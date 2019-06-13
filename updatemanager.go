@@ -7,6 +7,8 @@ import (
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
+	"gitpct.epam.com/epmd-aepr/aos_updatemanager/wsserver"
 )
 
 // GitSummary provided by govvv at compile-time
@@ -35,6 +37,17 @@ func main() {
 	log.SetLevel(logLevel)
 
 	log.WithFields(log.Fields{"configFile": *configFile, "version": GitSummary}).Info("Start update manager")
+
+	config, err := config.New(*configFile)
+	if err != nil {
+		log.Fatalf("Can' open config file: %s", err)
+	}
+
+	server, err := wsserver.New(config)
+	if err != nil {
+		log.Fatalf("Can't create ws server: %s", err)
+	}
+	defer server.Close()
 
 	// Handle SIGTERM
 	terminateChannel := make(chan os.Signal, 1)
