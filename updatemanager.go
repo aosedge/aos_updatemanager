@@ -7,8 +7,9 @@ import (
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
+
 	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/wsserver"
+	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
 )
 
 // GitSummary provided by govvv at compile-time
@@ -43,7 +44,7 @@ func main() {
 		log.Fatalf("Can' open config file: %s", err)
 	}
 
-	server, err := wsserver.New(config)
+	server, err := umserver.New(config)
 	if err != nil {
 		log.Fatalf("Can't create ws server: %s", err)
 	}
