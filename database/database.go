@@ -213,7 +213,13 @@ func (db *Database) GetOperationVersion() (version uint64, err error) {
 
 // SetLastError stores last error
 func (db *Database) SetLastError(lastError error) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET lastError = ?", lastError.Error())
+	errorStr := ""
+
+	if lastError != nil {
+		errorStr = lastError.Error()
+	}
+
+	result, err := db.sql.Exec("UPDATE config SET lastError = ?", errorStr)
 	if err != nil {
 		return err
 	}
@@ -246,6 +252,10 @@ func (db *Database) GetLastError() (lastError error, err error) {
 		}
 
 		return nil, err
+	}
+
+	if errorStr == "" {
+		return nil, nil
 	}
 
 	return errors.New(errorStr), nil

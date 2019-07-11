@@ -91,8 +91,8 @@ func TestFilesInfo(t *testing.T) {
 		umserver.UpgradeFileInfo{
 			Target: "target",
 			URL:    "url1",
-			Sha256: "sha256",
-			Sha512: "sha512",
+			Sha256: []byte{1, 2, 3, 4, 5, 6},
+			Sha512: []byte{1, 2, 3, 4, 5, 6},
 			Size:   1234}}
 	if err := db.SetFilesInfo(setFilesInfo); err != nil {
 		t.Fatalf("Can't set files info: %s", err)
@@ -136,6 +136,20 @@ func TestLastError(t *testing.T) {
 	}
 
 	if setError.Error() != getError.Error() {
+		t.Fatalf("Wrong last error value: %v", getError)
+	}
+
+	setError = nil
+	if err := db.SetLastError(setError); err != nil {
+		t.Fatalf("Can't set last error: %s", err)
+	}
+
+	getError, err = db.GetLastError()
+	if err != nil {
+		t.Fatalf("Can't get last error: %s", err)
+	}
+
+	if setError != getError {
 		t.Fatalf("Wrong last error value: %v", getError)
 	}
 }
