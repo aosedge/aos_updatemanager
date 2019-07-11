@@ -225,6 +225,8 @@ func (processor *messageProcessor) processSystemUpgrade(request []byte) (respons
 			OperationVersion: upgradeReq.ImageVersion}
 
 		if err := processor.updater.Upgrade(upgradeReq.ImageVersion, upgradeReq.Files); err != nil {
+			log.Errorf("Upgrade failed: %s", err)
+
 			statusMessage.Error = err.Error()
 			statusMessage.Status = FailedStatus
 		}
@@ -261,6 +263,8 @@ func (processor *messageProcessor) processSystemRevert(request []byte) (response
 			OperationVersion: revertReq.ImageVersion}
 
 		if err := processor.updater.Revert(revertReq.ImageVersion); err != nil {
+			log.Errorf("Revert failed: %s", err)
+
 			statusMessage.Error = err.Error()
 			statusMessage.Status = FailedStatus
 		}
