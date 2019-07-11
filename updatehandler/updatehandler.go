@@ -66,7 +66,10 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 		modules:     make(map[string]Module)}
 
 	if handler.imageVersion, err = handler.getImageVersion(); err != nil {
-		return nil, err
+		// TODO: If version file doesn't exist, create new one. Is it right behavior?
+		if err = handler.setImageVersion(handler.imageVersion); err != nil {
+			return nil, err
+		}
 	}
 
 	if handler.state, err = handler.storage.GetState(); err != nil {
