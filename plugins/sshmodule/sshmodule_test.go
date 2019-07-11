@@ -47,7 +47,8 @@ func TestMain(m *testing.M) {
 		"DestPath": "remoteTestFile",
 		"Commands":[
 			"cd . ",
-			"pwd"
+			"pwd",
+			"ls"
 		]
 	}`
 

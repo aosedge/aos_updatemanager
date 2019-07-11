@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -87,15 +89,15 @@ func (module *SSHModule) Upgrade(fileName string) (err error) {
 	}
 	defer session.Close()
 
+	log.WithFields(log.Fields{"src": fileName, "dst": module.config.DestPath}).Debug("Copy file")
+
 	// Copy file to the remote DestDir
 	if err = scp.CopyPath(fileName, module.config.DestPath, session); err != nil {
 		return err
 	}
 
-	for _, command := range module.config.Commands {
-		if err = module.runCommand(client, command); err != nil {
-			return err
-		}
+	if err = module.runCommands(client); err != nil {
+		return err
 	}
 
 	return nil
@@ -115,18 +117,40 @@ func (module *SSHModule) Revert() (err error) {
  * Private
  ******************************************************************************/
 
-func (module *SSHModule) runCommand(client *ssh.Client, command string) (err error) {
+func (module *SSHModule) runCommands(client *ssh.Client) (err error) {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
-	log.WithField("command", command).Debug("SSH command")
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return err
+	}
 
-	output, err := session.CombinedOutput(command)
+	session.Stdout = os.Stdout
+	session.Stderr = os.Stderr
 
-	log.WithField("output", string(output)).Debug("SSH output")
+	if err = session.Shell(); err != nil {
+		return err
+	}
 
-	return err
+	for _, command := range module.config.Commands {
+		log.WithField("command", command).Debug("SSH command")
+
+		if _, err = fmt.Fprintf(stdin, "%s\n", command); err != nil {
+			return err
+		}
+	}
+
+	if _, err = fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
+		return err
+	}
+
+	if err = session.Wait(); err != nil {
+		return err
+	}
+
+	return nil
 }
