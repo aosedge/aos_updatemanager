@@ -76,6 +76,28 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 		return nil, err
 	}
 
+	if handler.state == umserver.RevertingState || handler.state == umserver.UpgradingState {
+		handler.lastError = errors.New("unknown error")
+
+		log.Errorf("Last update failed: %s", handler.lastError)
+
+		if err = handler.storage.SetLastError(handler.lastError); err != nil {
+			return nil, err
+		}
+
+		switch {
+		case handler.state == umserver.RevertingState:
+			handler.state = umserver.RevertedState
+
+		case handler.state == umserver.UpgradingState:
+			handler.state = umserver.UpgradedState
+		}
+
+		if err = handler.storage.SetState(handler.state); err != nil {
+			return nil, err
+		}
+	}
+
 	if handler.filesInfo, err = handler.storage.GetFilesInfo(); err != nil {
 		return nil, err
 	}
