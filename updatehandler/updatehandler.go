@@ -3,6 +3,7 @@ package updatehandler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"path"
 	"strconv"
@@ -320,7 +321,7 @@ func (handler *Handler) getImageVersion() (version uint64, err error) {
 }
 
 func (handler *Handler) setImageVersion(version uint64) (err error) {
-	if err = ioutil.WriteFile(handler.versionFile, []byte(strconv.FormatUint(version, 10)), 0644); err != nil {
+	if err = ioutil.WriteFile(handler.versionFile, []byte(fmt.Sprintf("%d\n", version)), 0644); err != nil {
 		return err
 	}
 
