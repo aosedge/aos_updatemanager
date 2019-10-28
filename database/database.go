@@ -347,7 +347,7 @@ func (db *Database) createConfigTable() (err error) {
 			state,
 			operationVersion,
 			filesInfo,
-			lastError) values(?, ?, ?, ?, ?)`, dbVersion, umserver.UpgradedState, 0, []byte{}, ""); err != nil {
+			lastError) values(?, ?, ?, ?, ?)`, dbVersion, umserver.UpgradedState, 0, []byte("null"), ""); err != nil {
 		return err
 	}
 
