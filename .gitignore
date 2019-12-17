@@ -1,2 +1,4 @@
 aos_updatemanager
 *.so
+vendor/**
+Gopkg.lock
