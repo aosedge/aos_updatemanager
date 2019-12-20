@@ -25,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/nunc-ota/aos_common/image"
+	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umserver"
@@ -41,7 +42,7 @@ import (
 
 type testStorage struct {
 	state     int
-	filesInfo []umserver.UpgradeFileInfo
+	filesInfo []umprotocol.UpgradeFileInfo
 	version   uint64
 	lastError error
 }
@@ -177,7 +178,7 @@ func TestUpgradeRevert(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func generateFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
+func generateFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error) {
 	if err = ioutil.WriteFile("tmp/image", []byte("This is image file"), 0644); err != nil {
 		return nil, err
 	}
@@ -188,7 +189,7 @@ func generateFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
 	}
 
 	for i := 0; i < 3; i++ {
-		fileInfo := umserver.UpgradeFileInfo{
+		fileInfo := umprotocol.UpgradeFileInfo{
 			Target: "id" + strconv.Itoa(i+1),
 			URL:    "image",
 			Sha256: info.Sha256,
@@ -217,12 +218,12 @@ func (storage *testStorage) GetState() (state int, err error) {
 	return storage.state, nil
 }
 
-func (storage *testStorage) SetFilesInfo(filesInfo []umserver.UpgradeFileInfo) (err error) {
+func (storage *testStorage) SetFilesInfo(filesInfo []umprotocol.UpgradeFileInfo) (err error) {
 	storage.filesInfo = filesInfo
 	return nil
 }
 
-func (storage *testStorage) GetFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
+func (storage *testStorage) GetFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error) {
 	return storage.filesInfo, nil
 }
 

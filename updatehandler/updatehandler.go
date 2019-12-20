@@ -29,6 +29,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/nunc-ota/aos_common/image"
+	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umserver"
@@ -51,7 +52,7 @@ type Handler struct {
 	versionFile      string
 	upgradeDir       string
 	state            int
-	filesInfo        []umserver.UpgradeFileInfo
+	filesInfo        []umprotocol.UpgradeFileInfo
 	imageVersion     uint64
 	operationVersion uint64
 	lastError        error
@@ -61,8 +62,8 @@ type Handler struct {
 type Storage interface {
 	SetState(state int) (err error)
 	GetState() (state int, err error)
-	SetFilesInfo(filesInfo []umserver.UpgradeFileInfo) (err error)
-	GetFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error)
+	SetFilesInfo(filesInfo []umprotocol.UpgradeFileInfo) (err error)
+	GetFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error)
 	SetOperationVersion(version uint64) (err error)
 	GetOperationVersion() (version uint64, err error)
 	SetLastError(lastError error) (err error)
@@ -191,7 +192,7 @@ func (handler *Handler) GetLastError() (err error) {
 }
 
 // Upgrade performs upgrade operation
-func (handler *Handler) Upgrade(version uint64, filesInfo []umserver.UpgradeFileInfo) (err error) {
+func (handler *Handler) Upgrade(version uint64, filesInfo []umprotocol.UpgradeFileInfo) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
 

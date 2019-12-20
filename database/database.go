@@ -26,6 +26,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/umserver"
 )
@@ -138,7 +139,7 @@ func (db *Database) GetState() (state int, err error) {
 }
 
 // SetFilesInfo stores files info
-func (db *Database) SetFilesInfo(filesInfo []umserver.UpgradeFileInfo) (err error) {
+func (db *Database) SetFilesInfo(filesInfo []umprotocol.UpgradeFileInfo) (err error) {
 	infoJSON, err := json.Marshal(&filesInfo)
 	if err != nil {
 		return err
@@ -162,7 +163,7 @@ func (db *Database) SetFilesInfo(filesInfo []umserver.UpgradeFileInfo) (err erro
 }
 
 // GetFilesInfo returns files info
-func (db *Database) GetFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
+func (db *Database) GetFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error) {
 	stmt, err := db.sql.Prepare("SELECT filesInfo FROM config")
 	if err != nil {
 		return nil, err

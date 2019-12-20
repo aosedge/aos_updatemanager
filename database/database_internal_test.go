@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"testing"
 
+	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/umserver"
@@ -104,8 +105,8 @@ func TestState(t *testing.T) {
 }
 
 func TestFilesInfo(t *testing.T) {
-	setFilesInfo := []umserver.UpgradeFileInfo{
-		umserver.UpgradeFileInfo{
+	setFilesInfo := []umprotocol.UpgradeFileInfo{
+		umprotocol.UpgradeFileInfo{
 			Target: "target",
 			URL:    "url1",
 			Sha256: []byte{1, 2, 3, 4, 5, 6},

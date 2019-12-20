@@ -27,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 	"gitpct.epam.com/nunc-ota/aos_common/wsclient"
 
 	"aos_updatemanager/config"
@@ -121,14 +122,14 @@ func TestGetStatus(t *testing.T) {
 	}
 	defer client.close()
 
-	var response umserver.StatusMessage
+	var response umprotocol.StatusMessage
 
-	if err := client.sendRequest(&umserver.GetStatusReq{
-		MessageHeader: umserver.MessageHeader{Type: umserver.StatusType}}, &response, 5*time.Second); err != nil {
+	if err := client.sendRequest(&umprotocol.GetStatusReq{
+		MessageHeader: umprotocol.MessageHeader{Type: umprotocol.StatusType}}, &response, 5*time.Second); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Status != umserver.SuccessStatus {
+	if response.Status != umprotocol.SuccessStatus {
 		t.Errorf("Wrong updater status: %s", response.Status)
 	}
 }
@@ -140,19 +141,19 @@ func TestSystemUpgrade(t *testing.T) {
 	}
 	defer client.close()
 
-	var response umserver.StatusMessage
+	var response umprotocol.StatusMessage
 
-	if err := client.sendRequest(&umserver.UpgradeReq{
-		MessageHeader: umserver.MessageHeader{Type: umserver.UpgradeType},
+	if err := client.sendRequest(&umprotocol.UpgradeReq{
+		MessageHeader: umprotocol.MessageHeader{Type: umprotocol.UpgradeType},
 		ImageVersion:  3}, &response, 5*time.Second); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Status != umserver.SuccessStatus {
+	if response.Status != umprotocol.SuccessStatus {
 		t.Errorf("Wrong updater status: %s", response.Status)
 	}
 
-	if response.Operation != umserver.UpgradeType {
+	if response.Operation != umprotocol.UpgradeType {
 		t.Errorf("Wrong operation: %s", response.Operation)
 	}
 }
@@ -164,19 +165,19 @@ func TestSystemRevert(t *testing.T) {
 	}
 	defer client.close()
 
-	var response umserver.StatusMessage
+	var response umprotocol.StatusMessage
 
-	if err := client.sendRequest(&umserver.RevertReq{
-		MessageHeader: umserver.MessageHeader{Type: umserver.RevertType},
+	if err := client.sendRequest(&umprotocol.RevertReq{
+		MessageHeader: umprotocol.MessageHeader{Type: umprotocol.RevertType},
 		ImageVersion:  3}, &response, 5*time.Second); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Status != umserver.SuccessStatus {
+	if response.Status != umprotocol.SuccessStatus {
 		t.Errorf("Wrong updater status: %s", response.Status)
 	}
 
-	if response.Operation != umserver.RevertType {
+	if response.Operation != umprotocol.RevertType {
 		t.Errorf("Wrong operation: %s", response.Operation)
 	}
 }
@@ -217,13 +218,13 @@ func (client *testClient) sendRequest(request, response interface{}, timeout tim
 		return errors.New("wait response timeout")
 
 	case message := <-client.messageChannel:
-		var header umserver.MessageHeader
+		var header umprotocol.MessageHeader
 
 		if err = json.Unmarshal(message, &header); err != nil {
 			return err
 		}
 
-		if header.Type != umserver.StatusType && header.Error != "" {
+		if header.Type != umprotocol.StatusType && header.Error != "" {
 			return errors.New(header.Error)
 		}
 
@@ -251,7 +252,7 @@ func (updater *testUpdater) GetLastError() (err error) {
 	return nil
 }
 
-func (updater *testUpdater) Upgrade(version uint64, filesInfo []umserver.UpgradeFileInfo) (err error) {
+func (updater *testUpdater) Upgrade(version uint64, filesInfo []umprotocol.UpgradeFileInfo) (err error) {
 	updater.version = version
 	return nil
 }

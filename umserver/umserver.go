@@ -23,6 +23,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 	"gitpct.epam.com/nunc-ota/aos_common/wsserver"
 
 	"aos_updatemanager/config"
@@ -31,20 +32,6 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
-
-// Message types
-const (
-	RevertType  = "systemRevert"
-	StatusType  = "status"
-	UpgradeType = "systemUpgrade"
-)
-
-// Operation status
-const (
-	SuccessStatus    = "success"
-	FailedStatus     = "failed"
-	InProgressStatus = "inprogress"
-)
 
 // State
 const (
@@ -64,55 +51,13 @@ type Server struct {
 	updater  Updater
 }
 
-// MessageHeader UM message header
-type MessageHeader struct {
-	Type  string `json:"type"`
-	Error string `json:"error,omitempty"`
-}
-
-// UpgradeFileInfo upgrade file info
-type UpgradeFileInfo struct {
-	Target string `json:"target"`
-	URL    string `json:"url"`
-	Sha256 []byte `json:"sha256"`
-	Sha512 []byte `json:"sha512"`
-	Size   uint64 `json:"size"`
-}
-
-// UpgradeReq system upgrade request
-type UpgradeReq struct {
-	MessageHeader
-	ImageVersion uint64            `json:"imageVersion"`
-	Files        []UpgradeFileInfo `json:"files"`
-}
-
-// RevertReq system revert request
-type RevertReq struct {
-	MessageHeader
-	ImageVersion uint64 `json:"imageVersion"`
-}
-
-// GetStatusReq get system status request
-type GetStatusReq struct {
-	MessageHeader
-}
-
-// StatusMessage status message
-type StatusMessage struct {
-	MessageHeader
-	Operation        string `json:"operation"` // upgrade, revert
-	Status           string `json:"status"`    // success, failed, inprogress
-	OperationVersion uint64 `json:"operationVersion"`
-	ImageVersion     uint64 `json:"imageVersion"`
-}
-
 // Updater interface
 type Updater interface {
 	GetVersion() (version uint64)
 	GetOperationVersion() (version uint64)
 	GetState() (state int)
 	GetLastError() (err error)
-	Upgrade(version uint64, filesInfo []UpgradeFileInfo) (err error)
+	Upgrade(version uint64, filesInfo []umprotocol.UpgradeFileInfo) (err error)
 	Revert(version uint64) (err error)
 }
 
@@ -143,7 +88,7 @@ func (server *Server) Close() {
 
 // ProcessMessage proccess incoming messages
 func (processor *messageProcessor) ProcessMessage(messageType int, message []byte) (response []byte, err error) {
-	var header MessageHeader
+	var header umprotocol.MessageHeader
 
 	if messageType != websocket.TextMessage {
 		return nil, errors.New("incoming message in unsupported format")
@@ -168,15 +113,15 @@ func (server *Server) newMessageProcessor(sendMessage wsserver.SendMessage) (pro
 	return &messageProcessor{updater: server.updater, sendMessage: sendMessage}, nil
 }
 
-func (processor *messageProcessor) processIncomingMessage(header MessageHeader, request []byte) (response []byte, err error) {
+func (processor *messageProcessor) processIncomingMessage(header umprotocol.MessageHeader, request []byte) (response []byte, err error) {
 	switch string(header.Type) {
-	case StatusType:
+	case umprotocol.StatusType:
 		return processor.processGetStatus()
 
-	case UpgradeType:
+	case umprotocol.UpgradeType:
 		return processor.processSystemUpgrade(request)
 
-	case RevertType:
+	case umprotocol.RevertType:
 		return processor.processSystemRevert(request)
 
 	default:
@@ -186,30 +131,30 @@ func (processor *messageProcessor) processIncomingMessage(header MessageHeader, 
 
 func (processor *messageProcessor) processGetStatus() (response []byte, err error) {
 	state := processor.updater.GetState()
-	status := SuccessStatus
+	status := umprotocol.SuccessStatus
 	errStr := ""
 	operation := ""
 
 	if state == RevertingState || state == RevertedState {
-		operation = RevertType
+		operation = umprotocol.RevertType
 	}
 
 	if state == UpgradingState || state == UpgradedState {
-		operation = UpgradeType
+		operation = umprotocol.UpgradeType
 	}
 
 	if state == RevertingState || state == UpgradingState {
-		status = InProgressStatus
+		status = umprotocol.InProgressStatus
 	}
 
 	if err = processor.updater.GetLastError(); err != nil {
-		status = FailedStatus
+		status = umprotocol.FailedStatus
 		errStr = err.Error()
 	}
 
-	statusMessage := StatusMessage{
-		MessageHeader: MessageHeader{
-			Type:  StatusType,
+	statusMessage := umprotocol.StatusMessage{
+		MessageHeader: umprotocol.MessageHeader{
+			Type:  umprotocol.StatusType,
 			Error: errStr},
 		Operation:        operation,
 		Status:           status,
@@ -226,7 +171,7 @@ func (processor *messageProcessor) processGetStatus() (response []byte, err erro
 }
 
 func (processor *messageProcessor) processSystemUpgrade(request []byte) (response []byte, err error) {
-	var upgradeReq UpgradeReq
+	var upgradeReq umprotocol.UpgradeReq
 
 	if err = json.Unmarshal(request, &upgradeReq); err != nil {
 		return nil, err
@@ -235,17 +180,17 @@ func (processor *messageProcessor) processSystemUpgrade(request []byte) (respons
 	log.WithField("imageVersion", upgradeReq.ImageVersion).Debug("Process system upgrade request")
 
 	go func() {
-		statusMessage := StatusMessage{
-			MessageHeader:    MessageHeader{Type: StatusType},
-			Status:           SuccessStatus,
-			Operation:        UpgradeType,
+		statusMessage := umprotocol.StatusMessage{
+			MessageHeader:    umprotocol.MessageHeader{Type: umprotocol.StatusType},
+			Status:           umprotocol.SuccessStatus,
+			Operation:        umprotocol.UpgradeType,
 			OperationVersion: upgradeReq.ImageVersion}
 
 		if err := processor.updater.Upgrade(upgradeReq.ImageVersion, upgradeReq.Files); err != nil {
 			log.Errorf("Upgrade failed: %s", err)
 
 			statusMessage.Error = err.Error()
-			statusMessage.Status = FailedStatus
+			statusMessage.Status = umprotocol.FailedStatus
 		}
 
 		statusMessage.ImageVersion = processor.updater.GetVersion()
@@ -264,7 +209,7 @@ func (processor *messageProcessor) processSystemUpgrade(request []byte) (respons
 }
 
 func (processor *messageProcessor) processSystemRevert(request []byte) (response []byte, err error) {
-	var revertReq RevertReq
+	var revertReq umprotocol.RevertReq
 
 	if err = json.Unmarshal(request, &revertReq); err != nil {
 		return nil, err
@@ -273,17 +218,17 @@ func (processor *messageProcessor) processSystemRevert(request []byte) (response
 	log.WithField("imageVersion", revertReq.ImageVersion).Debug("Process system revert request")
 
 	go func() {
-		statusMessage := StatusMessage{
-			MessageHeader:    MessageHeader{Type: StatusType},
-			Status:           SuccessStatus,
-			Operation:        RevertType,
+		statusMessage := umprotocol.StatusMessage{
+			MessageHeader:    umprotocol.MessageHeader{Type: umprotocol.StatusType},
+			Status:           umprotocol.SuccessStatus,
+			Operation:        umprotocol.RevertType,
 			OperationVersion: revertReq.ImageVersion}
 
 		if err := processor.updater.Revert(revertReq.ImageVersion); err != nil {
 			log.Errorf("Revert failed: %s", err)
 
 			statusMessage.Error = err.Error()
-			statusMessage.Status = FailedStatus
+			statusMessage.Status = umprotocol.FailedStatus
 		}
 
 		statusMessage.ImageVersion = processor.updater.GetVersion()
@@ -301,7 +246,7 @@ func (processor *messageProcessor) processSystemRevert(request []byte) (response
 	return nil, nil
 }
 
-func createResponseError(header MessageHeader, responseErr error) (response []byte, err error) {
+func createResponseError(header umprotocol.MessageHeader, responseErr error) (response []byte, err error) {
 	header.Error = responseErr.Error()
 
 	if response, err = json.Marshal(header); err != nil {
