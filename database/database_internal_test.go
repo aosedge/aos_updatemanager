@@ -23,9 +23,9 @@ import (
 	"reflect"
 	"testing"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
-
 	log "github.com/sirupsen/logrus"
+
+	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************

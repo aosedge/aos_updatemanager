@@ -24,7 +24,7 @@ import (
 	"path"
 	"testing"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
+	"aos_updatemanager/config"
 )
 
 /*******************************************************************************

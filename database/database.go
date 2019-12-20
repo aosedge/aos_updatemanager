@@ -27,7 +27,7 @@ import (
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
+	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************

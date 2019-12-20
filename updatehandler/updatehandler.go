@@ -28,10 +28,10 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/image"
 
-	"gitpct.epam.com/epmd-aepr/aos_servicemanager/image"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
+	"aos_updatemanager/config"
+	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************

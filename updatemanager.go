@@ -24,13 +24,13 @@ import (
 	"path"
 	"syscall"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/updatehandler"
+	"aos_updatemanager/updatehandler"
 
 	log "github.com/sirupsen/logrus"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/database"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
+	"aos_updatemanager/config"
+	"aos_updatemanager/database"
+	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************

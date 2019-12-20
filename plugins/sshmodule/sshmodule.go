@@ -10,7 +10,7 @@ import (
 	"github.com/tmc/scp"
 	"golang.org/x/crypto/ssh"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/updatehandler"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

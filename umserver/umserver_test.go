@@ -27,10 +27,10 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_servicemanager/wsclient"
+	"gitpct.epam.com/nunc-ota/aos_common/wsclient"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
+	"aos_updatemanager/config"
+	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************

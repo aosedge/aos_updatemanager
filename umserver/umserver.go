@@ -23,9 +23,9 @@ import (
 
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_servicemanager/wsserver"
+	"gitpct.epam.com/nunc-ota/aos_common/wsserver"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
+	"aos_updatemanager/config"
 )
 
 /*******************************************************************************

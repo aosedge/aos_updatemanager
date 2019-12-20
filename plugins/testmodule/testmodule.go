@@ -5,7 +5,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/updatehandler"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

@@ -23,12 +23,12 @@ import (
 	"strconv"
 	"testing"
 
-	"gitpct.epam.com/epmd-aepr/aos_servicemanager/image"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/updatehandler"
-
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/image"
+
+	"aos_updatemanager/config"
+	"aos_updatemanager/umserver"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
