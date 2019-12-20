@@ -155,7 +155,7 @@ func TestGetUpgradeDir(t *testing.T) {
 }
 
 func TestGetWorkingDir(t *testing.T) {
-	if cfg.UpgradeDir != "/var/aos/updatemanager" {
+	if cfg.WorkingDir != "/var/aos/updatemanager" {
 		t.Errorf("Wrong working dir value: %s", cfg.WorkingDir)
 	}
 }

@@ -61,12 +61,11 @@ func TestMain(m *testing.M) {
 
 	module.Close()
 
-	os.Exit(ret)
-
 	if err = os.RemoveAll("tmp"); err != nil {
 		log.Fatalf("Error deleting tmp dir: %s", err)
 	}
 
+	os.Exit(ret)
 }
 
 /*******************************************************************************
