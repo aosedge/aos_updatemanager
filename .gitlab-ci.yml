@@ -1,0 +1,34 @@
+image: golang:1.12
+
+stages:
+  - test
+  - build
+
+before_script: 
+  - go get -u golang.org/x/lint/golint
+  - go get -u github.com/golang/dep/cmd/dep  
+  - cp -r $CI_PROJECT_DIR /go/src/
+  - cd /go/src/aos_updatemanager/
+  - dep ensure  
+  
+test: 
+  stage: test
+  script: 
+    - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
+    - echo "-------   Run Lint -------"
+    - ci/lint.sh
+    - echo "-------   Run Unit tests   -------"
+    - go build -buildmode=plugin plugins/testmodule/testmodule.go
+    - go test  $(go list ./... | grep -v "/vendor\|ssh*") -v 
+
+coverage:
+  stage: test
+  script: 
+    - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/    
+    - go build -buildmode=plugin plugins/testmodule/testmodule.go
+    - go test  $(go list ./... | grep -v "/vendor\|ssh*\|updatehandler") -v -coverprofile .testCoverage.txt
+
+build:
+  stage: build
+  script:
+    - go build

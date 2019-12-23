@@ -1,0 +1,2 @@
+[![pipeline status](https://gitpct.epam.com/nunc-ota/aos_updatemanager/badges/master/pipeline.svg)](https://gitpct.epam.com/nunc-ota/aos_updatemanager/commits/master) 
+[![coverage report](https://gitpct.epam.com/nunc-ota/aos_updatemanager/badges/master/coverage.svg)](https://gitpct.epam.com/nunc-ota/aos_updatemanager/commits/master)
