@@ -17,7 +17,7 @@
 [[constraint]]
   branch = "master"
   name = "gitpct.epam.com/nunc-ota/aos_common"
-  source = "git@gitpct.epam.com:nunc-ota/aos_common.git"
+  source = "https://gitlab+deploy-token-2:xKzx4NezaMzp6x9uUdJ4@gitpct.epam.com/nunc-ota/aos_common.git"
 
 [[constraint]]
   branch = "master"
