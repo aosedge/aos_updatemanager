@@ -42,7 +42,7 @@ type Config struct {
 type ModuleConfig struct {
 	ID       string
 	Disabled bool
-	Plugin   string
+	Module   string
 	Params   interface{}
 }
 

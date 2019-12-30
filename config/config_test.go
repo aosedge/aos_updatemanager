@@ -48,13 +48,13 @@ func createConfigFile() (err error) {
 	"Modules":[{
 		"ID": "id1",
 		"Disabled": true,
-		"Plugin": "test1"
+		"Module": "test1"
 	}, {
 		"ID": "id2",
-		"Plugin": "test2"
+		"Module": "test2"
 	}, {
 		"ID": "id3",
-		"Plugin": "test3"
+		"Module": "test3"
 	}]
 }`
 
@@ -133,7 +133,7 @@ func TestModules(t *testing.T) {
 		t.Error("Wrong module id")
 	}
 
-	if cfg.Modules[0].Plugin != "test1" || cfg.Modules[1].Plugin != "test2" || cfg.Modules[2].Plugin != "test3" {
+	if cfg.Modules[0].Module != "test1" || cfg.Modules[1].Module != "test2" || cfg.Modules[2].Module != "test3" {
 		t.Error("Wrong module plugin")
 	}
 

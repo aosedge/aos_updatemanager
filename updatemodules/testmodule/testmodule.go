@@ -1,12 +1,34 @@
-package main
+// SPDX-License-Identifier: Apache-2.0
+//
+// Copyright 2019 Renesas Inc.
+// Copyright 2019 EPAM Systems Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package testmodule
 
 import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatehandler"
 )
+
+/*******************************************************************************
+ * Consts
+ ******************************************************************************/
+
+// Name module name
+const Name = "test"
 
 /*******************************************************************************
  * Types
@@ -22,8 +44,8 @@ type TestModule struct {
  * Public
  ******************************************************************************/
 
-// NewModule creates test module instance
-func NewModule(id string, configJSON []byte) (module updatehandler.Module, err error) {
+// New creates test module instance
+func New(id string, configJSON []byte) (module *TestModule, err error) {
 	log.WithField("id", id).Info("Create test module")
 
 	testModule := &TestModule{id: id}
@@ -32,8 +54,9 @@ func NewModule(id string, configJSON []byte) (module updatehandler.Module, err e
 }
 
 // Close closes test module
-func (module *TestModule) Close() {
+func (module *TestModule) Close() (err error) {
 	log.WithField("id", module.id).Info("Close test module")
+	return nil
 }
 
 // GetID returns module ID

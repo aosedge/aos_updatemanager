@@ -87,13 +87,13 @@ func TestMain(m *testing.M) {
 		Modules: []config.ModuleConfig{
 			config.ModuleConfig{
 				ID:     "id1",
-				Plugin: "../testmodule.so"},
+				Module: "test"},
 			config.ModuleConfig{
 				ID:     "id2",
-				Plugin: "../testmodule.so"},
+				Module: "test"},
 			config.ModuleConfig{
 				ID:     "id3",
-				Plugin: "../testmodule.so"}}}, &testStorage{})
+				Module: "test"}}}, &testStorage{})
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}

@@ -9,8 +9,8 @@ before_script:
   - go get -u github.com/golang/dep/cmd/dep  
   - cp -r $CI_PROJECT_DIR /go/src/
   - cd /go/src/aos_updatemanager/
-  - dep ensure  
-  
+  - dep ensure
+
 test: 
   stage: test
   script: 
@@ -18,17 +18,15 @@ test:
     - echo "-------   Run Lint -------"
     - ci/lint.sh
     - echo "-------   Run Unit tests   -------"
-    - go build -buildmode=plugin plugins/testmodule/testmodule.go
-    - go test  $(go list ./... | grep -v "/vendor\|ssh*") -v 
+    - go test --tags "with_test_module" $(go list ./... | grep -v "/vendor\|ssh*") -v
 
 coverage:
   stage: test
   script: 
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/    
-    - go build -buildmode=plugin plugins/testmodule/testmodule.go
-    - go test  $(go list ./... | grep -v "/vendor\|ssh*\|updatehandler") -v -coverprofile .testCoverage.txt
+    - go test --tags "with_test_module" $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
 
 build:
   stage: build
   script:
-    - go build
+    - go build --tags "with_vis_module with_nuance_module"

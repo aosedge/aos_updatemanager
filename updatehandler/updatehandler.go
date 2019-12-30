@@ -33,6 +33,7 @@ import (
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umserver"
+	"aos_updatemanager/updatemodules"
 )
 
 /*******************************************************************************
@@ -46,7 +47,7 @@ import (
 // Handler update handler
 type Handler struct {
 	sync.Mutex
-	modules map[string]Module
+	modules map[string]updatemodules.Module
 	storage Storage
 
 	versionFile      string
@@ -82,7 +83,7 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 		storage:     storage,
 		upgradeDir:  cfg.UpgradeDir,
 		versionFile: cfg.VersionFile,
-		modules:     make(map[string]Module)}
+		modules:     make(map[string]updatemodules.Module)}
 
 	if handler.imageVersion, err = handler.getImageVersion(); err != nil {
 		// TODO: If version file doesn't exist, create new one. Is it right behavior?
@@ -144,7 +145,7 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 			return nil, err
 		}
 
-		module, err := newModule(moduleCfg.ID, moduleCfg.Plugin, paramsJSON)
+		module, err := updatemodules.New(moduleCfg.ID, moduleCfg.Module, paramsJSON)
 		if err != nil {
 			return nil, err
 		}

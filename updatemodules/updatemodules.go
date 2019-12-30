@@ -15,21 +15,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package updatehandler
+package updatemodules
 
 import (
-	"errors"
-	"plugin"
+	"fmt"
 )
+
+/*******************************************************************************
+ * Vars
+ ******************************************************************************/
+
+var moduleMap = map[string]NewFunc{}
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
+// NewFunc new function type
+type NewFunc func(id string, configJSON []byte) (module Module, err error)
+
 // Module interface for module plugin
 type Module interface {
 	// Close closes module
-	Close()
+	Close() (err error)
 	// GetID returns module ID
 	GetID() (id string)
 	// Upgrade upgrade module
@@ -42,22 +50,17 @@ type Module interface {
  * Private
  ******************************************************************************/
 
-// newModule creates new module instance
-func newModule(id, pluginPath string, configJSON []byte) (module Module, err error) {
-	plugin, err := plugin.Open(pluginPath)
-	if err != nil {
-		return module, err
-	}
+// Register registers new update module
+func Register(name string, newFunc NewFunc) {
+	moduleMap[name] = newFunc
+}
 
-	newModuleSymbol, err := plugin.Lookup("NewModule")
-	if err != nil {
-		return module, err
-	}
-
-	newModuleFunction, ok := newModuleSymbol.(func(id string, configJSON []byte) (Module, error))
+// New creates new module instance
+func New(id, name string, configJSON []byte) (module Module, err error) {
+	newFunc, ok := moduleMap[name]
 	if !ok {
-		return module, errors.New("unexpected function type")
+		return nil, fmt.Errorf("update module '%s' not found", name)
 	}
 
-	return newModuleFunction(id, configJSON)
+	return newFunc(id, configJSON)
 }
