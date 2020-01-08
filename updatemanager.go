@@ -24,13 +24,13 @@ import (
 	"path"
 	"syscall"
 
-	"aos_updatemanager/updatehandler"
-
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
+	"aos_updatemanager/modulemanager"
 	"aos_updatemanager/umserver"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -112,7 +112,12 @@ func main() {
 		}
 	}
 
-	updater, err := updatehandler.New(cfg, db)
+	moduleManager, err := modulemanager.New(cfg)
+	if err != nil {
+		log.Fatalf("Can't create module manager: %s", err)
+	}
+
+	updater, err := updatehandler.New(cfg, moduleManager, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}

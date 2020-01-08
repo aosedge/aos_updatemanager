@@ -15,23 +15,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sshmodule_test
+package modulemanager_test
 
 import (
-	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/updatemodules/sshmodule"
+	"aos_updatemanager/config"
+	"aos_updatemanager/modulemanager"
+	"aos_updatemanager/modulemanager/testmodule"
 )
 
 /*******************************************************************************
- * Var
+ * Consts
  ******************************************************************************/
 
-var module *sshmodule.SSHModule
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+/*******************************************************************************
+ * Vars
+ ******************************************************************************/
 
 /*******************************************************************************
  * Init
@@ -51,36 +59,12 @@ func init() {
  ******************************************************************************/
 
 func TestMain(m *testing.M) {
-	var err error
 
-	if err = os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Error creating tmp dir %s", err)
-	}
-
-	configJSON := `{
-		"Host": "localhost:22",
-		"User": "test",
-		"Password": "test",
-		"DestPath": "remoteTestFile",
-		"Commands":[
-			"cd . ",
-			"pwd",
-			"ls"
-		]
-	}`
-
-	module, err = sshmodule.New("TestComponent", []byte(configJSON))
-	if err != nil {
-		log.Fatalf("Can't create SSH module: %s", err)
-	}
+	modulemanager.Register("test", func(id string, configJSON []byte) (module interface{}, err error) {
+		return testmodule.New(id, configJSON)
+	})
 
 	ret := m.Run()
-
-	module.Close()
-
-	if err = os.RemoveAll("tmp"); err != nil {
-		log.Fatalf("Error deleting tmp dir: %s", err)
-	}
 
 	os.Exit(ret)
 }
@@ -89,19 +73,38 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
-func TestGetID(t *testing.T) {
-	id := module.GetID()
-	if id != "TestComponent" {
-		t.Errorf("Wrong module ID: %s", id)
-	}
-}
+func TestGetModule(t *testing.T) {
+	const numIds = 5
 
-func TestUpgrade(t *testing.T) {
-	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+	cfg := config.Config{Modules: make([]config.ModuleConfig, 0, numIds)}
+
+	for i := 0; i < numIds; i++ {
+		cfg.Modules = append(cfg.Modules, config.ModuleConfig{
+			ID:     "id" + strconv.Itoa(i),
+			Module: testmodule.Name})
 	}
 
-	if err := module.Upgrade("tmp/testfile"); err != nil {
-		t.Errorf("Upgrade failed: %s", err)
+	moduleManager, err := modulemanager.New(&cfg)
+	if err != nil {
+		t.Fatalf("can't create module manager: %s", err)
+	}
+	defer func() {
+		if err := moduleManager.Close(); err != nil {
+			t.Errorf("can't close module manager: %s", err)
+		}
+	}()
+
+	for i := 0; i < numIds; i++ {
+		id := "id" + strconv.Itoa(i)
+
+		module, err := moduleManager.GetModuleByID(id)
+
+		if module == nil {
+			t.Errorf("module %s should not be nil", id)
+		}
+
+		if err != nil {
+			t.Errorf("can't get module %s: %s", id, err)
+		}
 	}
 }

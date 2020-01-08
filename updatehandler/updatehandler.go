@@ -18,7 +18,6 @@
 package updatehandler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -33,7 +32,6 @@ import (
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umserver"
-	"aos_updatemanager/updatemodules"
 )
 
 /*******************************************************************************
@@ -47,8 +45,8 @@ import (
 // Handler update handler
 type Handler struct {
 	sync.Mutex
-	modules map[string]Module
-	storage Storage
+	storage        Storage
+	moduleProvider ModuleProvider
 
 	versionFile      string
 	upgradeDir       string
@@ -59,16 +57,20 @@ type Handler struct {
 	lastError        error
 }
 
-// Module interface for module plugin
-type Module interface {
-	// Close closes module
-	Close() (err error)
+// UpdateModule interface for module plugin
+type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
 	// Upgrade upgrade module
 	Upgrade(fileName string) (err error)
 	// Revert revert module
 	Revert() (err error)
+}
+
+// ModuleProvider module provider interface
+type ModuleProvider interface {
+	// GetModuleByID returns module by id
+	GetModuleByID(id string) (module interface{}, err error)
 }
 
 // Storage provides API to store/retreive persistent data
@@ -88,14 +90,14 @@ type Storage interface {
  ******************************************************************************/
 
 // New returns pointer to new Handler
-func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
+func New(cfg *config.Config, moduleProvider ModuleProvider, storage Storage) (handler *Handler, err error) {
 	log.Debug("Create update handler")
 
 	handler = &Handler{
-		storage:     storage,
-		upgradeDir:  cfg.UpgradeDir,
-		versionFile: cfg.VersionFile,
-		modules:     make(map[string]Module)}
+		storage:        storage,
+		moduleProvider: moduleProvider,
+		upgradeDir:     cfg.UpgradeDir,
+		versionFile:    cfg.VersionFile}
 
 	if handler.imageVersion, err = handler.getImageVersion(); err != nil {
 		// TODO: If version file doesn't exist, create new one. Is it right behavior?
@@ -140,33 +142,6 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 
 	if handler.lastError, err = handler.storage.GetLastError(); err != nil {
 		return nil, err
-	}
-
-	for _, moduleCfg := range cfg.Modules {
-		if moduleCfg.Disabled {
-			log.WithField("id", moduleCfg.ID).Debug("Skip disabled module")
-			continue
-		}
-
-		if _, ok := handler.modules[moduleCfg.ID]; ok {
-			log.WithField("id", moduleCfg.ID).Warning("Module already exists")
-		}
-
-		paramsJSON, err := json.Marshal(moduleCfg.Params)
-		if err != nil {
-			return nil, err
-		}
-
-		module, err := updatemodules.New(moduleCfg.ID, moduleCfg.Module, paramsJSON)
-		if err != nil {
-			return nil, err
-		}
-
-		handler.modules[moduleCfg.ID] = module.(Module)
-	}
-
-	if len(handler.modules) == 0 {
-		return nil, errors.New("no valid modules info provided")
 	}
 
 	return handler, nil
@@ -330,12 +305,6 @@ func (handler *Handler) Revert(version uint64) (err error) {
 
 // Close closes update handler
 func (handler *Handler) Close() {
-	handler.Lock()
-	defer handler.Unlock()
-
-	for _, module := range handler.modules {
-		module.Close()
-	}
 }
 
 /*******************************************************************************
@@ -377,9 +346,9 @@ func (handler *Handler) upgrade() (err error) {
 			break
 		}
 
-		module, ok := handler.modules[fileInfo.Target]
-		if !ok {
-			err = errors.New("missing component: " + fileInfo.Target)
+		var module UpdateModule
+
+		if module, err = handler.getModuleByID(fileInfo.Target); err != nil {
 			break
 		}
 
@@ -392,7 +361,12 @@ func (handler *Handler) upgrade() (err error) {
 
 	if err != nil {
 		for i := 0; i < index; i++ {
-			if err := handler.modules[handler.filesInfo[i].Target].Revert(); err != nil {
+			module, err := handler.getModuleByID(handler.filesInfo[i].Target)
+			if err != nil {
+				return err
+			}
+
+			if err = module.Revert(); err != nil {
 				return err
 			}
 		}
@@ -415,9 +389,9 @@ func (handler *Handler) revert() (err error) {
 	defer handler.Lock()
 
 	for _, fileInfo := range handler.filesInfo {
-		module, ok := handler.modules[fileInfo.Target]
-		if !ok {
-			return errors.New("missing component: " + fileInfo.Target)
+		module, err := handler.getModuleByID(fileInfo.Target)
+		if err != nil {
+			return err
 		}
 
 		if err = module.Revert(); err != nil {
@@ -432,4 +406,18 @@ func (handler *Handler) revert() (err error) {
 	}
 
 	return nil
+}
+
+func (handler *Handler) getModuleByID(id string) (module UpdateModule, err error) {
+	providedModule, err := handler.moduleProvider.GetModuleByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	updateModule, ok := providedModule.(UpdateModule)
+	if !ok {
+		return nil, fmt.Errorf("module %s doesn't provide required interface", id)
+	}
+
+	return updateModule, nil
 }

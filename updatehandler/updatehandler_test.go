@@ -28,6 +28,8 @@ import (
 	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
+	"aos_updatemanager/modulemanager"
+	"aos_updatemanager/modulemanager/testmodule"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
 )
@@ -81,9 +83,11 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't set image file: %s", err)
 	}
 
-	updater, err = updatehandler.New(&config.Config{
-		UpgradeDir:  "tmp",
-		VersionFile: "tmp/version",
+	modulemanager.Register(testmodule.Name, func(id string, configJSON []byte) (module interface{}, err error) {
+		return testmodule.New(id, configJSON)
+	})
+
+	moduleManager, err := modulemanager.New(&config.Config{
 		Modules: []config.ModuleConfig{
 			config.ModuleConfig{
 				ID:     "id1",
@@ -93,7 +97,14 @@ func TestMain(m *testing.M) {
 				Module: "test"},
 			config.ModuleConfig{
 				ID:     "id3",
-				Module: "test"}}}, &testStorage{})
+				Module: "test"}}})
+	if err != nil {
+		log.Fatalf("Can't create module manager: %s", err)
+	}
+
+	updater, err = updatehandler.New(&config.Config{
+		UpgradeDir:  "tmp",
+		VersionFile: "tmp/version"}, moduleManager, &testStorage{})
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
