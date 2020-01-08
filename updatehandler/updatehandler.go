@@ -47,7 +47,7 @@ import (
 // Handler update handler
 type Handler struct {
 	sync.Mutex
-	modules map[string]updatemodules.Module
+	modules map[string]Module
 	storage Storage
 
 	versionFile      string
@@ -57,6 +57,18 @@ type Handler struct {
 	imageVersion     uint64
 	operationVersion uint64
 	lastError        error
+}
+
+// Module interface for module plugin
+type Module interface {
+	// Close closes module
+	Close() (err error)
+	// GetID returns module ID
+	GetID() (id string)
+	// Upgrade upgrade module
+	Upgrade(fileName string) (err error)
+	// Revert revert module
+	Revert() (err error)
 }
 
 // Storage provides API to store/retreive persistent data
@@ -83,7 +95,7 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 		storage:     storage,
 		upgradeDir:  cfg.UpgradeDir,
 		versionFile: cfg.VersionFile,
-		modules:     make(map[string]updatemodules.Module)}
+		modules:     make(map[string]Module)}
 
 	if handler.imageVersion, err = handler.getImageVersion(); err != nil {
 		// TODO: If version file doesn't exist, create new one. Is it right behavior?
@@ -150,7 +162,7 @@ func New(cfg *config.Config, storage Storage) (handler *Handler, err error) {
 			return nil, err
 		}
 
-		handler.modules[moduleCfg.ID] = module
+		handler.modules[moduleCfg.ID] = module.(Module)
 	}
 
 	if len(handler.modules) == 0 {

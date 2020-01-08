@@ -32,19 +32,7 @@ var moduleMap = map[string]NewFunc{}
  ******************************************************************************/
 
 // NewFunc new function type
-type NewFunc func(id string, configJSON []byte) (module Module, err error)
-
-// Module interface for module plugin
-type Module interface {
-	// Close closes module
-	Close() (err error)
-	// GetID returns module ID
-	GetID() (id string)
-	// Upgrade upgrade module
-	Upgrade(fileName string) (err error)
-	// Revert revert module
-	Revert() (err error)
-}
+type NewFunc func(id string, configJSON []byte) (module interface{}, err error)
 
 /*******************************************************************************
  * Private
@@ -56,7 +44,7 @@ func Register(name string, newFunc NewFunc) {
 }
 
 // New creates new module instance
-func New(id, name string, configJSON []byte) (module Module, err error) {
+func New(id, name string, configJSON []byte) (module interface{}, err error) {
 	newFunc, ok := moduleMap[name]
 	if !ok {
 		return nil, fmt.Errorf("update module '%s' not found", name)
