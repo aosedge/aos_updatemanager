@@ -18,7 +18,9 @@
 package fsmodule
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"sync"
 
@@ -35,6 +37,25 @@ type FileSystemModule struct {
 	sync.Mutex
 	partitionForUpdate string
 }
+
+type fsUpdateMetadata struct {
+	ComponentType string `json:"componentType"`
+	Version       int    `json:"version"`
+	Description   string `json:"description,omitempty"`
+	Type          string `json:"type"`
+	Commit        string `json:"commit,omitempty"`
+	Resources     string `json:"resources"`
+}
+
+/*******************************************************************************
+ * Constants
+ ******************************************************************************/
+
+const metaDataFilename = "metadata.json"
+const (
+	incrementalType = "incremental"
+	fullType        = "full"
+)
 
 /*******************************************************************************
  * Public
@@ -66,6 +87,20 @@ func (module *FileSystemModule) GetID() (id string) {
 // Upgrade upgrade module
 func (module *FileSystemModule) Upgrade(folderPath string) (err error) {
 	log.Info("FileSystemModule Upgrade request : ", folderPath)
+	jsonFile, err := os.Open(folderPath + "/" + metaDataFilename)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+
+	var fsMetadata fsUpdateMetadata
+	if err = json.Unmarshal(byteValue, &fsMetadata); err != nil {
+		return err
+	}
+	if err = fsMetadata.Validate(folderPath, module.id); err != nil {
+		return err
+	}
 
 	return err
 }
@@ -82,5 +117,28 @@ func (module *FileSystemModule) SetPartitionForUpdate(path string) (err error) {
 		return fmt.Errorf("partition %s does not exist ", path)
 	}
 	module.partitionForUpdate = path
+	return nil
+}
+
+// Validate fsUpdateMetadata validation function
+func (metadata *fsUpdateMetadata) Validate(path, id string) (err error) {
+	if metadata.ComponentType != id {
+		return fmt.Errorf("module type missmatch Update %s != %s", metadata.ComponentType, id)
+	}
+
+	if metadata.Type != fullType && metadata.Type != incrementalType {
+		return fmt.Errorf("unknown fs type update")
+	}
+
+	if metadata.Type == incrementalType {
+		if metadata.Commit == "" {
+			return fmt.Errorf("no commit field for incremental update")
+		}
+	}
+
+	if _, err := os.Stat(path + "/" + metadata.Resources); os.IsNotExist(err) {
+		return fmt.Errorf("resource does not exist")
+	}
+
 	return nil
 }
