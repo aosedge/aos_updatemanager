@@ -21,6 +21,8 @@ import (
 	fsmodule "aos_updatemanager/updatemodules/fsmodule"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"strconv"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -164,5 +166,112 @@ func TestParamsValidation(t *testing.T) {
 	}
 	if err := module.Upgrade("tmp"); err == nil {
 		t.Errorf("Upgrade should failed: resource does not exist")
+	}
+}
+
+func TestFullFSUpdate(t *testing.T) {
+	if err := ioutil.WriteFile("tmp/metadata.json", []byte(`{
+		"componentType": "rootfs",
+		"version": 12,
+		"description": "Nuance rootfs v 12",
+		"type": "full",		
+		"resources" : "testImage.img.gz"
+	  }`), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := ioutil.WriteFile("tmp/testImage.img.gz", []byte("This is test file"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := module.Upgrade("tmp"); err == nil {
+		t.Errorf("Upgrade should failed: resource does not exist %s", err)
+	}
+
+	generateTestPartition(10)
+
+	if err := module.SetPartitionForUpdate("./tmp/partition"); err != nil {
+		t.Errorf("Error SetPartitionForUpdate: %s", err)
+	}
+
+	if err := module.Upgrade("tmp"); err == nil {
+		t.Errorf("Upgrade should failed: invalid header %s", err)
+	}
+	generateTestImage()
+
+	if err := module.Upgrade("tmp"); err == nil {
+		t.Errorf("Upgrade should failed: Size missmatch %s", err)
+	}
+	generateTestPartition(20)
+	if err := module.Upgrade("tmp"); err != nil {
+		t.Errorf("Upgrade failed %s", err)
+	}
+
+	command := exec.Command("mount", "./tmp/partition", "./tmp/mount_point")
+	if err := command.Run(); err != nil {
+		t.Errorf("Can't mount updated partiion: %s", err)
+	}
+
+	if _, err := os.Stat("./tmp/mount_point/testdata.txt"); os.IsNotExist(err) {
+		t.Errorf("Resource does not exist")
+	}
+
+	command = exec.Command("umount", "./tmp/mount_point")
+	if err := command.Run(); err != nil {
+		t.Errorf("Can't umount updated partiion: %s", err)
+	}
+}
+
+func generateTestImage() {
+	command := exec.Command("dd", "if=/dev/zero", "of=./tmp/testImage.img", "bs=1M", "count=20")
+	err := command.Run()
+	if err != nil {
+		log.Fatalf("Can't run dd: %s", err)
+	}
+
+	command = exec.Command("mkfs.ext4", "./tmp/testImage.img")
+	err = command.Run()
+	if err != nil {
+		log.Fatalf("Can't run mkfs.ext4: %s", err)
+	}
+
+	if err = os.MkdirAll("tmp/mount_point", 0755); err != nil {
+		log.Fatalf("Error creating tmp mount_point %s", err)
+	}
+
+	command = exec.Command("mount", "./tmp/testImage.img", "./tmp/mount_point")
+	err = command.Run()
+	if err != nil {
+		log.Fatalf("Can't run mount: %s", err)
+	}
+
+	if err := ioutil.WriteFile("./tmp/mount_point/testdata.txt", []byte("This is test file"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	command = exec.Command("umount", "./tmp/mount_point")
+	err = command.Run()
+	if err != nil {
+		log.Fatalf("Can't run umount: %s", err)
+	}
+
+	if err = os.RemoveAll("./tmp/testImage.img.gz"); err != nil {
+		log.Fatalf("Error deleting ./tmp/testImage.img.gz : %s", err)
+	}
+
+	command = exec.Command("gzip", "./tmp/testImage.img")
+	err = command.Run()
+	if err != nil {
+		log.Fatalf("Can't run gzip: %s", err)
+	}
+}
+
+func generateTestPartition(size int) {
+	count := "count=" + strconv.Itoa(size)
+
+	command := exec.Command("dd", "if=/dev/zero", "of=./tmp/partition", "bs=1M", count)
+	err := command.Run()
+	if err != nil {
+		log.Fatalf("Can't run dd: %s", err)
 	}
 }

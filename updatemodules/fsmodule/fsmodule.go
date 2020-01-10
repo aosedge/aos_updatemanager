@@ -18,11 +18,14 @@
 package fsmodule
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -102,6 +105,13 @@ func (module *FileSystemModule) Upgrade(folderPath string) (err error) {
 		return err
 	}
 
+	fsMetadata.Resources = folderPath + "/" + fsMetadata.Resources
+	if fsMetadata.Type == fullType {
+		err = module.performFullFsUpdate(&fsMetadata)
+	} else {
+		err = fmt.Errorf("incremental update Not supported")
+	}
+
 	return err
 }
 
@@ -117,6 +127,72 @@ func (module *FileSystemModule) SetPartitionForUpdate(path string) (err error) {
 		return fmt.Errorf("partition %s does not exist ", path)
 	}
 	module.partitionForUpdate = path
+	return nil
+}
+
+// Full fs update
+func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) (err error) {
+	partition, err := os.OpenFile(module.partitionForUpdate, os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	defer partition.Close()
+
+	content, err := os.Open(metadata.Resources)
+	if err != nil {
+		return err
+	}
+	defer content.Close()
+
+	gz, err := gzip.NewReader(content)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	partitionSize, err := partition.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+
+	log.Info("Start full fs Update partition ", module.partitionForUpdate, "from ", metadata.Resources)
+
+	var stat syscall.Statfs_t
+
+	syscall.Statfs(module.partitionForUpdate, &stat)
+
+	blockSize := stat.Bsize
+	buf := make([]byte, blockSize, blockSize)
+	total := uint64(0)
+	tmpTotal := uint64(0)
+
+	for {
+		read, err := gz.Read(buf)
+		if err != nil && err != io.EOF {
+			log.Error("Could not read contents to pass to partition: ", err)
+			return err
+		}
+
+		var written int
+		if read > 0 {
+			tmpTotal = uint64(read) + tmpTotal
+			if tmpTotal > uint64(partitionSize) {
+				return fmt.Errorf("requested to write at least %d bytes to partition but maximum size is %d", tmpTotal, partitionSize)
+			}
+			written, err = partition.WriteAt(buf[:read], int64(total))
+			if err != nil {
+				return err
+			}
+			// increment our total
+			total = total + uint64(written)
+		}
+		// is this the end of the data?
+		if err == io.EOF {
+			log.Info("Write partition done, written: ", total)
+			break
+		}
+	}
+
 	return nil
 }
 
