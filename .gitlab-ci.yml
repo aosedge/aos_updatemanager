@@ -25,6 +25,7 @@ coverage:
   script: 
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/    
     - go test --tags "with_test_module" $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
+    - go tool cover -func=.testCoverage.txt
 
 build:
   stage: build
