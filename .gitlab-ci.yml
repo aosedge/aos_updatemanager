@@ -4,30 +4,30 @@ stages:
   - test
   - build
 
-before_script: 
+before_script:
   - go get -u golang.org/x/lint/golint
-  - go get -u github.com/golang/dep/cmd/dep  
+  - go get -u github.com/golang/dep/cmd/dep
   - cp -r $CI_PROJECT_DIR /go/src/
   - cd /go/src/aos_updatemanager/
   - dep ensure
 
-test: 
+test:
   stage: test
-  script: 
+  script:
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - echo "-------   Run Lint -------"
     - ci/lint.sh
     - echo "-------   Run Unit tests   -------"
-    - go test --tags "with_test_module" $(go list ./... | grep -v "/vendor\|ssh*") -v
+    - go test $(go list ./... | grep -v "/vendor\|ssh*") -v
 
 coverage:
   stage: test
-  script: 
-    - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/    
-    - go test --tags "with_test_module" $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
+  script:
+    - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
+    - go test $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
 build:
   stage: build
   script:
-    - go build --tags "with_vis_module with_nuance_module"
+    - go build

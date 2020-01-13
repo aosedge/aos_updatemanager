@@ -1,6 +1,6 @@
 # State Controller
 
-State Controller (SC) is used to extend and customize system upgrade functionality. The update handler (UH) notifies SC when new upgrade or revert request is received. SC may accept, reject or delay the system upgrade. UH notifies SC when all system modules are updated or reverted. SC may accept, reject, delay the upgrade or revert at this stage as well. SC may decide to do not finish the upgrade or revert procedure but rather to postpone it till next UM start. SC should provide the installed image version.
+State Controller (SC) is used to extend and customize system upgrade functionality. The update handler (UH) notifies SC when new upgrade or revert request is received. SC may accept, reject or delay the system upgrade. UH notifies SC when all system modules are updated or reverted. SC may accept, reject, delay the upgrade or revert at this stage as well. SC may decide to do not finish the upgrade or revert procedure but rather to postpone it till next UM start. SC should provide the installed image version and the platform ID.
 
 SC is optional and can be disabled. If SC is enabled, UH should:
 * get current installed image version from SC;
