@@ -18,7 +18,7 @@
 package fsmodule_test
 
 import (
-	fsmodule "aos_updatemanager/updatemodules/fsmodule"
+	fsmodule "aos_updatemanager/modulemanager/fsmodule"
 	"io/ioutil"
 	"os"
 	"os/exec"
