@@ -31,3 +31,5 @@ build:
   stage: build
   script:
     - go build
+    - tar czf artifacts.tar.gz aos_updatemanager aos_updatemanager.cfg
+    - curl -H "X-JFrog-Art-Api:$CI_ARTIFACTS_TOKEN" -T ./artifacts.tar.gz "https://artifactory.epam.com/artifactory/NUNC-OTA/update_manager/builds/$CI_PIPELINE_ID/"
