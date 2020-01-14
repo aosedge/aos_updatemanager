@@ -20,13 +20,11 @@ package database
 import (
 	"errors"
 	"os"
-	"reflect"
 	"testing"
 
-	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/umserver"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -89,7 +87,7 @@ func TestDBVersion(t *testing.T) {
 }
 
 func TestState(t *testing.T) {
-	setState := umserver.RevertingState
+	setState := updatehandler.RevertingState
 	if err := db.SetState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
@@ -101,28 +99,6 @@ func TestState(t *testing.T) {
 
 	if setState != getState {
 		t.Fatalf("Wrong state value: %v", getState)
-	}
-}
-
-func TestFilesInfo(t *testing.T) {
-	setFilesInfo := []umprotocol.UpgradeFileInfo{
-		umprotocol.UpgradeFileInfo{
-			Target: "target",
-			URL:    "url1",
-			Sha256: []byte{1, 2, 3, 4, 5, 6},
-			Sha512: []byte{1, 2, 3, 4, 5, 6},
-			Size:   1234}}
-	if err := db.SetFilesInfo(setFilesInfo); err != nil {
-		t.Fatalf("Can't set files info: %s", err)
-	}
-
-	getFilesInfo, err := db.GetFilesInfo()
-	if err != nil {
-		t.Fatalf("Can't get files info: %s", err)
-	}
-
-	if !reflect.DeepEqual(setFilesInfo, getFilesInfo) {
-		t.Fatalf("Wrong files info value: %v", getFilesInfo)
 	}
 }
 

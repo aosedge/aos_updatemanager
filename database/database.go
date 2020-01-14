@@ -19,16 +19,12 @@ package database
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
-
-	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************
@@ -136,59 +132,6 @@ func (db *Database) GetState() (state int, err error) {
 	}
 
 	return state, nil
-}
-
-// SetFilesInfo stores files info
-func (db *Database) SetFilesInfo(filesInfo []umprotocol.UpgradeFileInfo) (err error) {
-	infoJSON, err := json.Marshal(&filesInfo)
-	if err != nil {
-		return err
-	}
-
-	result, err := db.sql.Exec("UPDATE config SET filesInfo = ?", infoJSON)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetFilesInfo returns files info
-func (db *Database) GetFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error) {
-	stmt, err := db.sql.Prepare("SELECT filesInfo FROM config")
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	var infoJSON []byte
-
-	if err = stmt.QueryRow().Scan(&infoJSON); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrNotExist
-		}
-
-		return nil, err
-	}
-
-	if infoJSON == nil {
-		return nil, nil
-	}
-
-	if err = json.Unmarshal(infoJSON, &filesInfo); err != nil {
-		return nil, err
-	}
-
-	return filesInfo, nil
 }
 
 // SetOperationVersion stores operation version
@@ -354,7 +297,6 @@ func (db *Database) createConfigTable() (err error) {
 			version INTEGER,
 			state INTEGER,
 			operationVersion INTEGER,
-			filesInfo BLOB,
 			lastError TEXT)`); err != nil {
 		return err
 	}
@@ -364,8 +306,7 @@ func (db *Database) createConfigTable() (err error) {
 			version,
 			state,
 			operationVersion,
-			filesInfo,
-			lastError) values(?, ?, ?, ?, ?)`, dbVersion, umserver.UpgradedState, 0, []byte("null"), ""); err != nil {
+			lastError) values(?, ?, ?, ?)`, dbVersion, 0, 0, ""); err != nil {
 		return err
 	}
 

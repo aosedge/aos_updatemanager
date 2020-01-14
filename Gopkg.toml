@@ -14,10 +14,10 @@
   branch = "master"
   name = "github.com/tmc/scp"
 
-[[constraint]]  
+[[constraint]]
+  branch = "master"
   name = "gitpct.epam.com/nunc-ota/aos_common"
   source = "https://gitlab+deploy-token-2:xKzx4NezaMzp6x9uUdJ4@gitpct.epam.com/nunc-ota/aos_common.git"
-  revision = "88c6d63b08ce053e1786cb012d00a7a8e47f9dab"
 
 [[constraint]]
   branch = "master"
