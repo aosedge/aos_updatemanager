@@ -42,7 +42,6 @@ func createConfigFile() (err error) {
 	"ServerUrl": "localhost:8090",
 	"Cert": "crt.pem",
 	"Key": "key.pem",
-	"VersionFile": "/var/aos/version",
 	"UpgradeDir": "/var/aos/upgrade",
 	"WorkingDir": "/var/aos/updatemanager",
 	"Modules":[{
@@ -139,12 +138,6 @@ func TestModules(t *testing.T) {
 
 	if cfg.Modules[0].Disabled != true || cfg.Modules[1].Disabled != false || cfg.Modules[2].Disabled != false {
 		t.Error("Wrong disable value")
-	}
-}
-
-func TestGetVersionFile(t *testing.T) {
-	if cfg.VersionFile != "/var/aos/version" {
-		t.Errorf("Wrong version file value: %s", cfg.VersionFile)
 	}
 }
 

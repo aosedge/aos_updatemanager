@@ -102,6 +102,22 @@ func TestState(t *testing.T) {
 	}
 }
 
+func TestCurrentVersion(t *testing.T) {
+	setVersion := uint64(16)
+	if err := db.SetCurrentVersion(setVersion); err != nil {
+		t.Fatalf("Can't set current version: %s", err)
+	}
+
+	getVersion, err := db.GetCurrentVersion()
+	if err != nil {
+		t.Fatalf("Can't get current version: %s", err)
+	}
+
+	if setVersion != getVersion {
+		t.Fatalf("Wrong current version value: %v", getVersion)
+	}
+}
+
 func TestOperationVersion(t *testing.T) {
 	setVersion := uint64(5)
 	if err := db.SetOperationVersion(setVersion); err != nil {

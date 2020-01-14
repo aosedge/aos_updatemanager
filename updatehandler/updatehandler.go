@@ -20,9 +20,6 @@ package updatehandler
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"strconv"
-	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -53,10 +50,9 @@ type Handler struct {
 	storage        Storage
 	moduleProvider ModuleProvider
 
-	versionFile      string
 	upgradeDir       string
 	state            int
-	imageVersion     uint64
+	currentVersion   uint64
 	operationVersion uint64
 	lastError        error
 }
@@ -81,6 +77,8 @@ type ModuleProvider interface {
 type Storage interface {
 	SetState(state int) (err error)
 	GetState() (state int, err error)
+	SetCurrentVersion(version uint64) (err error)
+	GetCurrentVersion() (version uint64, err error)
 	SetOperationVersion(version uint64) (err error)
 	GetOperationVersion() (version uint64, err error)
 	SetLastError(lastError error) (err error)
@@ -99,13 +97,10 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, storage Storage) (ha
 		storage:        storage,
 		moduleProvider: moduleProvider,
 		upgradeDir:     cfg.UpgradeDir,
-		versionFile:    cfg.VersionFile}
+	}
 
-	if handler.imageVersion, err = handler.getImageVersion(); err != nil {
-		// TODO: If version file doesn't exist, create new one. Is it right behavior?
-		if err = handler.setImageVersion(handler.imageVersion); err != nil {
-			return nil, err
-		}
+	if handler.currentVersion, err = storage.GetCurrentVersion(); err != nil {
+		return nil, err
 	}
 
 	if handler.state, err = handler.storage.GetState(); err != nil {
@@ -150,7 +145,7 @@ func (handler *Handler) GetCurrentVersion() (version uint64) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	return handler.imageVersion
+	return handler.currentVersion
 }
 
 // GetOperationVersion returns upgrade/revert version
@@ -318,23 +313,6 @@ func (handler *Handler) Close() {
 /*******************************************************************************
  * Private
  ******************************************************************************/
-
-func (handler *Handler) getImageVersion() (version uint64, err error) {
-	versionStr, err := ioutil.ReadFile(handler.versionFile)
-	if err != nil {
-		return 0, err
-	}
-
-	return strconv.ParseUint(strings.TrimSpace(string(versionStr)), 10, 64)
-}
-
-func (handler *Handler) setImageVersion(version uint64) (err error) {
-	if err = ioutil.WriteFile(handler.versionFile, []byte(fmt.Sprintf("%d\n", version)), 0644); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func (handler *Handler) upgrade() (err error) {
 	// Called under locked context but we need to unlock here

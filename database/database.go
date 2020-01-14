@@ -172,6 +172,44 @@ func (db *Database) GetOperationVersion() (version uint64, err error) {
 	return version, nil
 }
 
+// SetCurrentVersion stores current image version
+func (db *Database) SetCurrentVersion(version uint64) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET currentVersion = ?", version)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
+}
+
+// GetCurrentVersion returns current image version
+func (db *Database) GetCurrentVersion() (version uint64, err error) {
+	stmt, err := db.sql.Prepare("SELECT currentVersion FROM config")
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	if err = stmt.QueryRow().Scan(&version); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, ErrNotExist
+		}
+
+		return 0, err
+	}
+
+	return version, nil
+}
+
 // SetLastError stores last error
 func (db *Database) SetLastError(lastError error) (err error) {
 	errorStr := ""
@@ -296,6 +334,7 @@ func (db *Database) createConfigTable() (err error) {
 		`CREATE TABLE config (
 			version INTEGER,
 			state INTEGER,
+			currentVersion INTEGER,
 			operationVersion INTEGER,
 			lastError TEXT)`); err != nil {
 		return err
@@ -305,8 +344,9 @@ func (db *Database) createConfigTable() (err error) {
 		`INSERT INTO config (
 			version,
 			state,
+			currentVersion,
 			operationVersion,
-			lastError) values(?, ?, ?, ?)`, dbVersion, 0, 0, ""); err != nil {
+			lastError) values(?, ?, ?, ?, ?)`, dbVersion, 0, 0, 0, ""); err != nil {
 		return err
 	}
 
