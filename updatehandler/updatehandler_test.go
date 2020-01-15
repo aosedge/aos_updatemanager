@@ -18,19 +18,16 @@
 package updatehandler_test
 
 import (
-	"io/ioutil"
 	"os"
-	"strconv"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/nunc-ota/aos_common/image"
 	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/modulemanager"
 	"aos_updatemanager/modulemanager/testmodule"
-	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
 )
 
@@ -43,10 +40,11 @@ import (
  ******************************************************************************/
 
 type testStorage struct {
-	state     int
-	filesInfo []umprotocol.UpgradeFileInfo
-	version   uint64
-	lastError error
+	state            int
+	imageInfo        umprotocol.ImageInfo
+	operationVersion uint64
+	currentVersion   uint64
+	lastError        error
 }
 
 /*******************************************************************************
@@ -79,10 +77,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't crate tmp dir: %s", err)
 	}
 
-	if err := setImageVersion("tmp/version", 43); err != nil {
-		log.Fatalf("Can't set image file: %s", err)
-	}
-
 	modulemanager.Register(testmodule.Name, func(id string, configJSON []byte) (module interface{}, err error) {
 		return testmodule.New(id, configJSON)
 	})
@@ -102,9 +96,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	updater, err = updatehandler.New(&config.Config{
-		UpgradeDir:  "tmp",
-		VersionFile: "tmp/version"}, moduleManager, &testStorage{})
+	updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, &testStorage{})
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
@@ -124,38 +116,50 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
-func TestGetVersion(t *testing.T) {
-	version := updater.GetVersion()
+func TestGetCurrentVersion(t *testing.T) {
+	version := updater.GetCurrentVersion()
 
-	if version != 43 {
+	if version != 0 {
 		t.Errorf("Wrong version: %d", version)
 	}
 }
 
 func TestUpgradeRevert(t *testing.T) {
-	version := updater.GetVersion()
+	statusChannel := make(chan string)
 
-	filesInfo, err := generateFilesInfo()
-	if err != nil {
-		t.Fatalf("Can't generate files info: %s", err)
-	}
+	updater.SetStatusCallback(func(status string) {
+		statusChannel <- status
+	})
+
+	version := updater.GetCurrentVersion()
 
 	version++
 
-	if err := updater.Upgrade(version, filesInfo); err != nil {
+	if err := updater.Upgrade(version, umprotocol.ImageInfo{}); err != nil {
 		t.Errorf("Upgrading error: %s", err)
 	}
 
-	if updater.GetVersion() != version {
-		t.Error("Wrong version")
+	select {
+	case <-time.After(5 * time.Second):
+		t.Error("wait operation timeout")
+
+	case <-statusChannel:
+	}
+
+	if updater.GetCurrentVersion() != version {
+		t.Error("Wrong current version")
 	}
 
 	if updater.GetOperationVersion() != version {
-		t.Error("Wrong version")
+		t.Error("Wrong operation version")
 	}
 
-	if updater.GetState() != umserver.UpgradedState {
-		t.Error("Wrong state")
+	if updater.GetLastOperation() != umprotocol.UpgradeOperation {
+		t.Error("Wrong operation")
+	}
+
+	if updater.GetStatus() != umprotocol.SuccessStatus {
+		t.Error("Wrong status")
 	}
 
 	if err := updater.GetLastError(); err != nil {
@@ -168,16 +172,27 @@ func TestUpgradeRevert(t *testing.T) {
 		t.Errorf("Upgrading error: %s", err)
 	}
 
-	if updater.GetVersion() != version {
-		t.Error("Wrong version")
+	select {
+	case <-time.After(5 * time.Second):
+		t.Error("wait operation timeout")
+
+	case <-statusChannel:
+	}
+
+	if updater.GetCurrentVersion() != version {
+		t.Error("Wrong current version")
 	}
 
 	if updater.GetOperationVersion() != version {
-		t.Error("Wrong version")
+		t.Error("Wrong operation version")
 	}
 
-	if updater.GetState() != umserver.RevertedState {
-		t.Error("Wrong state")
+	if updater.GetLastOperation() != umprotocol.RevertOperation {
+		t.Error("Wrong operation")
+	}
+
+	if updater.GetStatus() != umprotocol.SuccessStatus {
+		t.Error("Wrong status")
 	}
 
 	if err := updater.GetLastError(); err != nil {
@@ -189,37 +204,6 @@ func TestUpgradeRevert(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func generateFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error) {
-	if err = ioutil.WriteFile("tmp/image", []byte("This is image file"), 0644); err != nil {
-		return nil, err
-	}
-
-	info, err := image.CreateFileInfo("tmp/image")
-	if err != nil {
-		return nil, err
-	}
-
-	for i := 0; i < 3; i++ {
-		fileInfo := umprotocol.UpgradeFileInfo{
-			Target: "id" + strconv.Itoa(i+1),
-			URL:    "image",
-			Sha256: info.Sha256,
-			Sha512: info.Sha512,
-			Size:   info.Size}
-		filesInfo = append(filesInfo, fileInfo)
-	}
-
-	return filesInfo, nil
-}
-
-func setImageVersion(fileName string, version uint64) (err error) {
-	if err = ioutil.WriteFile(fileName, []byte(strconv.FormatUint(version, 10)), 0644); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (storage *testStorage) SetState(state int) (err error) {
 	storage.state = state
 	return nil
@@ -229,22 +213,22 @@ func (storage *testStorage) GetState() (state int, err error) {
 	return storage.state, nil
 }
 
-func (storage *testStorage) SetFilesInfo(filesInfo []umprotocol.UpgradeFileInfo) (err error) {
-	storage.filesInfo = filesInfo
+func (storage *testStorage) SetCurrentVersion(version uint64) (err error) {
+	storage.currentVersion = version
 	return nil
 }
 
-func (storage *testStorage) GetFilesInfo() (filesInfo []umprotocol.UpgradeFileInfo, err error) {
-	return storage.filesInfo, nil
+func (storage *testStorage) GetCurrentVersion() (version uint64, err error) {
+	return storage.currentVersion, nil
 }
 
 func (storage *testStorage) SetOperationVersion(version uint64) (err error) {
-	storage.version = version
+	storage.operationVersion = version
 	return nil
 }
 
 func (storage *testStorage) GetOperationVersion() (version uint64, err error) {
-	return storage.version, nil
+	return storage.operationVersion, nil
 }
 
 func (storage *testStorage) SetLastError(lastError error) (err error) {

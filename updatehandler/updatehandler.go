@@ -109,34 +109,20 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, storage Storage) (ha
 		return nil, err
 	}
 
-	if handler.state == RevertingState || handler.state == UpgradingState {
-		handler.lastError = errors.New("unknown error")
-
-		log.Errorf("Last update failed: %s", handler.lastError)
-
-		if err = handler.storage.SetLastError(handler.lastError); err != nil {
-			return nil, err
-		}
-
-		switch {
-		case handler.state == RevertingState:
-			handler.state = RevertedState
-
-		case handler.state == UpgradingState:
-			handler.state = UpgradedState
-		}
-
-		if err = handler.storage.SetState(handler.state); err != nil {
-			return nil, err
-		}
-	}
-
 	if handler.operationVersion, err = handler.storage.GetOperationVersion(); err != nil {
 		return nil, err
 	}
 
 	if handler.lastError, err = handler.storage.GetLastError(); err != nil {
 		return nil, err
+	}
+
+	if handler.state == UpgradingState {
+		go handler.operationFinished(UpgradedState, handler.upgrade())
+	}
+
+	if handler.state == RevertingState {
+		go handler.operationFinished(RevertedState, handler.revert())
 	}
 
 	return handler, nil
@@ -215,18 +201,6 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return errors.New("can't upgrade after failed revert")
 	}
 
-	/* TODO: Shall image version be without gaps?
-	if handler.imageVersion+1 != version {
-		return errors.New("wrong version")
-	}
-	*/
-
-	handler.state = UpgradingState
-
-	if err = handler.storage.SetState(handler.state); err != nil {
-		return err
-	}
-
 	handler.operationVersion = version
 
 	if err = handler.storage.SetOperationVersion(handler.operationVersion); err != nil {
@@ -239,21 +213,15 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
-	if err = handler.upgrade(); err != nil {
-		handler.lastError = err
-	}
-
-	if err = handler.storage.SetLastError(handler.lastError); err != nil {
-		return err
-	}
-
-	handler.state = UpgradedState
+	handler.state = UpgradingState
 
 	if err = handler.storage.SetState(handler.state); err != nil {
 		return err
 	}
 
-	return handler.lastError
+	go handler.operationFinished(UpgradedState, handler.upgrade())
+
+	return nil
 }
 
 // Revert performs revert operation
@@ -267,18 +235,6 @@ func (handler *Handler) Revert(version uint64) (err error) {
 		return errors.New("wrong state")
 	}
 
-	/* TODO: Shall image version be without gaps?
-	if handler.imageVersion-1 != version {
-		return errors.New("wrong version")
-	}
-	*/
-
-	handler.state = RevertingState
-
-	if err = handler.storage.SetState(handler.state); err != nil {
-		return err
-	}
-
 	handler.operationVersion = version
 
 	if err = handler.storage.SetOperationVersion(handler.operationVersion); err != nil {
@@ -291,21 +247,15 @@ func (handler *Handler) Revert(version uint64) (err error) {
 		return err
 	}
 
-	if err = handler.revert(); err != nil {
-		handler.lastError = err
-	}
-
-	if err = handler.storage.SetLastError(handler.lastError); err != nil {
-		return err
-	}
-
-	handler.state = RevertedState
+	handler.state = RevertingState
 
 	if err = handler.storage.SetState(handler.state); err != nil {
 		return err
 	}
 
-	return handler.lastError
+	go handler.operationFinished(RevertedState, handler.revert())
+
+	return nil
 }
 
 // SetStatusCallback sets callback which will be called when upgrade/revert is finished
@@ -324,11 +274,42 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (handler *Handler) upgrade() (err error) {
-	// Called under locked context but we need to unlock here
-	handler.Unlock()
-	defer handler.Lock()
+func (handler *Handler) operationFinished(newState int, err error) {
+	handler.Lock()
+	defer handler.Unlock()
 
+	log.WithFields(log.Fields{"newState": newState, "error": err}).Info("Operation finished")
+
+	handler.lastError = err
+
+	if err = handler.storage.SetLastError(handler.lastError); err != nil {
+		log.Errorf("Can't set last error: %s", err)
+	}
+
+	handler.state = newState
+
+	if err = handler.storage.SetState(handler.state); err != nil {
+		log.Errorf("Can't set state: %s", err)
+	}
+
+	handler.currentVersion = handler.operationVersion
+
+	if err = handler.storage.SetCurrentVersion(handler.currentVersion); err != nil {
+		log.Errorf("Can't set current version: %s", err)
+	}
+
+	if handler.statusCallaback != nil {
+		status := umprotocol.SuccessStatus
+
+		if err != nil {
+			status = umprotocol.FailedStatus
+		}
+
+		handler.statusCallaback(status)
+	}
+}
+
+func (handler *Handler) upgrade() (err error) {
 	// TODO: should be reimplemented a
 	/*
 		index := 0
@@ -382,10 +363,6 @@ func (handler *Handler) upgrade() (err error) {
 }
 
 func (handler *Handler) revert() (err error) {
-	// Called under locked context but we need to unlock here
-	handler.Unlock()
-	defer handler.Lock()
-
 	// TODO: should be reimplemented according to new protocol
 	/*
 		for _, fileInfo := range handler.filesInfo {

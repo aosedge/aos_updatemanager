@@ -179,30 +179,19 @@ func (processor *messageProcessor) processSystemUpgrade(request []byte) (respons
 
 	log.WithField("imageVersion", upgradeReq.ImageVersion).Debug("Process system upgrade request")
 
-	go func() {
+	if err := processor.updater.Upgrade(upgradeReq.ImageVersion, upgradeReq.ImageInfo); err != nil {
+		log.Errorf("Upgrade failed: %s", err)
+
 		statusMessage := umprotocol.StatusRsp{
-			Status:           umprotocol.SuccessStatus,
+			Status:           umprotocol.FailedStatus,
 			Operation:        umprotocol.UpgradeOperation,
-			RequestedVersion: upgradeReq.ImageVersion}
-
-		if err := processor.updater.Upgrade(upgradeReq.ImageVersion, upgradeReq.ImageInfo); err != nil {
-			log.Errorf("Upgrade failed: %s", err)
-
-			statusMessage.Error = err.Error()
-			statusMessage.Status = umprotocol.FailedStatus
+			RequestedVersion: upgradeReq.ImageVersion,
+			CurrentVersion:   processor.updater.GetCurrentVersion(),
+			Error:            err.Error(),
 		}
 
-		statusMessage.CurrentVersion = processor.updater.GetCurrentVersion()
-
-		statusJSON, err := marshalResponse(umprotocol.StatusResponseType, &statusMessage)
-		if err != nil {
-			log.Errorf("Can't marshal status message: %s", err)
-		}
-
-		if err = processor.sendMessage(websocket.TextMessage, statusJSON); err != nil {
-			log.Errorf("Can't send status message: %s", err)
-		}
-	}()
+		return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
+	}
 
 	return nil, nil
 }
@@ -216,30 +205,19 @@ func (processor *messageProcessor) processSystemRevert(request []byte) (response
 
 	log.WithField("imageVersion", revertReq.ImageVersion).Debug("Process system revert request")
 
-	go func() {
+	if err := processor.updater.Revert(revertReq.ImageVersion); err != nil {
+		log.Errorf("Revert failed: %s", err)
+
 		statusMessage := umprotocol.StatusRsp{
-			Status:           umprotocol.SuccessStatus,
+			Status:           umprotocol.FailedStatus,
 			Operation:        umprotocol.RevertOperation,
-			RequestedVersion: revertReq.ImageVersion}
-
-		if err := processor.updater.Revert(revertReq.ImageVersion); err != nil {
-			log.Errorf("Revert failed: %s", err)
-
-			statusMessage.Error = err.Error()
-			statusMessage.Status = umprotocol.FailedStatus
+			RequestedVersion: revertReq.ImageVersion,
+			CurrentVersion:   processor.updater.GetCurrentVersion(),
+			Error:            err.Error(),
 		}
 
-		statusMessage.CurrentVersion = processor.updater.GetCurrentVersion()
-
-		statusJSON, err := marshalResponse(umprotocol.StatusResponseType, &statusMessage)
-		if err != nil {
-			log.Errorf("Can't marshal status message: %s", err)
-		}
-
-		if err = processor.sendMessage(websocket.TextMessage, statusJSON); err != nil {
-			log.Errorf("Can't send status message: %s", err)
-		}
-	}()
+		return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
+	}
 
 	return nil, nil
 }
