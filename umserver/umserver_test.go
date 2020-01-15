@@ -50,9 +50,10 @@ type testClient struct {
 }
 
 type testUpdater struct {
-	version   uint64
-	operation string
-	status    string
+	version        uint64
+	operation      string
+	status         string
+	statusCallback func(status string)
 }
 
 /*******************************************************************************
@@ -264,10 +265,26 @@ func (updater *testUpdater) GetLastError() (err error) {
 
 func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
 	updater.version = version
+	updater.operation = umprotocol.UpgradeOperation
+
+	if updater.statusCallback != nil {
+		go updater.statusCallback(umprotocol.SuccessStatus)
+	}
+
 	return nil
 }
 
 func (updater *testUpdater) Revert(version uint64) (err error) {
 	updater.version = version
+	updater.operation = umprotocol.RevertOperation
+
+	if updater.statusCallback != nil {
+		go updater.statusCallback(umprotocol.SuccessStatus)
+	}
+
 	return nil
+}
+
+func (updater *testUpdater) SetStatusCallback(callback func(status string)) {
+	updater.statusCallback = callback
 }

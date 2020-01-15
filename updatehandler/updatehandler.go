@@ -55,6 +55,8 @@ type Handler struct {
 	currentVersion   uint64
 	operationVersion uint64
 	lastError        error
+
+	statusCallaback func(status string)
 }
 
 // UpdateModule interface for module plugin
@@ -304,6 +306,14 @@ func (handler *Handler) Revert(version uint64) (err error) {
 	}
 
 	return handler.lastError
+}
+
+// SetStatusCallback sets callback which will be called when upgrade/revert is finished
+func (handler *Handler) SetStatusCallback(callback func(status string)) {
+	handler.Lock()
+	defer handler.Unlock()
+
+	handler.statusCallaback = callback
 }
 
 // Close closes update handler

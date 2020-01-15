@@ -49,6 +49,7 @@ type Updater interface {
 	GetOperationVersion() (version uint64)
 	GetLastOperation() (operation string)
 	GetStatus() (status string)
+	SetStatusCallback(callback func(status string))
 	GetLastError() (err error)
 	Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error)
 	Revert(version uint64) (err error)
@@ -115,7 +116,38 @@ func (processor *messageProcessor) ProcessMessage(messageType int, messageJSON [
  ******************************************************************************/
 
 func (server *Server) newMessageProcessor(sendMessage wsserver.SendMessage) (processor wsserver.MessageProcessor, err error) {
-	return &messageProcessor{updater: server.updater, sendMessage: sendMessage}, nil
+	messageProcessor := &messageProcessor{updater: server.updater, sendMessage: sendMessage}
+
+	messageProcessor.updater.SetStatusCallback(messageProcessor.sendStatus)
+
+	return messageProcessor, nil
+}
+
+func (processor *messageProcessor) sendStatus(status string) {
+	errStr := ""
+
+	if err := processor.updater.GetLastError(); err != nil {
+		errStr = err.Error()
+	}
+
+	statusMessage := umprotocol.StatusRsp{
+		Operation:        processor.updater.GetLastOperation(),
+		Status:           status,
+		Error:            errStr,
+		RequestedVersion: processor.updater.GetOperationVersion(),
+		CurrentVersion:   processor.updater.GetCurrentVersion(),
+	}
+
+	log.Debug("Send operation status")
+
+	statusJSON, err := marshalResponse(umprotocol.StatusResponseType, &statusMessage)
+	if err != nil {
+		log.Errorf("Can't marshal status message: %s", err)
+	}
+
+	if err = processor.sendMessage(websocket.TextMessage, statusJSON); err != nil {
+		log.Errorf("Can't send status message: %s", err)
+	}
 }
 
 func (processor *messageProcessor) processGetStatus() (response []byte, err error) {
