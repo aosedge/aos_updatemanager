@@ -18,11 +18,15 @@
 package updatehandler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"path"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/image"
 	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
@@ -59,6 +63,8 @@ const (
 	revertFinishStateControllerStage
 	revertFinishStage
 )
+
+const metadataFileName = "metadata.json"
 
 /*******************************************************************************
  * Types
@@ -120,6 +126,18 @@ type StateController interface {
 	Revert(version uint64) (err error)
 	UpgradeFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error)
 	RevertFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error)
+}
+
+type itemMetadata struct {
+	Type string `json:"type"`
+	Path string `json:"path"`
+}
+
+type imageMetadata struct {
+	PlatformID        string         `json:"platformId"`
+	BundleVersion     string         `json:"bundleVersion,omitempty"`
+	BundleDescription string         `json:"bundleDescription,omitempty"`
+	UpdateItems       []itemMetadata `json:"updateItems"`
 }
 
 /*******************************************************************************
@@ -253,6 +271,13 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return errors.New("can't upgrade after failed revert")
 	}
 
+	if err = image.CheckFileInfo(imageInfo.Path, image.FileInfo{
+		Sha256: imageInfo.Sha256,
+		Sha512: imageInfo.Sha512,
+		Size:   imageInfo.Size}); err != nil {
+		return err
+	}
+
 	handler.operationVersion = version
 
 	if err = handler.storage.SetOperationVersion(handler.operationVersion); err != nil {
@@ -342,7 +367,11 @@ func (handler *Handler) operationFinished(newState int, operationError error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	log.WithFields(log.Fields{"newState": newState, "error": operationError}).Info("Operation finished")
+	if operationError != nil {
+		log.Errorf("Operation failed: %s", operationError)
+	} else {
+		log.WithFields(log.Fields{"newState": newState}).Info("Operation finished")
+	}
 
 	handler.state = newState
 
@@ -384,6 +413,7 @@ func (handler *Handler) upgrade(path string, stage int) {
 			stage = upgradeUnpackStage
 
 		case upgradeUnpackStage:
+			handler.lastError = image.UntarGZArchive(path, handler.upgradeDir)
 			stage = upgradeStartStateControllerStage
 
 		case upgradeStartStateControllerStage:
@@ -394,6 +424,7 @@ func (handler *Handler) upgrade(path string, stage int) {
 			stage = upgradeModulesStage
 
 		case upgradeModulesStage:
+			handler.lastError = handler.updateModules()
 			stage = upgradeFinishStateControllerStage
 
 		case upgradeFinishStateControllerStage:
@@ -478,6 +509,50 @@ func (handler *Handler) revert(stage int) {
 			return
 		}
 	}
+}
+
+func (handler *Handler) updateModules() (err error) {
+	metadataJSON, err := ioutil.ReadFile(path.Join(handler.upgradeDir, metadataFileName))
+	if err != nil {
+		return err
+	}
+
+	var metadata imageMetadata
+
+	if err = json.Unmarshal(metadataJSON, &metadata); err != nil {
+		return err
+	}
+
+	if handler.stateController != nil {
+		platformID, err := handler.stateController.GetPlatformID()
+		if err != nil {
+			return err
+		}
+
+		if metadata.PlatformID != platformID {
+			return errors.New("wrong platform ID")
+		}
+	}
+
+	for _, item := range metadata.UpdateItems {
+		log.WithField("id", item.Type).Debug("Update module")
+
+		module, err := handler.moduleProvider.GetModuleByID(item.Type)
+		if err != nil {
+			return err
+		}
+
+		updateModule, ok := module.(UpdateModule)
+		if !ok {
+			return fmt.Errorf("module %s doesn't implement update interface", item.Type)
+		}
+
+		if err = updateModule.Upgrade(item.Path); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (handler *Handler) getModuleByID(id string) (module UpdateModule, err error) {

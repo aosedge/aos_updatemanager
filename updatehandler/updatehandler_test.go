@@ -18,11 +18,14 @@
 package updatehandler_test
 
 import (
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/nunc-ota/aos_common/image"
 	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
@@ -74,7 +77,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err = os.MkdirAll("tmp", 0755); err != nil {
 		log.Fatalf("Can't crate tmp dir: %s", err)
 	}
 
@@ -97,8 +100,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, nil, &testStorage{})
-	if err != nil {
+	if updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, nil, &testStorage{}); err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -106,7 +108,7 @@ func TestMain(m *testing.M) {
 
 	updater.Close()
 
-	if err := os.RemoveAll("tmp"); err != nil {
+	if err = os.RemoveAll("tmp"); err != nil {
 		log.Fatalf("Error removing tmp dir: %s", err)
 	}
 
@@ -136,15 +138,24 @@ func TestUpgradeRevert(t *testing.T) {
 
 	version++
 
-	if err := updater.Upgrade(version, umprotocol.ImageInfo{}); err != nil {
-		t.Errorf("Upgrading error: %s", err)
+	imageInfo, err := createImage("tmp/testimage.bin")
+
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	if err := updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
 	}
 
 	select {
 	case <-time.After(5 * time.Second):
 		t.Error("wait operation timeout")
 
-	case <-statusChannel:
+	case status := <-statusChannel:
+		if status != umprotocol.SuccessStatus {
+			t.Fatalf("Upgrade failed: %s", updater.GetLastError())
+		}
 	}
 
 	if updater.GetCurrentVersion() != version {
@@ -204,6 +215,53 @@ func TestUpgradeRevert(t *testing.T) {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func createImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
+	metadataJSON := `
+{
+    "platformId": "SomePlatform",
+    "bundleVersion": "v1.24 28-02-2020",
+    "bundleDescription": "This is super update",
+    "updateItems": [
+        {
+            "type": "id1",
+            "path": "id1Dir"
+        },
+        {
+            "type": "id2",
+            "path": "id2Dir"
+        },
+        {
+            "type": "id3",
+            "path": "id3Dir"
+        }
+    ]
+}`
+
+	if err = os.MkdirAll("tmp/image", 0755); err != nil {
+		return imageInfo, err
+	}
+
+	if err := ioutil.WriteFile("tmp/image/metadata.json", []byte(metadataJSON), 0644); err != nil {
+		return imageInfo, err
+	}
+
+	if err := exec.Command("tar", "-C", "tmp/image", "-czf", imagePath, "./").Run(); err != nil {
+		return imageInfo, err
+	}
+
+	fileInfo, err := image.CreateFileInfo(imagePath)
+	if err != nil {
+		return imageInfo, err
+	}
+
+	imageInfo.Path = imagePath
+	imageInfo.Sha256 = fileInfo.Sha256
+	imageInfo.Sha512 = fileInfo.Sha512
+	imageInfo.Size = fileInfo.Size
+
+	return imageInfo, nil
+}
 
 func (storage *testStorage) SetState(state int) (err error) {
 	storage.state = state
