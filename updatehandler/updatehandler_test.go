@@ -41,7 +41,8 @@ import (
 
 type testStorage struct {
 	state            int
-	imageInfo        umprotocol.ImageInfo
+	operationStage   int
+	imagePath        string
 	operationVersion uint64
 	currentVersion   uint64
 	lastError        error
@@ -211,6 +212,24 @@ func (storage *testStorage) SetState(state int) (err error) {
 
 func (storage *testStorage) GetState() (state int, err error) {
 	return storage.state, nil
+}
+
+func (storage *testStorage) SetOperationStage(stage int) (err error) {
+	storage.operationStage = stage
+	return nil
+}
+
+func (storage *testStorage) GetOperationStage() (stage int, err error) {
+	return storage.operationStage, nil
+}
+
+func (storage *testStorage) SetImagePath(path string) (err error) {
+	storage.imagePath = path
+	return nil
+}
+
+func (storage *testStorage) GetImagePath() (path string, err error) {
+	return storage.imagePath, nil
 }
 
 func (storage *testStorage) SetCurrentVersion(version uint64) (err error) {

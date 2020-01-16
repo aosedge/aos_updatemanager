@@ -32,12 +32,28 @@ import (
  * Consts
  ******************************************************************************/
 
-// State
+// States
 const (
-	UpgradedState = iota
-	UpgradingState
-	RevertedState
-	RevertingState
+	upgradedState = iota
+	upgradingState
+	revertedState
+	revertingState
+)
+
+// Upgrade stages
+const (
+	upgradeInitStage = iota
+	upgradeUnpackStage
+	upgradeModulesStage
+	revertModuleStage
+	upgradeFinishStage
+)
+
+// Revert stages
+const (
+	revertInitStage = iota
+	revertModulesStage
+	revertFinishStage
 )
 
 /*******************************************************************************
@@ -79,6 +95,10 @@ type ModuleProvider interface {
 type Storage interface {
 	SetState(state int) (err error)
 	GetState() (state int, err error)
+	SetImagePath(path string) (err error)
+	GetImagePath() (path string, err error)
+	SetOperationStage(stage int) (err error)
+	GetOperationStage() (stage int, err error)
 	SetCurrentVersion(version uint64) (err error)
 	GetCurrentVersion() (version uint64, err error)
 	SetOperationVersion(version uint64) (err error)
@@ -117,12 +137,22 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, storage Storage) (ha
 		return nil, err
 	}
 
-	if handler.state == UpgradingState {
-		go handler.operationFinished(UpgradedState, handler.upgrade())
+	imagePath, err := handler.storage.GetImagePath()
+	if err != nil {
+		return nil, err
 	}
 
-	if handler.state == RevertingState {
-		go handler.operationFinished(RevertedState, handler.revert())
+	stage, err := handler.storage.GetOperationStage()
+	if err != nil {
+		return nil, err
+	}
+
+	if handler.state == upgradingState {
+		go handler.upgrade(imagePath, stage)
+	}
+
+	if handler.state == revertingState {
+		go handler.revert(stage)
 	}
 
 	return handler, nil
@@ -151,7 +181,7 @@ func (handler *Handler) GetStatus() (status string) {
 
 	status = umprotocol.SuccessStatus
 
-	if handler.state == RevertingState || handler.state == UpgradingState {
+	if handler.state == revertingState || handler.state == upgradingState {
 		status = umprotocol.InProgressStatus
 	}
 
@@ -167,11 +197,11 @@ func (handler *Handler) GetLastOperation() (operation string) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	if handler.state == RevertingState || handler.state == RevertedState {
+	if handler.state == revertingState || handler.state == revertedState {
 		operation = umprotocol.RevertOperation
 	}
 
-	if handler.state == UpgradingState || handler.state == UpgradedState {
+	if handler.state == upgradingState || handler.state == upgradedState {
 		operation = umprotocol.UpgradeOperation
 	}
 
@@ -193,11 +223,11 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 
 	log.WithField("version", version).Info("Upgrade")
 
-	if handler.state != RevertedState && handler.state != UpgradedState {
+	if handler.state != revertedState && handler.state != upgradedState {
 		return errors.New("wrong state")
 	}
 
-	if handler.state == RevertedState && handler.lastError != nil {
+	if handler.state == revertedState && handler.lastError != nil {
 		return errors.New("can't upgrade after failed revert")
 	}
 
@@ -213,13 +243,21 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
-	handler.state = UpgradingState
+	if err = handler.storage.SetOperationStage(upgradeInitStage); err != nil {
+		return err
+	}
+
+	if err = handler.storage.SetImagePath(imageInfo.Path); err != nil {
+		return err
+	}
+
+	handler.state = upgradingState
 
 	if err = handler.storage.SetState(handler.state); err != nil {
 		return err
 	}
 
-	go handler.operationFinished(UpgradedState, handler.upgrade())
+	go handler.upgrade(imageInfo.Path, upgradeInitStage)
 
 	return nil
 }
@@ -231,7 +269,7 @@ func (handler *Handler) Revert(version uint64) (err error) {
 
 	log.WithField("version", version).Info("Revert")
 
-	if !(handler.state == UpgradedState && handler.lastError == nil) {
+	if !(handler.state == upgradedState && handler.lastError == nil) {
 		return errors.New("wrong state")
 	}
 
@@ -247,13 +285,17 @@ func (handler *Handler) Revert(version uint64) (err error) {
 		return err
 	}
 
-	handler.state = RevertingState
+	if err = handler.storage.SetOperationStage(revertInitStage); err != nil {
+		return err
+	}
+
+	handler.state = revertingState
 
 	if err = handler.storage.SetState(handler.state); err != nil {
 		return err
 	}
 
-	go handler.operationFinished(RevertedState, handler.revert())
+	go handler.revert(revertInitStage)
 
 	return nil
 }
@@ -274,34 +316,30 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (handler *Handler) operationFinished(newState int, err error) {
+func (handler *Handler) operationFinished(newState int, operationError error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	log.WithFields(log.Fields{"newState": newState, "error": err}).Info("Operation finished")
-
-	handler.lastError = err
-
-	if err = handler.storage.SetLastError(handler.lastError); err != nil {
-		log.Errorf("Can't set last error: %s", err)
-	}
+	log.WithFields(log.Fields{"newState": newState, "error": operationError}).Info("Operation finished")
 
 	handler.state = newState
 
-	if err = handler.storage.SetState(handler.state); err != nil {
+	if err := handler.storage.SetState(handler.state); err != nil {
 		log.Errorf("Can't set state: %s", err)
 	}
 
-	handler.currentVersion = handler.operationVersion
+	if operationError == nil {
+		handler.currentVersion = handler.operationVersion
 
-	if err = handler.storage.SetCurrentVersion(handler.currentVersion); err != nil {
-		log.Errorf("Can't set current version: %s", err)
+		if err := handler.storage.SetCurrentVersion(handler.currentVersion); err != nil {
+			log.Errorf("Can't set current version: %s", err)
+		}
 	}
 
 	if handler.statusCallaback != nil {
 		status := umprotocol.SuccessStatus
 
-		if err != nil {
+		if operationError != nil {
 			status = umprotocol.FailedStatus
 		}
 
@@ -309,80 +347,71 @@ func (handler *Handler) operationFinished(newState int, err error) {
 	}
 }
 
-func (handler *Handler) upgrade() (err error) {
-	// TODO: should be reimplemented a
-	/*
-		index := 0
+func (handler *Handler) upgrade(path string, stage int) {
+	for {
+		log.WithField("stage", stage).Debug("Upgrade stage changed")
 
-		for ; index < len(handler.filesInfo); index++ {
-			fileInfo := handler.filesInfo[index]
-			fileName := path.Join(handler.upgradeDir, fileInfo.URL)
+		switch stage {
+		case upgradeInitStage:
+			stage = upgradeUnpackStage
 
-			if err = image.CheckFileInfo(fileName, image.FileInfo{
-				Sha256: fileInfo.Sha256,
-				Sha512: fileInfo.Sha512,
-				Size:   fileInfo.Size}); err != nil {
-				break
-			}
+		case upgradeUnpackStage:
+			stage = upgradeModulesStage
 
-			var module UpdateModule
+		case upgradeModulesStage:
+			stage = upgradeFinishStage
 
-			if module, err = handler.getModuleByID(fileInfo.Target); err != nil {
-				break
-			}
-
-			if err = module.Upgrade(fileName); err != nil {
-				// revert module with upgrade attempt
-				index++
-				break
-			}
+		case upgradeFinishStage:
+			handler.operationFinished(upgradedState, handler.lastError)
+			return
 		}
 
-		if err != nil {
-			for i := 0; i < index; i++ {
-				module, err := handler.getModuleByID(handler.filesInfo[i].Target)
-				if err != nil {
-					return err
-				}
-
-				if err = module.Revert(); err != nil {
-					return err
-				}
+		if handler.lastError != nil {
+			if err := handler.storage.SetLastError(handler.lastError); err != nil {
+				handler.operationFinished(upgradedState, err)
+				return
 			}
 
-			return err
+			stage = upgradeFinishStage
 		}
 
-		handler.imageVersion = handler.operationVersion
-
-		if err = handler.setImageVersion(handler.imageVersion); err != nil {
-			return err
+		if err := handler.storage.SetOperationStage(stage); err != nil {
+			handler.operationFinished(upgradedState, err)
+			return
 		}
-	*/
-	return nil
+	}
 }
 
-func (handler *Handler) revert() (err error) {
-	// TODO: should be reimplemented according to new protocol
-	/*
-		for _, fileInfo := range handler.filesInfo {
-			module, err := handler.getModuleByID(fileInfo.Target)
-			if err != nil {
-				return err
-			}
+func (handler *Handler) revert(stage int) {
+	for {
+		log.WithField("stage", stage).Debug("Revert stage changed")
 
-			if err = module.Revert(); err != nil {
-				return err
-			}
+		switch stage {
+		case revertInitStage:
+			stage = revertModulesStage
+
+		case revertModulesStage:
+			stage = revertFinishStage
+
+		case revertFinishStage:
+			handler.operationFinished(revertedState, handler.lastError)
+			return
 		}
 
-		handler.imageVersion = handler.operationVersion
+		if handler.lastError != nil {
+			if err := handler.storage.SetLastError(handler.lastError); err != nil {
+				handler.operationFinished(revertedState, err)
+				return
+			}
 
-		if err = handler.setImageVersion(handler.imageVersion); err != nil {
-			return err
+			stage = revertFinishStage
 		}
-	*/
-	return nil
+
+		if err := handler.storage.SetOperationStage(stage); err != nil {
+			handler.operationFinished(revertedState, err)
+			return
+		}
+	}
 }
 
 func (handler *Handler) getModuleByID(id string) (module UpdateModule, err error) {

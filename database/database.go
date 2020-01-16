@@ -32,7 +32,7 @@ import (
  ******************************************************************************/
 
 const (
-	dbVersion = 1
+	dbVersion = 2
 )
 
 /*******************************************************************************
@@ -134,6 +134,45 @@ func (db *Database) GetState() (state int, err error) {
 	return state, nil
 }
 
+// SetOperationStage stores operation stage
+func (db *Database) SetOperationStage(stage int) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET stage = ?", stage)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
+}
+
+// GetOperationStage returns operation stage
+func (db *Database) GetOperationStage() (stage int, err error) {
+	stmt, err := db.sql.Prepare("SELECT stage FROM config")
+	if err != nil {
+		return stage, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow().Scan(&stage)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return stage, ErrNotExist
+		}
+
+		return stage, err
+	}
+
+	return stage, nil
+}
+
 // SetOperationVersion stores operation version
 func (db *Database) SetOperationVersion(version uint64) (err error) {
 	result, err := db.sql.Exec("UPDATE config SET operationVersion = ?", version)
@@ -208,6 +247,44 @@ func (db *Database) GetCurrentVersion() (version uint64, err error) {
 	}
 
 	return version, nil
+}
+
+// SetImagePath stores image path
+func (db *Database) SetImagePath(path string) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET imagePath = ?", path)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
+}
+
+// GetImagePath returns image path
+func (db *Database) GetImagePath() (path string, err error) {
+	stmt, err := db.sql.Prepare("SELECT imagePath FROM config")
+	if err != nil {
+		return "", err
+	}
+	defer stmt.Close()
+
+	if err = stmt.QueryRow().Scan(&path); err != nil {
+		if err == sql.ErrNoRows {
+			return "", ErrNotExist
+		}
+
+		return "", err
+	}
+
+	return path, nil
 }
 
 // SetLastError stores last error
@@ -334,8 +411,10 @@ func (db *Database) createConfigTable() (err error) {
 		`CREATE TABLE config (
 			version INTEGER,
 			state INTEGER,
+			stage INTEGER,
 			currentVersion INTEGER,
 			operationVersion INTEGER,
+			imagePath TEXT,
 			lastError TEXT)`); err != nil {
 		return err
 	}
@@ -344,9 +423,11 @@ func (db *Database) createConfigTable() (err error) {
 		`INSERT INTO config (
 			version,
 			state,
+			stage,
 			currentVersion,
 			operationVersion,
-			lastError) values(?, ?, ?, ?, ?)`, dbVersion, 0, 0, 0, ""); err != nil {
+			imagePath,
+			lastError) values(?, ?, ?, ?, ?, ?, ?)`, dbVersion, 0, 0, 0, 0, "", ""); err != nil {
 		return err
 	}
 

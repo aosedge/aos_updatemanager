@@ -23,8 +23,6 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -87,7 +85,7 @@ func TestDBVersion(t *testing.T) {
 }
 
 func TestState(t *testing.T) {
-	setState := updatehandler.RevertingState
+	setState := 34
 	if err := db.SetState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
@@ -102,6 +100,21 @@ func TestState(t *testing.T) {
 	}
 }
 
+func TestOperationStage(t *testing.T) {
+	setStage := 59
+	if err := db.SetOperationStage(setStage); err != nil {
+		t.Fatalf("Can't set operation stage: %s", err)
+	}
+
+	getStage, err := db.GetOperationStage()
+	if err != nil {
+		t.Fatalf("Can't get operation stage: %s", err)
+	}
+
+	if setStage != getStage {
+		t.Fatalf("Wrong operation stage value: %v", getStage)
+	}
+}
 func TestCurrentVersion(t *testing.T) {
 	setVersion := uint64(16)
 	if err := db.SetCurrentVersion(setVersion); err != nil {
@@ -161,5 +174,21 @@ func TestLastError(t *testing.T) {
 
 	if setError != getError {
 		t.Fatalf("Wrong last error value: %v", getError)
+	}
+}
+
+func TestImagePath(t *testing.T) {
+	setImagePath := "/path/to/image"
+	if err := db.SetImagePath(setImagePath); err != nil {
+		t.Fatalf("Can't set image path: %s", err)
+	}
+
+	getImagePath, err := db.GetImagePath()
+	if err != nil {
+		t.Fatalf("Can't get image path: %s", err)
+	}
+
+	if setImagePath != getImagePath {
+		t.Fatalf("Wrong image path value: %v", getImagePath)
 	}
 }
