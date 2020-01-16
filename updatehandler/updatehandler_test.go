@@ -97,7 +97,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, &testStorage{})
+	updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, nil, &testStorage{})
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}

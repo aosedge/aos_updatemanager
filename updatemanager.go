@@ -29,6 +29,7 @@ import (
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
 	"aos_updatemanager/modulemanager"
+	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
 )
@@ -117,7 +118,13 @@ func main() {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	updater, err := updatehandler.New(cfg, moduleManager, db)
+	stateController, err := statecontroller.New(nil)
+	if err != nil {
+		log.Fatalf("Can't create state controller: %s", err)
+	}
+	defer stateController.Close()
+
+	updater, err := updatehandler.New(cfg, moduleManager, stateController, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}

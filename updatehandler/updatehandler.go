@@ -44,7 +44,9 @@ const (
 const (
 	upgradeInitStage = iota
 	upgradeUnpackStage
+	upgradeStartStateControllerStage
 	upgradeModulesStage
+	upgradeFinishStateControllerStage
 	revertModuleStage
 	upgradeFinishStage
 )
@@ -52,7 +54,9 @@ const (
 // Revert stages
 const (
 	revertInitStage = iota
+	revertStartStateControllerStage
 	revertModulesStage
+	revertFinishStateControllerStage
 	revertFinishStage
 )
 
@@ -63,8 +67,9 @@ const (
 // Handler update handler
 type Handler struct {
 	sync.Mutex
-	storage        Storage
-	moduleProvider ModuleProvider
+	stateController StateController
+	storage         Storage
+	moduleProvider  ModuleProvider
 
 	upgradeDir       string
 	state            int
@@ -107,22 +112,39 @@ type Storage interface {
 	GetLastError() (lastError error, err error)
 }
 
+// StateController state controller interface
+type StateController interface {
+	GetVersion() (version uint64, err error)
+	GetPlatformID() (id string, err error)
+	Upgrade(version uint64) (err error)
+	Revert(version uint64) (err error)
+	UpgradeFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error)
+	RevertFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error)
+}
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // New returns pointer to new Handler
-func New(cfg *config.Config, moduleProvider ModuleProvider, storage Storage) (handler *Handler, err error) {
+func New(cfg *config.Config, moduleProvider ModuleProvider, stateController StateController, storage Storage) (handler *Handler, err error) {
 	log.Debug("Create update handler")
 
 	handler = &Handler{
-		storage:        storage,
-		moduleProvider: moduleProvider,
-		upgradeDir:     cfg.UpgradeDir,
+		stateController: stateController,
+		storage:         storage,
+		moduleProvider:  moduleProvider,
+		upgradeDir:      cfg.UpgradeDir,
 	}
 
-	if handler.currentVersion, err = storage.GetCurrentVersion(); err != nil {
-		return nil, err
+	if handler.stateController != nil {
+		if handler.currentVersion, err = handler.stateController.GetVersion(); err != nil {
+			return nil, err
+		}
+	} else {
+		if handler.currentVersion, err = storage.GetCurrentVersion(); err != nil {
+			return nil, err
+		}
 	}
 
 	if handler.state, err = handler.storage.GetState(); err != nil {
@@ -328,12 +350,18 @@ func (handler *Handler) operationFinished(newState int, operationError error) {
 		log.Errorf("Can't set state: %s", err)
 	}
 
-	if operationError == nil {
-		handler.currentVersion = handler.operationVersion
+	if handler.stateController != nil {
+		var err error
 
-		if err := handler.storage.SetCurrentVersion(handler.currentVersion); err != nil {
-			log.Errorf("Can't set current version: %s", err)
+		if handler.currentVersion, err = handler.stateController.GetVersion(); err != nil {
+			log.Errorf("Can't get current version: %s", err)
 		}
+	} else if operationError == nil {
+		handler.currentVersion = handler.operationVersion
+	}
+
+	if err := handler.storage.SetCurrentVersion(handler.currentVersion); err != nil {
+		log.Errorf("Can't set current version: %s", err)
 	}
 
 	if handler.statusCallaback != nil {
@@ -356,9 +384,28 @@ func (handler *Handler) upgrade(path string, stage int) {
 			stage = upgradeUnpackStage
 
 		case upgradeUnpackStage:
+			stage = upgradeStartStateControllerStage
+
+		case upgradeStartStateControllerStage:
+			if handler.stateController != nil {
+				handler.lastError = handler.stateController.Upgrade(handler.operationVersion)
+			}
+
 			stage = upgradeModulesStage
 
 		case upgradeModulesStage:
+			stage = upgradeFinishStateControllerStage
+
+		case upgradeFinishStateControllerStage:
+			if handler.stateController != nil {
+				var postpone bool
+
+				postpone, handler.lastError = handler.stateController.UpgradeFinished(handler.operationVersion, nil)
+				if postpone {
+					return
+				}
+			}
+
 			stage = upgradeFinishStage
 
 		case upgradeFinishStage:
@@ -388,9 +435,28 @@ func (handler *Handler) revert(stage int) {
 
 		switch stage {
 		case revertInitStage:
+			stage = revertStartStateControllerStage
+
+		case revertStartStateControllerStage:
+			if handler.stateController != nil {
+				handler.lastError = handler.stateController.Revert(handler.operationVersion)
+			}
+
 			stage = revertModulesStage
 
 		case revertModulesStage:
+			stage = revertFinishStateControllerStage
+
+		case revertFinishStateControllerStage:
+			if handler.stateController != nil {
+				var postpone bool
+
+				postpone, handler.lastError = handler.stateController.RevertFinished(handler.operationVersion, nil)
+				if postpone {
+					return
+				}
+			}
+
 			stage = revertFinishStage
 
 		case revertFinishStage:
