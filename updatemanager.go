@@ -29,6 +29,7 @@ import (
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
 	"aos_updatemanager/modulemanager"
+	fsmodule "aos_updatemanager/modulemanager/fsmodule"
 	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
@@ -113,12 +114,14 @@ func main() {
 		}
 	}
 
+	registerModules()
+
 	moduleManager, err := modulemanager.New(cfg)
 	if err != nil {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	stateController, err := statecontroller.New(nil)
+	stateController, err := statecontroller.New(nil, moduleManager)
 	if err != nil {
 		log.Fatalf("Can't create state controller: %s", err)
 	}
@@ -141,4 +144,10 @@ func main() {
 	signal.Notify(terminateChannel, os.Interrupt, syscall.SIGTERM)
 
 	<-terminateChannel
+}
+
+func registerModules() {
+	modulemanager.Register("rootfs", func(id string, configJSON []byte) (module interface{}, err error) {
+		return fsmodule.New(id, configJSON)
+	})
 }
