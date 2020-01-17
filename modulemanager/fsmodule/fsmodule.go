@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"sync"
 	"syscall"
 
@@ -90,7 +91,7 @@ func (module *FileSystemModule) GetID() (id string) {
 // Upgrade upgrade module
 func (module *FileSystemModule) Upgrade(folderPath string) (err error) {
 	log.Info("FileSystemModule Upgrade request : ", folderPath)
-	jsonFile, err := os.Open(folderPath + "/" + metaDataFilename)
+	jsonFile, err := os.Open(path.Join(folderPath, metaDataFilename))
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func (module *FileSystemModule) Upgrade(folderPath string) (err error) {
 		return err
 	}
 
-	fsMetadata.Resources = folderPath + "/" + fsMetadata.Resources
+	fsMetadata.Resources = path.Join(folderPath, fsMetadata.Resources)
 	if fsMetadata.Type == fullType {
 		err = module.performFullFsUpdate(&fsMetadata)
 	} else {
@@ -132,6 +133,7 @@ func (module *FileSystemModule) SetPartitionForUpdate(path string) (err error) {
 
 // Full fs update
 func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) (err error) {
+	log.Debug("Start full file system update, destination: ", module.partitionForUpdate)
 	partition, err := os.OpenFile(module.partitionForUpdate, os.O_RDWR, 0666)
 	if err != nil {
 		return err
@@ -197,9 +199,9 @@ func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) 
 }
 
 // Validate fsUpdateMetadata validation function
-func (metadata *fsUpdateMetadata) Validate(path, id string) (err error) {
+func (metadata *fsUpdateMetadata) Validate(resourcePath, id string) (err error) {
 	if metadata.ComponentType != id {
-		return fmt.Errorf("module type missmatch Update %s != %s", metadata.ComponentType, id)
+		return fmt.Errorf("module type mismatch %s!=%s", metadata.ComponentType, id)
 	}
 
 	if metadata.Type != fullType && metadata.Type != incrementalType {
@@ -212,8 +214,8 @@ func (metadata *fsUpdateMetadata) Validate(path, id string) (err error) {
 		}
 	}
 
-	if _, err := os.Stat(path + "/" + metadata.Resources); os.IsNotExist(err) {
-		return fmt.Errorf("resource does not exist")
+	if _, err := os.Stat(path.Join(resourcePath, metadata.Resources)); os.IsNotExist(err) {
+		return fmt.Errorf("resource does not exist %s", path.Join(resourcePath, metadata.Resources))
 	}
 
 	return nil

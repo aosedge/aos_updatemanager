@@ -547,7 +547,7 @@ func (handler *Handler) updateModules() (err error) {
 			return fmt.Errorf("module %s doesn't implement update interface", item.Type)
 		}
 
-		if err = updateModule.Upgrade(item.Path); err != nil {
+		if err = updateModule.Upgrade(path.Join(handler.upgradeDir, item.Path)); err != nil {
 			return err
 		}
 	}
