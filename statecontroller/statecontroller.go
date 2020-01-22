@@ -85,7 +85,7 @@ func (controller *Controller) Upgrade(version uint64) (err error) {
 		return err
 	}
 	if fsModule, ok := module.(*fsmodule.FileSystemModule); ok {
-		fsModule.SetPartitionForUpdate(controller.configProvider.GetRootFsConfig())
+		fsModule.SetPartitionForUpdate(controller.configProvider.GetRootFsConfig(), "ext4")
 	} else {
 		log.Warning("not fsmodule")
 		return fmt.Errorf("No rootfs module detected")

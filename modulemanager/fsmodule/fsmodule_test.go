@@ -86,12 +86,12 @@ func TestGetID(t *testing.T) {
 }
 
 func TestSetPartition(t *testing.T) {
-	err := module.SetPartitionForUpdate("")
+	err := module.SetPartitionForUpdate("", "")
 	if err == nil {
 		t.Errorf("Should be error: partition does not exist")
 	}
 
-	err = module.SetPartitionForUpdate("/tmp")
+	err = module.SetPartitionForUpdate("/tmp", "ext4")
 	if err != nil {
 		t.Errorf("Error SetPartitionForUpdate: %s", err)
 	}
@@ -190,7 +190,7 @@ func TestFullFSUpdate(t *testing.T) {
 
 	generateTestPartition(10)
 
-	if err := module.SetPartitionForUpdate("./tmp/partition"); err != nil {
+	if err := module.SetPartitionForUpdate("./tmp/partition", "ext4"); err != nil {
 		t.Errorf("Error SetPartitionForUpdate: %s", err)
 	}
 

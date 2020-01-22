@@ -39,7 +39,12 @@ import (
 type FileSystemModule struct {
 	id string
 	sync.Mutex
-	partitionForUpdate string
+	partitionForUpdate partitionInfo
+}
+
+type partitionInfo struct {
+	device string
+	fsType string
 }
 
 type fsUpdateMetadata struct {
@@ -123,18 +128,20 @@ func (module *FileSystemModule) Revert() (err error) {
 }
 
 // SetPartitionForUpdate Set partition which should be updated
-func (module *FileSystemModule) SetPartitionForUpdate(path string) (err error) {
+func (module *FileSystemModule) SetPartitionForUpdate(path, fsType string) (err error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("partition %s does not exist ", path)
 	}
-	module.partitionForUpdate = path
+
+	module.partitionForUpdate = partitionInfo{path, fsType}
+
 	return nil
 }
 
 // Full fs update
 func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) (err error) {
-	log.Debug("Start full file system update, destination: ", module.partitionForUpdate)
-	partition, err := os.OpenFile(module.partitionForUpdate, os.O_RDWR, 0666)
+	log.Debug("Start full file system update, destination: ", module.partitionForUpdate.device)
+	partition, err := os.OpenFile(module.partitionForUpdate.device, os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
@@ -157,11 +164,11 @@ func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) 
 		return err
 	}
 
-	log.Info("Start full fs Update partition ", module.partitionForUpdate, "from ", metadata.Resources)
+	log.Info("Start full fs Update partition ", module.partitionForUpdate.device, "from ", metadata.Resources)
 
 	var stat syscall.Statfs_t
 
-	syscall.Statfs(module.partitionForUpdate, &stat)
+	syscall.Statfs(module.partitionForUpdate.device, &stat)
 
 	blockSize := stat.Bsize
 	buf := make([]byte, blockSize, blockSize)
