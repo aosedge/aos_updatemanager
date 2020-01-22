@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"sync"
 
@@ -64,6 +65,7 @@ const (
 	revertFinishStage
 )
 
+const bundleDir = "bundleDir"
 const metadataFileName = "metadata.json"
 
 /*******************************************************************************
@@ -152,7 +154,13 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 		stateController: stateController,
 		storage:         storage,
 		moduleProvider:  moduleProvider,
-		upgradeDir:      cfg.UpgradeDir,
+		upgradeDir:      path.Join(cfg.UpgradeDir, bundleDir),
+	}
+
+	if _, err := os.Stat(handler.upgradeDir); os.IsNotExist(err) {
+		if errMkdir := os.MkdirAll(handler.upgradeDir, 0755); errMkdir != nil {
+			return nil, errMkdir
+		}
 	}
 
 	if handler.stateController != nil {
@@ -410,9 +418,20 @@ func (handler *Handler) upgrade(path string, stage int) {
 
 		switch stage {
 		case upgradeInitStage:
+			if err := os.RemoveAll(handler.upgradeDir); err != nil {
+				log.Debug("Remove untar bundle folder error: ", err)
+				handler.lastError = err
+				break
+			}
+
 			stage = upgradeUnpackStage
 
 		case upgradeUnpackStage:
+			if err := os.MkdirAll(handler.upgradeDir, 0755); err != nil {
+				handler.lastError = err
+				break
+			}
+
 			handler.lastError = image.UntarGZArchive(path, handler.upgradeDir)
 			stage = upgradeStartStateControllerStage
 
