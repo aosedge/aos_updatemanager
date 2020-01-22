@@ -7,13 +7,13 @@ import (
 
 	"github.com/shirou/gopsutil/disk"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/modulemanager/fsmodule"
 )
 
 /*******************************************************************************
  * Consts
  ******************************************************************************/
+
+const rootFSModuleID = "rootfs"
 
 /*******************************************************************************
  * Types
@@ -45,6 +45,10 @@ type controllerConfig struct {
 	RootPartitions []partitionInfo
 }
 
+type fsModule interface {
+	SetPartitionForUpdate(path, fsType string) (err error)
+}
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
@@ -58,7 +62,7 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 	log.Info("Create state constoller")
 
 	if moduleProvider == nil {
-		return nil, fmt.Errorf("moduleProvider is nil")
+		return nil, errors.New("module provider should not be nil")
 	}
 
 	controller = &Controller{
@@ -66,6 +70,10 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 	}
 
 	if err = json.Unmarshal(configJSON, &controller.config); err != nil {
+		return nil, err
+	}
+
+	if err = controller.initModules(); err != nil {
 		return nil, err
 	}
 
@@ -91,24 +99,6 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 
 // Upgrade notifies state controller about start of system upgrade
 func (controller *Controller) Upgrade(version uint64) (err error) {
-	///configure update modules
-	module, err := controller.moduleProvider.GetModuleByID("rootfs")
-	if err != nil {
-		log.Warning("no rootfs modue ", err)
-		return err
-	}
-	if fsModule, ok := module.(*fsmodule.FileSystemModule); ok {
-		partition, err := controller.getRootFSUpdatePartition()
-		if err != nil {
-			return err
-		}
-
-		fsModule.SetPartitionForUpdate(partition.Device, partition.FSType)
-	} else {
-		log.Warning("not fsmodule")
-		return fmt.Errorf("No rootfs module detected")
-	}
-
 	return nil
 }
 
@@ -155,5 +145,30 @@ func (controller *Controller) getRootFSUpdatePartition() (partition partitionInf
 		}
 	}
 
-	return partition, errors.New("no unmounted partition found")
+	return partition, errors.New("no root FS update partition found")
+}
+
+func (controller *Controller) initModules() (err error) {
+	// init root FS module
+
+	module, err := controller.moduleProvider.GetModuleByID(rootFSModuleID)
+	if err != nil {
+		return err
+	}
+
+	fsModule, ok := module.(fsModule)
+	if !ok {
+		return fmt.Errorf("module %s doesn't implement required interface", rootFSModuleID)
+	}
+
+	partition, err := controller.getRootFSUpdatePartition()
+	if err != nil {
+		return err
+	}
+
+	if err = fsModule.SetPartitionForUpdate(partition.Device, partition.FSType); err != nil {
+		return err
+	}
+
+	return nil
 }
