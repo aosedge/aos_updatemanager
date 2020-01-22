@@ -18,7 +18,6 @@
 package modulemanager
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -73,17 +72,12 @@ func New(cfg *config.Config) (manager *ModuleManager, err error) {
 			log.WithField("id", moduleCfg.ID).Warning("Module already exists")
 		}
 
-		paramsJSON, err := json.Marshal(moduleCfg.Params)
-		if err != nil {
-			return nil, err
-		}
-
 		newFunc, ok := moduleMap[moduleCfg.Module]
 		if !ok {
 			return nil, fmt.Errorf("module %s not found", moduleCfg.Module)
 		}
 
-		module, err := newFunc(moduleCfg.ID, paramsJSON)
+		module, err := newFunc(moduleCfg.ID, moduleCfg.Params)
 		if err != nil {
 			return nil, err
 		}

@@ -42,7 +42,7 @@ type ModuleConfig struct {
 	ID       string
 	Disabled bool
 	Module   string
-	Params   interface{}
+	Params   json.RawMessage
 }
 
 /*******************************************************************************
