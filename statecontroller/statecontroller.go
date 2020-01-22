@@ -1,6 +1,7 @@
 package statecontroller
 
 import (
+	"encoding/json"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
@@ -20,6 +21,7 @@ import (
 type Controller struct {
 	configProvider ConfigProvider
 	moduleProvider ModuleProvider
+	config         controllerConfig
 }
 
 type modulesConfiguration struct {
@@ -34,6 +36,15 @@ type ConfigProvider interface {
 type ModuleProvider interface {
 	// GetModuleByID returns module by id
 	GetModuleByID(id string) (module interface{}, err error)
+}
+
+type partitionInfo struct {
+	Device string
+	FSType string
+}
+
+type controllerConfig struct {
+	RootPartitions []partitionInfo
 }
 
 /*******************************************************************************
@@ -55,6 +66,10 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 	controller = &Controller{}
 	controller.configProvider = &modulesConfiguration{}
 	controller.moduleProvider = moduleProvider
+
+	if err = json.Unmarshal(configJSON, &controller.config); err != nil {
+		return nil, err
+	}
 
 	return controller, nil
 }

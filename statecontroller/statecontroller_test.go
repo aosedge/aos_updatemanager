@@ -44,7 +44,22 @@ func TestMain(m *testing.M) {
 
 	moduleMgr := TestModuleMgr{}
 
-	if controller, err = statecontroller.New(nil, &moduleMgr); err != nil {
+	configJSON := `
+{
+	"RootPartitions" : [
+		{
+			"device" : "/dev/sda1",
+			"fstype" : "ext4"
+		},
+		{
+			"device" : "/dev/sda2",
+			"fstype" : "ext4"
+		}
+	]
+}
+`
+
+	if controller, err = statecontroller.New([]byte(configJSON), &moduleMgr); err != nil {
 		log.Fatalf("Error creating state controller: %s", err)
 	}
 

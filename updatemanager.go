@@ -121,7 +121,7 @@ func main() {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	stateController, err := statecontroller.New(nil, moduleManager)
+	stateController, err := statecontroller.New(cfg.StateController, moduleManager)
 	if err != nil {
 		log.Fatalf("Can't create state controller: %s", err)
 	}
