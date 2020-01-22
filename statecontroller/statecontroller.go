@@ -2,8 +2,10 @@ package statecontroller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
+	"github.com/shirou/gopsutil/disk"
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/modulemanager/fsmodule"
@@ -100,7 +102,12 @@ func (controller *Controller) Upgrade(version uint64) (err error) {
 		return err
 	}
 	if fsModule, ok := module.(*fsmodule.FileSystemModule); ok {
-		fsModule.SetPartitionForUpdate(controller.configProvider.GetRootFsConfig(), "ext4")
+		partition, err := controller.getRootFSUpdatePartition()
+		if err != nil {
+			return err
+		}
+
+		fsModule.SetPartitionForUpdate(partition.Device, partition.FSType)
 	} else {
 		log.Warning("not fsmodule")
 		return fmt.Errorf("No rootfs module detected")
@@ -133,4 +140,35 @@ func (config modulesConfiguration) GetRootFsConfig() string {
 	// TODO: implements detection partition got update
 	return "/dev/nvme0n1p3"
 
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func (controller *Controller) getRootFSUpdatePartition() (partition partitionInfo, err error) {
+	// We assume that active partition should be mounted at same time another root FS partition
+	// should be unmounted. Return first unmounted partition from root FS partition list.
+
+	stats, err := disk.Partitions(false)
+	if err != nil {
+		return partition, err
+	}
+
+	for _, partition = range controller.config.RootPartitions {
+		found := false
+
+		for _, stat := range stats {
+			if stat.Device == partition.Device {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return partition, nil
+		}
+	}
+
+	return partition, errors.New("no unmounted partition found")
 }
