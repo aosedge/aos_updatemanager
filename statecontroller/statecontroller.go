@@ -21,12 +21,8 @@ import (
 
 // Controller state controller instance
 type Controller struct {
-	configProvider ConfigProvider
 	moduleProvider ModuleProvider
 	config         controllerConfig
-}
-
-type modulesConfiguration struct {
 }
 
 //ConfigProvider interface to get configuration for update modules
@@ -65,9 +61,9 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 		return nil, fmt.Errorf("moduleProvider is nil")
 	}
 
-	controller = &Controller{}
-	controller.configProvider = &modulesConfiguration{}
-	controller.moduleProvider = moduleProvider
+	controller = &Controller{
+		moduleProvider: moduleProvider,
+	}
 
 	if err = json.Unmarshal(configJSON, &controller.config); err != nil {
 		return nil, err
@@ -129,17 +125,6 @@ func (controller *Controller) UpgradeFinished(version uint64, moduleStatus map[s
 // RevertFinished notifies state controller about finish of revert
 func (controller *Controller) RevertFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error) {
 	return false, nil
-}
-
-//SetConfigProvider change default config provider
-func (controller *Controller) SetConfigProvider(config ConfigProvider) {
-	controller.configProvider = config
-}
-
-func (config modulesConfiguration) GetRootFsConfig() string {
-	// TODO: implements detection partition got update
-	return "/dev/nvme0n1p3"
-
 }
 
 /*******************************************************************************
