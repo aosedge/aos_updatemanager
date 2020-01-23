@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"testing"
 
@@ -188,90 +189,97 @@ func TestFullFSUpdate(t *testing.T) {
 		t.Errorf("Upgrade should failed: resource does not exist %s", err)
 	}
 
-	generateTestPartition(10)
+	partition := "./tmp/partition"
+	generateTestPartition(10, partition)
 
-	if err := module.SetPartitionForUpdate("./tmp/partition", "ext4"); err != nil {
+	if err := module.SetPartitionForUpdate(partition, "ext4"); err != nil {
 		t.Errorf("Error SetPartitionForUpdate: %s", err)
 	}
 
 	if err := module.Upgrade("tmp"); err == nil {
 		t.Errorf("Upgrade should failed: invalid header %s", err)
 	}
-	generateTestImage()
+	generateTestImage("./tmp/", prepareContentForFullUpdate)
 
 	if err := module.Upgrade("tmp"); err == nil {
 		t.Errorf("Upgrade should failed: Size missmatch %s", err)
 	}
-	generateTestPartition(20)
+
+	generateTestPartition(20, partition)
+
 	if err := module.Upgrade("tmp"); err != nil {
 		t.Errorf("Upgrade failed %s", err)
 	}
 
-	command := exec.Command("mount", "./tmp/partition", "./tmp/mount_point")
+	if err := os.MkdirAll("tmp/mount_point_new", 0755); err != nil {
+		log.Fatalf("Error creating tmp dir %s", err)
+	}
+
+	command := exec.Command("mount", partition, "./tmp/mount_point_new")
 	if err := command.Run(); err != nil {
 		t.Errorf("Can't mount updated partiion: %s", err)
 	}
 
-	if _, err := os.Stat("./tmp/mount_point/testdata.txt"); os.IsNotExist(err) {
+	if _, err := os.Stat("./tmp/mount_point_new/testdata.txt"); os.IsNotExist(err) {
 		t.Errorf("Resource does not exist")
 	}
 
-	command = exec.Command("umount", "./tmp/mount_point")
+	command = exec.Command("umount", "./tmp/mount_point_new")
 	if err := command.Run(); err != nil {
 		t.Errorf("Can't umount updated partiion: %s", err)
 	}
 }
 
-func generateTestImage() {
-	command := exec.Command("dd", "if=/dev/zero", "of=./tmp/testImage.img", "bs=1M", "count=20")
-	err := command.Run()
-	if err != nil {
-		log.Fatalf("Can't run dd: %s", err)
-	}
+func generateTestImage(folderForRes string, imageContent func(mountPoint string)) (archivePath string) {
+	mountPointImg := "./tmp/mount_point"
+	pathToImage := path.Join(folderForRes, "testImage.img")
 
-	command = exec.Command("mkfs.ext4", "./tmp/testImage.img")
-	err = command.Run()
-	if err != nil {
+	generateTestPartition(20, pathToImage)
+
+	if err := exec.Command("mkfs.ext4", pathToImage).Run(); err != nil {
 		log.Fatalf("Can't run mkfs.ext4: %s", err)
 	}
 
-	if err = os.MkdirAll("tmp/mount_point", 0755); err != nil {
+	if err := os.MkdirAll(mountPointImg, 0755); err != nil {
 		log.Fatalf("Error creating tmp mount_point %s", err)
 	}
 
-	command = exec.Command("mount", "./tmp/testImage.img", "./tmp/mount_point")
-	err = command.Run()
-	if err != nil {
+	if err := exec.Command("mount", pathToImage, mountPointImg).Run(); err != nil {
 		log.Fatalf("Can't run mount: %s", err)
 	}
 
-	if err := ioutil.WriteFile("./tmp/mount_point/testdata.txt", []byte("This is test file"), 0644); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
-	}
+	imageContent(mountPointImg)
 
-	command = exec.Command("umount", "./tmp/mount_point")
-	err = command.Run()
-	if err != nil {
+	if err := exec.Command("umount", mountPointImg).Run(); err != nil {
 		log.Fatalf("Can't run umount: %s", err)
 	}
 
-	if err = os.RemoveAll("./tmp/testImage.img.gz"); err != nil {
+	if err := os.RemoveAll("./tmp/testImage.img.gz"); err != nil {
 		log.Fatalf("Error deleting ./tmp/testImage.img.gz : %s", err)
 	}
 
-	command = exec.Command("gzip", "./tmp/testImage.img")
-	err = command.Run()
-	if err != nil {
+	if err := exec.Command("gzip", path.Join(folderForRes, "testImage.img")).Run(); err != nil {
 		log.Fatalf("Can't run gzip: %s", err)
+	}
+	if err := os.RemoveAll(mountPointImg); err != nil {
+		log.Fatalf("Error deleting %s : %s", mountPointImg, err)
+	}
+
+	return path.Join(folderForRes, "testImage.img.gz")
+}
+
+func prepareContentForFullUpdate(mountPoint string) {
+	if err := ioutil.WriteFile(path.Join(mountPoint, "testdata.txt"), []byte("This is test file"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
 	}
 }
 
-func generateTestPartition(size int) {
+func generateTestPartition(size int, pathPartition string) {
 	count := "count=" + strconv.Itoa(size)
 
-	command := exec.Command("dd", "if=/dev/zero", "of=./tmp/partition", "bs=1M", count)
+	command := exec.Command("dd", "if=/dev/zero", "of="+pathPartition, "bs=1M", count)
 	err := command.Run()
 	if err != nil {
-		log.Fatalf("Can't run dd: %s", err)
+		log.Fatalf("Generate test partition failed: %s", err)
 	}
 }
