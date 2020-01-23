@@ -408,7 +408,11 @@ func (handler *Handler) operationFinished(newState int, operationError error) {
 			status = umprotocol.FailedStatus
 		}
 
-		handler.statusCallaback(status)
+		statusCallback := handler.statusCallaback
+
+		handler.Unlock()
+		statusCallback(status)
+		handler.Lock()
 	}
 }
 
