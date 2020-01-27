@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -276,11 +277,40 @@ func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMet
 		return err
 	}
 
+	log.Debug("Cleanup hard links ")
+	if err := removeRepoContents(tmpMountpoint); err != nil {
+		return err
+	}
+
 	log.Debug("Ostree checkout to commit ", metadata.Commit)
 	command = exec.Command("ostree", "--repo="+repoPath, "checkout", metadata.Commit, "-H", "-U", "--union", tmpMountpoint)
 	if err := command.Run(); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func removeRepoContents(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if name == ostreeRepoFolder {
+			continue
+		}
+
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+
+	}
 	return nil
 }

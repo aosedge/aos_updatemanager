@@ -329,6 +329,10 @@ func TestIncrementalUpdate(t *testing.T) {
 	if _, err := os.Stat(path.Join(tmpMountPint, "dir1/file3.txt")); os.IsNotExist(err) {
 		t.Errorf("Resource dir1/file3.txt does not exist")
 	}
+
+	if _, err := os.Stat(path.Join(tmpMountPint, "file_for_remove.txt")); os.IsNotExist(err) == false {
+		t.Errorf("file_for_remove.txt should not be exist")
+	}
 }
 
 func generateTestImage(folderForRes string, imageContent func(mountPoint string)) (archivePath string) {
@@ -406,6 +410,9 @@ func prepareResourceForIncUpdate(mountpath string) {
 	if err := ioutil.WriteFile("tmp/archive_folder/file.txt", []byte("This is test file"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
+	if err := ioutil.WriteFile("tmp/archive_folder/file_for_remove.txt", []byte("This is test file to test remove"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
 	if err := ioutil.WriteFile("tmp/archive_folder/dir1/file2.txt", []byte("This is test file2"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
@@ -445,6 +452,9 @@ func prepareDiffcommit() (commitId string) {
 	if err := ioutil.WriteFile("tmp/archive_folder/dir1/file2.txt", []byte("Edited File"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
+	if err := os.RemoveAll("tmp/archive_folder/file_for_remove.txt"); err != nil {
+		log.Fatalf("Can't remove file: %s", err)
+	}
 
 	if err := exec.Command("tar", "-czf", "tmp/test_archive2.tar.gz", "-C", "tmp/archive_folder", ".").Run(); err != nil {
 		log.Fatalf("Can't run tar: %s", err)
@@ -462,6 +472,6 @@ func prepareDiffcommit() (commitId string) {
 		"--filename=tmp/ostree/test/delta").Run(); err != nil {
 		log.Fatal("error static-delta ", err)
 	}
-	return commitstr
 
+	return commitstr
 }
