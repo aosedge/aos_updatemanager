@@ -19,15 +19,30 @@ package fsmodule_test
 
 import (
 	fsmodule "aos_updatemanager/modulemanager/fsmodule"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
 )
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+type fsMetadata struct {
+	ComponentType string `json:"componentType"`
+	Version       int    `json:"version"`
+	Description   string `json:"description,omitempty"`
+	Type          string `json:"type"`
+	Commit        string `json:"commit,omitempty"`
+	Resources     string `json:"resources"`
+}
 
 /*******************************************************************************
  * Var
@@ -230,6 +245,92 @@ func TestFullFSUpdate(t *testing.T) {
 	}
 }
 
+func TestIncrementalUpdate(t *testing.T) {
+	ostreeTestpath := "tmp/ostree/test/"
+	if err := os.MkdirAll(ostreeTestpath, 0755); err != nil {
+		log.Fatalf("Error creating tmp dir %s", err)
+	}
+
+	generateTestImage(ostreeTestpath, prepareResourceForIncUpdate)
+
+	metadata := fsMetadata{
+		ComponentType: "rootfs",
+		Version:       12,
+		Description:   "Nuance rootfs v 12",
+		Type:          "full",
+		Resources:     "testImage.img.gz",
+	}
+
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		log.Fatalf("Can't marshall json: %s", err)
+	}
+
+	if err := ioutil.WriteFile(path.Join(ostreeTestpath, "metadata.json"), data, 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	partition := "tmp/ostree/partition"
+	generateTestPartition(20, partition)
+
+	//generate loop
+	loopDevice := "/dev/loop99"
+	if err := exec.Command("losetup", loopDevice, partition).Run(); err != nil {
+		log.Fatalf("Can't run losetup: %s", err)
+	}
+
+	if err := module.SetPartitionForUpdate(loopDevice, "ext4"); err != nil {
+		t.Errorf("Error SetPartitionForUpdate: %s", err)
+	}
+
+	if err := module.Upgrade(ostreeTestpath); err != nil {
+		t.Errorf("Upgrade failed %s", err)
+	}
+
+	commit := prepareDiffcommit()
+	metadata.Commit = commit
+	metadata.Type = "incremental"
+	metadata.Version = 13
+	metadata.Resources = "delta"
+
+	data, err = json.Marshal(metadata)
+	if err != nil {
+		log.Fatalf("Can't marshall json: %s", err)
+	}
+
+	if err := ioutil.WriteFile(path.Join(ostreeTestpath, "metadata.json"), data, 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := module.Upgrade(ostreeTestpath); err != nil {
+		t.Errorf("Upgrade failed with delta %s", err)
+	}
+
+	if err := exec.Command("losetup", "-d", loopDevice).Run(); err != nil {
+		log.Fatalf("Can't remove loop: %s", err)
+	}
+
+	//change validation
+	tmpMountPint := "./tmp/mount_point"
+	if err := os.MkdirAll(tmpMountPint, 0755); err != nil {
+		log.Fatalf("Error creating tmp mount_point %s", err)
+	}
+
+	if err := exec.Command("mount", partition, tmpMountPint).Run(); err != nil {
+		log.Fatalf("Can't run mount for updated partition: %s", err)
+	}
+
+	defer func() {
+		if err := exec.Command("umount", tmpMountPint).Run(); err != nil {
+			log.Fatalf("Can't run umount: %s", err)
+		}
+	}()
+
+	if _, err := os.Stat(path.Join(tmpMountPint, "dir1/file3.txt")); os.IsNotExist(err) {
+		t.Errorf("Resource dir1/file3.txt does not exist")
+	}
+}
+
 func generateTestImage(folderForRes string, imageContent func(mountPoint string)) (archivePath string) {
 	mountPointImg := "./tmp/mount_point"
 	pathToImage := path.Join(folderForRes, "testImage.img")
@@ -282,4 +383,85 @@ func generateTestPartition(size int, pathPartition string) {
 	if err != nil {
 		log.Fatalf("Generate test partition failed: %s", err)
 	}
+}
+
+// prepare full image with ostree repo
+func prepareResourceForIncUpdate(mountpath string) {
+	//prepare source folder and create archive
+	if err := os.MkdirAll("tmp/origOstree/", 0755); err != nil {
+		log.Fatalf("Error creating tmp dir %s", err)
+	}
+
+	//ostree --repo=tmp/origOstree/.ostree_repo init --mode=bare-user
+	if err := exec.Command("ostree", "--repo=tmp/origOstree/.ostree_repo", "init", "--mode=bare-user").Run(); err != nil {
+		log.Fatalf("Error creating repo %s", err)
+	}
+
+	if err := os.MkdirAll("tmp/archive_folder", 0755); err != nil {
+		log.Fatalf("Error creating tmp dir %s", err)
+	}
+	if err := os.MkdirAll("tmp/archive_folder/dir1", 0755); err != nil {
+		log.Fatalf("Error creating tmp dir %s", err)
+	}
+	if err := ioutil.WriteFile("tmp/archive_folder/file.txt", []byte("This is test file"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+	if err := ioutil.WriteFile("tmp/archive_folder/dir1/file2.txt", []byte("This is test file2"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := exec.Command("tar", "-czf", "tmp/test_archive.tar.gz", "-C", "tmp/archive_folder", ".").Run(); err != nil {
+		log.Fatalf("Can't run tar: %s", err)
+	}
+
+	//ostree --repo=tmp/origOstree/.ostree_repo commit -b branch_name -s"commit name" --tree=tar=tmp/test_archive.tar.gz
+	commit, err := exec.Command("ostree", "--repo=tmp/origOstree/.ostree_repo", "commit", "-b", "branch_name", "-s", `"commit name"`,
+		"--tree=tar=tmp/test_archive.tar.gz").Output()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	commitstr := strings.TrimSuffix(string(commit), "\n")
+	log.Debug("Commit= ", commitstr)
+
+	if err := exec.Command("ostree", "--repo="+path.Join(mountpath, ".ostree_repo"), "init", "--mode=bare-user").Run(); err != nil {
+		log.Fatalf("Error creating repo in mountpath %s", err)
+	}
+
+	if err := exec.Command("ostree", "--repo="+path.Join(mountpath, ".ostree_repo"), "pull-local", "tmp/origOstree/.ostree_repo").Run(); err != nil {
+		log.Fatalf("Error pull-local %s", err)
+	}
+
+	if err := exec.Command("ostree", "--repo="+path.Join(mountpath, ".ostree_repo"), "checkout", commitstr, "-H", "-U", "--union", mountpath).Run(); err != nil {
+		log.Fatal("Error chcekout ", err)
+	}
+}
+
+func prepareDiffcommit() (commitId string) {
+	if err := ioutil.WriteFile("tmp/archive_folder/dir1/file3.txt", []byte("This is test file2"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := ioutil.WriteFile("tmp/archive_folder/dir1/file2.txt", []byte("Edited File"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := exec.Command("tar", "-czf", "tmp/test_archive2.tar.gz", "-C", "tmp/archive_folder", ".").Run(); err != nil {
+		log.Fatalf("Can't run tar: %s", err)
+	}
+
+	commit, err := exec.Command("ostree", "--repo=tmp/origOstree/.ostree_repo", "commit", "-b", "branch_name", "-s", `"commit name2"`,
+		"--tree=tar=tmp/test_archive2.tar.gz").Output()
+	if err != nil {
+		log.Fatal("error commit ", err)
+	}
+
+	commitstr := strings.TrimSuffix(string(commit), "\n")
+
+	if err := exec.Command("ostree", "--repo=tmp/origOstree/.ostree_repo", "static-delta", "generate", "branch_name",
+		"--filename=tmp/ostree/test/delta").Run(); err != nil {
+		log.Fatal("error static-delta ", err)
+	}
+	return commitstr
+
 }

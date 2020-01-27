@@ -24,9 +24,11 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"sync"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -61,10 +63,13 @@ type fsUpdateMetadata struct {
  ******************************************************************************/
 
 const metaDataFilename = "metadata.json"
+const tmpMountpoint = "/tmp/aos/mountpoint"
+const ostreeRepoFolder = ".ostree_repo"
 const (
 	incrementalType = "incremental"
 	fullType        = "full"
 )
+const umountRetryCount = 3
 
 /*******************************************************************************
  * Public
@@ -115,7 +120,7 @@ func (module *FileSystemModule) Upgrade(folderPath string) (err error) {
 	if fsMetadata.Type == fullType {
 		err = module.performFullFsUpdate(&fsMetadata)
 	} else {
-		err = fmt.Errorf("incremental update Not supported")
+		err = module.performIncrementalFsUpdate(&fsMetadata)
 	}
 
 	return err
@@ -223,6 +228,58 @@ func (metadata *fsUpdateMetadata) Validate(resourcePath, id string) (err error) 
 
 	if _, err := os.Stat(path.Join(resourcePath, metadata.Resources)); os.IsNotExist(err) {
 		return fmt.Errorf("resource does not exist %s", path.Join(resourcePath, metadata.Resources))
+	}
+
+	return nil
+}
+
+func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMetadata) (err error) {
+	log.Debug("Start incremental update dev=", module.partitionForUpdate.device, " sources=", metadata.Resources)
+
+	if err = os.MkdirAll(tmpMountpoint, 0755); err != nil {
+		return err
+	}
+
+	defer os.RemoveAll(tmpMountpoint)
+
+	if err := syscall.Mount(module.partitionForUpdate.device, tmpMountpoint, module.partitionForUpdate.fsType, syscall.MS_DIRSYNC, ""); err != nil {
+		return err
+	}
+
+	defer func() {
+		var umountErr error
+		var i int
+
+		for i = 0; i < umountRetryCount; i++ {
+			if errLocal := syscall.Unmount(tmpMountpoint, 0); errLocal != nil {
+				log.Warning("Error unmount ", errLocal)
+				umountErr = errLocal
+				time.Sleep(1 * time.Second)
+			} else {
+				return
+			}
+		}
+
+		if err != nil {
+			err = umountErr
+		}
+	}()
+
+	repoPath := path.Join(tmpMountpoint, ostreeRepoFolder)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return fmt.Errorf("ostree repo %s doesnot exist: ", repoPath)
+	}
+
+	log.Debug("Apply static delta ")
+	command := exec.Command("ostree", "--repo="+repoPath, "static-delta", "apply-offline", metadata.Resources)
+	if err := command.Run(); err != nil {
+		return err
+	}
+
+	log.Debug("Ostree checkout to commit ", metadata.Commit)
+	command = exec.Command("ostree", "--repo="+repoPath, "checkout", metadata.Commit, "-H", "-U", "--union", tmpMountpoint)
+	if err := command.Run(); err != nil {
+		return err
 	}
 
 	return nil
