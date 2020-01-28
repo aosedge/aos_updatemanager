@@ -26,7 +26,7 @@ type Controller struct {
 	config         controllerConfig
 }
 
-//ConfigProvider interface to get configuration for update modules
+// ConfigProvider interface to get configuration for update modules
 type ConfigProvider interface {
 	GetRootFsConfig() string
 }
@@ -109,12 +109,12 @@ func (controller *Controller) Revert(version uint64) (err error) {
 }
 
 // UpgradeFinished notifies state controller about finish of upgrade
-func (controller *Controller) UpgradeFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error) {
+func (controller *Controller) UpgradeFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error) {
 	return false, nil
 }
 
 // RevertFinished notifies state controller about finish of revert
-func (controller *Controller) RevertFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error) {
+func (controller *Controller) RevertFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error) {
 	return false, nil
 }
 

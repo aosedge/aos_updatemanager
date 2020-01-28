@@ -130,8 +130,8 @@ type StateController interface {
 	GetPlatformID() (id string, err error)
 	Upgrade(version uint64) (err error)
 	Revert(version uint64) (err error)
-	UpgradeFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error)
-	RevertFinished(version uint64, moduleStatus map[string]error) (postpone bool, err error)
+	UpgradeFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
+	RevertFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
 }
 
 type itemMetadata struct {
@@ -467,9 +467,14 @@ func (handler *Handler) upgrade(path string, stage int) {
 		case upgradeFinishStateControllerStage:
 			if handler.stateController != nil {
 				var postpone bool
+				var moduleStatuses map[string]error
+
+				if moduleStatuses, handler.lastError = handler.storage.GetModuleStatuses(); handler.lastError != nil {
+					break
+				}
 
 				if postpone, handler.lastError = handler.stateController.UpgradeFinished(
-					handler.operationVersion, nil); postpone {
+					handler.operationVersion, handler.lastError, moduleStatuses); postpone {
 					return
 				}
 			}
@@ -536,9 +541,14 @@ func (handler *Handler) revert(stage int) {
 		case revertFinishStateControllerStage:
 			if handler.stateController != nil {
 				var postpone bool
+				var moduleStatuses map[string]error
+
+				if moduleStatuses, handler.lastError = handler.storage.GetModuleStatuses(); handler.lastError != nil {
+					break
+				}
 
 				if postpone, handler.lastError = handler.stateController.RevertFinished(
-					handler.operationVersion, nil); postpone {
+					handler.operationVersion, handler.lastError, moduleStatuses); postpone {
 					return
 				}
 			}
