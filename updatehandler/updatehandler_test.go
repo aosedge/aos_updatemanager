@@ -49,6 +49,8 @@ type testStorage struct {
 	operationVersion uint64
 	currentVersion   uint64
 	lastError        error
+
+	moduleStatuses map[string]error
 }
 
 /*******************************************************************************
@@ -100,7 +102,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	if updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, nil, &testStorage{}); err != nil {
+	if updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, nil, &testStorage{moduleStatuses: make(map[string]error)}); err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -315,4 +317,26 @@ func (storage *testStorage) SetLastError(lastError error) (err error) {
 
 func (storage *testStorage) GetLastError() (lastError error, err error) {
 	return storage.lastError, nil
+}
+
+func (storage *testStorage) AddModuleStatus(id string, status error) (err error) {
+	storage.moduleStatuses[id] = status
+
+	return nil
+}
+
+func (storage *testStorage) RemoveModuleStatus(id string) (err error) {
+	delete(storage.moduleStatuses, id)
+
+	return nil
+}
+
+func (storage *testStorage) GetModuleStatuses() (moduleStatuses map[string]error, err error) {
+	return storage.moduleStatuses, nil
+}
+
+func (storage *testStorage) ClearModuleStatuses() (err error) {
+	storage.moduleStatuses = make(map[string]error)
+
+	return nil
 }

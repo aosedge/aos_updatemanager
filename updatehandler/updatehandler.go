@@ -118,6 +118,10 @@ type Storage interface {
 	GetOperationVersion() (version uint64, err error)
 	SetLastError(lastError error) (err error)
 	GetLastError() (lastError error, err error)
+	AddModuleStatus(id string, status error) (err error)
+	RemoveModuleStatus(id string) (err error)
+	GetModuleStatuses() (moduleStatuses map[string]error, err error)
+	ClearModuleStatuses() (err error)
 }
 
 // StateController state controller interface

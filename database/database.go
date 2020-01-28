@@ -79,7 +79,11 @@ func New(name string) (db *Database, err error) {
 
 	db = &Database{sqlite}
 
-	if err := db.createConfigTable(); err != nil {
+	if err = db.createConfigTable(); err != nil {
+		return db, err
+	}
+
+	if err = db.createModuleStatusesTable(); err != nil {
 		return db, err
 	}
 
@@ -337,6 +341,66 @@ func (db *Database) GetLastError() (lastError error, err error) {
 	return errors.New(errorStr), nil
 }
 
+// AddModuleStatus adds module status to DB
+func (db *Database) AddModuleStatus(id string, status error) (err error) {
+	statusStr := ""
+
+	if status != nil {
+		statusStr = status.Error()
+	}
+
+	if _, err = db.sql.Exec("INSERT INTO moduleStatuses VALUES(?, ?)", id, statusStr); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RemoveModuleStatus removes module status from DB
+func (db *Database) RemoveModuleStatus(id string) (err error) {
+	if _, err = db.sql.Exec("DELETE FROM moduleStatuses WHERE module = ?", id); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetModuleStatuses returns all added module statuses
+func (db *Database) GetModuleStatuses() (moduleStatuses map[string]error, err error) {
+	rows, err := db.sql.Query("SELECT * FROM moduleStatuses")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	moduleStatuses = make(map[string]error)
+
+	for rows.Next() {
+		var id, statusStr string
+
+		if err = rows.Scan(&id, &statusStr); err != nil {
+			return nil, err
+		}
+
+		var status error
+
+		if statusStr != "" {
+			status = errors.New(statusStr)
+		}
+
+		moduleStatuses[id] = status
+	}
+
+	return moduleStatuses, rows.Err()
+}
+
+// ClearModuleStatuses clears module statuses DB
+func (db *Database) ClearModuleStatuses() (err error) {
+	_, err = db.sql.Exec("DELETE FROM moduleStatuses")
+
+	return err
+}
+
 // Close closes database
 func (db *Database) Close() {
 	db.sql.Close()
@@ -428,6 +492,28 @@ func (db *Database) createConfigTable() (err error) {
 			operationVersion,
 			imagePath,
 			lastError) values(?, ?, ?, ?, ?, ?, ?)`, dbVersion, 0, 0, 0, 0, "", ""); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) createModuleStatusesTable() (err error) {
+	log.Info("Create module status table")
+
+	exist, err := db.isTableExist("moduleStatuses")
+	if err != nil {
+		return err
+	}
+
+	if exist {
+		return nil
+	}
+
+	if _, err = db.sql.Exec(
+		`CREATE TABLE moduleStatuses (
+			module TEXT NOT NULL PRIMARY KEY,
+			status TEXT)`); err != nil {
 		return err
 	}
 
