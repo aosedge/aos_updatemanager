@@ -150,18 +150,27 @@ func (controller *Controller) getRootFSUpdatePartition() (partition partitionInf
 
 func (controller *Controller) initModules() (err error) {
 	// init root FS module
+	if err := controller.initFileSystemUpdateModule(rootFSModuleID, controller.getRootFSUpdatePartition); err != nil {
+		return err
+	}
 
-	module, err := controller.moduleProvider.GetModuleByID(rootFSModuleID)
+	return err
+}
+
+func (controller *Controller) initFileSystemUpdateModule(id string, resourceProvider func() (partitionInfo, error)) (err error) {
+	log.Info("Register module: ", id)
+
+	module, err := controller.moduleProvider.GetModuleByID(id)
 	if err != nil {
 		return err
 	}
 
 	fsModule, ok := module.(fsModule)
 	if !ok {
-		return fmt.Errorf("module %s doesn't implement required interface", rootFSModuleID)
+		return fmt.Errorf("module %s doesn't implement required interface", id)
 	}
 
-	partition, err := controller.getRootFSUpdatePartition()
+	partition, err := resourceProvider()
 	if err != nil {
 		return err
 	}
