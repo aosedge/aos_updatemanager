@@ -51,8 +51,8 @@ const (
 	upgradeUnpackStage
 	upgradeStartStateControllerStage
 	upgradeModulesStage
+	upgradeRevertModulesStage
 	upgradeFinishStateControllerStage
-	revertModuleStage
 	upgradeFinishStage
 )
 
@@ -93,7 +93,7 @@ type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
 	// Upgrade upgrade module
-	Upgrade(fileName string) (err error)
+	Upgrade(path string) (err error)
 	// Revert revert module
 	Revert() (err error)
 }
@@ -310,6 +310,10 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
+	if err = handler.storage.ClearModuleStatuses(); err != nil {
+		return err
+	}
+
 	handler.state = upgradingState
 
 	if err = handler.storage.SetState(handler.state); err != nil {
@@ -426,26 +430,32 @@ func (handler *Handler) upgrade(path string, stage int) {
 
 		switch stage {
 		case upgradeInitStage:
-			if err := os.RemoveAll(handler.upgradeDir); err != nil {
-				log.Debug("Remove untar bundle folder error: ", err)
-				handler.lastError = err
+			if handler.lastError = os.RemoveAll(handler.upgradeDir); handler.lastError != nil {
+				stage = upgradeFinishStage
 				break
 			}
 
 			stage = upgradeUnpackStage
 
 		case upgradeUnpackStage:
-			if err := os.MkdirAll(handler.upgradeDir, 0755); err != nil {
-				handler.lastError = err
+			if handler.lastError = os.MkdirAll(handler.upgradeDir, 0755); handler.lastError != nil {
+				stage = upgradeFinishStage
 				break
 			}
 
-			handler.lastError = image.UntarGZArchive(path, handler.upgradeDir)
+			if handler.lastError = image.UntarGZArchive(path, handler.upgradeDir); handler.lastError != nil {
+				stage = upgradeFinishStage
+				break
+			}
+
 			stage = upgradeStartStateControllerStage
 
 		case upgradeStartStateControllerStage:
 			if handler.stateController != nil {
-				handler.lastError = handler.stateController.Upgrade(handler.operationVersion)
+				if handler.lastError = handler.stateController.Upgrade(handler.operationVersion); handler.lastError != nil {
+					stage = upgradeFinishStage
+					break
+				}
 			}
 
 			stage = upgradeModulesStage
@@ -458,10 +468,22 @@ func (handler *Handler) upgrade(path string, stage int) {
 			if handler.stateController != nil {
 				var postpone bool
 
-				postpone, handler.lastError = handler.stateController.UpgradeFinished(handler.operationVersion, nil)
-				if postpone {
+				if postpone, handler.lastError = handler.stateController.UpgradeFinished(
+					handler.operationVersion, nil); postpone {
 					return
 				}
+			}
+
+			if handler.lastError != nil {
+				stage = upgradeRevertModulesStage
+				break
+			}
+
+			stage = upgradeFinishStage
+
+		case upgradeRevertModulesStage:
+			if err := handler.revertModules(); err != nil {
+				log.Errorf("Error reverting modules: %s", err)
 			}
 
 			stage = upgradeFinishStage
@@ -476,8 +498,6 @@ func (handler *Handler) upgrade(path string, stage int) {
 				handler.operationFinished(upgradedState, err)
 				return
 			}
-
-			stage = upgradeFinishStage
 		}
 
 		if err := handler.storage.SetOperationStage(stage); err != nil {
@@ -497,20 +517,28 @@ func (handler *Handler) revert(stage int) {
 
 		case revertStartStateControllerStage:
 			if handler.stateController != nil {
-				handler.lastError = handler.stateController.Revert(handler.operationVersion)
+				if handler.lastError = handler.stateController.Revert(handler.operationVersion); handler.lastError != nil {
+					stage = upgradeFinishStage
+					break
+				}
 			}
 
 			stage = revertModulesStage
 
 		case revertModulesStage:
+			if handler.lastError = handler.revertModules(); handler.lastError != nil {
+				stage = upgradeFinishStage
+				break
+			}
+
 			stage = revertFinishStateControllerStage
 
 		case revertFinishStateControllerStage:
 			if handler.stateController != nil {
 				var postpone bool
 
-				postpone, handler.lastError = handler.stateController.RevertFinished(handler.operationVersion, nil)
-				if postpone {
+				if postpone, handler.lastError = handler.stateController.RevertFinished(
+					handler.operationVersion, nil); postpone {
 					return
 				}
 			}
@@ -527,8 +555,6 @@ func (handler *Handler) revert(stage int) {
 				handler.operationFinished(revertedState, err)
 				return
 			}
-
-			stage = revertFinishStage
 		}
 
 		if err := handler.storage.SetOperationStage(stage); err != nil {
@@ -536,6 +562,26 @@ func (handler *Handler) revert(stage int) {
 			return
 		}
 	}
+}
+
+func (handler *Handler) updateModule(id, path string) (err error) {
+	log.WithField("id", id).Debug("Update module")
+
+	module, err := handler.moduleProvider.GetModuleByID(id)
+	if err != nil {
+		return err
+	}
+
+	updateModule, ok := module.(UpdateModule)
+	if !ok {
+		return fmt.Errorf("module %s doesn't implement update interface", id)
+	}
+
+	if err = updateModule.Upgrade(path); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (handler *Handler) updateModules() (err error) {
@@ -561,23 +607,72 @@ func (handler *Handler) updateModules() (err error) {
 		}
 	}
 
+	moduleStatuses, err := handler.storage.GetModuleStatuses()
+	if err != nil {
+		return err
+	}
+
 	for _, item := range metadata.UpdateItems {
-		log.WithField("id", item.Type).Debug("Update module")
-
-		module, err := handler.moduleProvider.GetModuleByID(item.Type)
-		if err != nil {
-			return err
+		status, ok := moduleStatuses[item.Type]
+		if ok {
+			continue
 		}
 
-		updateModule, ok := module.(UpdateModule)
-		if !ok {
-			return fmt.Errorf("module %s doesn't implement update interface", item.Type)
+		if status != nil {
+			return status
 		}
 
-		if err = updateModule.Upgrade(path.Join(handler.upgradeDir, item.Path)); err != nil {
+		status = handler.updateModule(item.Type, path.Join(handler.upgradeDir, item.Path))
+
+		if err = handler.storage.AddModuleStatus(item.Type, status); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (handler *Handler) revertModule(id string) (err error) {
+	log.WithField("id", id).Debug("Revert module")
+
+	module, err := handler.moduleProvider.GetModuleByID(id)
+	if err != nil {
+		return err
+	}
+
+	updateModule, ok := module.(UpdateModule)
+	if !ok {
+		return fmt.Errorf("module %s doesn't implement update interface", id)
+	}
+
+	if err = updateModule.Revert(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (handler *Handler) revertModules() (err error) {
+	moduleStatuses, err := handler.storage.GetModuleStatuses()
+	if err != nil {
+		return err
+	}
+
+	for id, status := range moduleStatuses {
+		if status != nil {
+			continue
+		}
+
+		status = handler.revertModule(id)
+
+		if err == nil {
+			err = status
+		}
+
+		if err := handler.storage.RemoveModuleStatus(id); err != nil {
+			log.Errorf("Can't remove module status: %s", err)
+		}
+	}
+
+	return err
 }
