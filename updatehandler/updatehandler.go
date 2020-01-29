@@ -581,17 +581,3 @@ func (handler *Handler) updateModules() (err error) {
 
 	return nil
 }
-
-func (handler *Handler) getModuleByID(id string) (module UpdateModule, err error) {
-	providedModule, err := handler.moduleProvider.GetModuleByID(id)
-	if err != nil {
-		return nil, err
-	}
-
-	updateModule, ok := providedModule.(UpdateModule)
-	if !ok {
-		return nil, fmt.Errorf("module %s doesn't provide required interface", id)
-	}
-
-	return updateModule, nil
-}
