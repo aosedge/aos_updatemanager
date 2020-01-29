@@ -14,6 +14,7 @@ import (
  ******************************************************************************/
 
 const rootFSModuleID = "rootfs"
+const bootloaderModuleID = "bootloader"
 
 /*******************************************************************************
  * Types
@@ -148,13 +149,21 @@ func (controller *Controller) getRootFSUpdatePartition() (partition partitionInf
 	return partition, errors.New("no root FS update partition found")
 }
 
+func (controller *Controller) getBootloaderUpdatePartition() (partition partitionInfo, err error) {
+	return partition, nil
+}
+
 func (controller *Controller) initModules() (err error) {
 	// init root FS module
 	if err := controller.initFileSystemUpdateModule(rootFSModuleID, controller.getRootFSUpdatePartition); err != nil {
 		return err
 	}
 
-	return err
+	if err := controller.initFileSystemUpdateModule(bootloaderModuleID, controller.getBootloaderUpdatePartition); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (controller *Controller) initFileSystemUpdateModule(id string, resourceProvider func() (partitionInfo, error)) (err error) {

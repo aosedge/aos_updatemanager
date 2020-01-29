@@ -35,7 +35,9 @@ type testUpdateModule struct {
 var controller *statecontroller.Controller
 
 var moduleMgr = testModuleMgr{
-	modules: map[string]interface{}{"rootfs": &testUpdateModule{}},
+	modules: map[string]interface{}{
+		"rootfs":     &testUpdateModule{},
+		"bootloader": &testUpdateModule{}},
 }
 
 /*******************************************************************************

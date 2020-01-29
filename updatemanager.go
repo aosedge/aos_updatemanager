@@ -150,4 +150,8 @@ func registerModules() {
 	modulemanager.Register("rootfs", func(id string, configJSON []byte) (module interface{}, err error) {
 		return fsmodule.New(id, configJSON)
 	})
+
+	modulemanager.Register("bootloader", func(id string, configJSON []byte) (module interface{}, err error) {
+		return fsmodule.New(id, configJSON)
+	})
 }
