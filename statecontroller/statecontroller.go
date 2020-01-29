@@ -26,11 +26,6 @@ type Controller struct {
 	config         controllerConfig
 }
 
-// ConfigProvider interface to get configuration for update modules
-type ConfigProvider interface {
-	GetRootFsConfig() string
-}
-
 // ModuleProvider module provider interface
 type ModuleProvider interface {
 	// GetModuleByID returns module by id
@@ -154,7 +149,6 @@ func (controller *Controller) getBootloaderUpdatePartition() (partition partitio
 }
 
 func (controller *Controller) initModules() (err error) {
-	// init root FS module
 	if err := controller.initFileSystemUpdateModule(rootFSModuleID, controller.getRootFSUpdatePartition); err != nil {
 		return err
 	}
