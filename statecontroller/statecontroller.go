@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"regexp"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -19,6 +21,8 @@ const bootloaderModuleID = "bootloader"
 
 const (
 	kernelRootPrefix = "root="
+	kernelBootPrefix = "NUANCE.boot="
+	kernelBootFormat = "(hd0,gpt%d)"
 )
 
 /*******************************************************************************
@@ -30,6 +34,7 @@ type Controller struct {
 	moduleProvider ModuleProvider
 	config         controllerConfig
 	activeRootPart string
+	activeBootPart string
 }
 
 // ModuleProvider module provider interface
@@ -46,6 +51,7 @@ type partitionInfo struct {
 type controllerConfig struct {
 	KernelCmdline  string
 	RootPartitions []partitionInfo
+	BootPartitions []partitionInfo
 }
 
 type fsModule interface {
@@ -144,7 +150,15 @@ func (controller *Controller) getRootFSUpdatePartition() (partition partitionInf
 }
 
 func (controller *Controller) getBootloaderUpdatePartition() (partition partitionInfo, err error) {
-	return partition, nil
+	for _, partition = range controller.config.BootPartitions {
+		if partition.Device != controller.activeBootPart {
+			log.WithField("partition", partition.Device).Debug("Update boot partition")
+
+			return partition, nil
+		}
+	}
+
+	return partition, errors.New("no root FS update partition found")
 }
 
 func (controller *Controller) initModules() (err error) {
@@ -198,6 +212,27 @@ func (controller *Controller) parseBootCmd() (err error) {
 		switch {
 		case strings.HasPrefix(option, kernelRootPrefix):
 			controller.activeRootPart = strings.TrimPrefix(option, kernelRootPrefix)
+
+		case strings.HasPrefix(option, kernelBootPrefix):
+			option = strings.TrimPrefix(option, kernelBootPrefix)
+
+			var grubPart int
+
+			if _, err = fmt.Sscanf(option, kernelBootFormat, &grubPart); err != nil {
+				return err
+			}
+
+			for _, partition := range controller.config.BootPartitions {
+				partStr := regexp.MustCompile("[[:digit:]]*$").FindString(partition.Device)
+				configPart, err := strconv.Atoi(partStr)
+				if err != nil {
+					return err
+				}
+
+				if configPart == grubPart {
+					controller.activeBootPart = partition.Device
+				}
+			}
 		}
 	}
 
@@ -206,6 +241,12 @@ func (controller *Controller) parseBootCmd() (err error) {
 	}
 
 	log.WithField("partition", controller.activeRootPart).Debug("Active root partition")
+
+	if controller.activeBootPart == "" {
+		return errors.New("can't define active boot FS")
+	}
+
+	log.WithField("partition", controller.activeBootPart).Debug("Active boot partition")
 
 	return nil
 }

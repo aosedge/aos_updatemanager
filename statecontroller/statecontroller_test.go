@@ -39,6 +39,16 @@ var moduleMgr = testModuleMgr{
 var configJSON = `
 {
 	"KernelCmdline" : "tmp/cmdline",
+	"BootPartitions" : [
+		{
+			"device" : "/dev/myBoot1",
+			"fstype" : "ext4"
+		},
+		{
+			"device" : "/dev/myBoot2",
+			"fstype" : "ext4"
+		}
+	],
 	"RootPartitions" : [
 		{
 			"device" : "/dev/myRoot1",
@@ -75,7 +85,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
 
-	if err := createCmdLine("opt1=val1 root=/dev/myRoot1 opt2=val2"); err != nil {
+	if err := createCmdLine("opt1=val1 root=/dev/myRoot1 opt2=val2 NUANCE.boot=(hd0,gpt1)/EFI/BOOT"); err != nil {
 		log.Fatalf("Can't create cmdline file: %s", err)
 	}
 
