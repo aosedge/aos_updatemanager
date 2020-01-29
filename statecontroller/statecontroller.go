@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"strings"
 
-	"github.com/shirou/gopsutil/disk"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,6 +17,10 @@ import (
 const rootFSModuleID = "rootfs"
 const bootloaderModuleID = "bootloader"
 
+const (
+	kernelRootPrefix = "root="
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -24,6 +29,7 @@ const bootloaderModuleID = "bootloader"
 type Controller struct {
 	moduleProvider ModuleProvider
 	config         controllerConfig
+	activeRootPart string
 }
 
 // ModuleProvider module provider interface
@@ -38,6 +44,7 @@ type partitionInfo struct {
 }
 
 type controllerConfig struct {
+	KernelCmdline  string
 	RootPartitions []partitionInfo
 }
 
@@ -63,9 +70,16 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 
 	controller = &Controller{
 		moduleProvider: moduleProvider,
+		config: controllerConfig{
+			KernelCmdline: "/proc/cmdline",
+		},
 	}
 
 	if err = json.Unmarshal(configJSON, &controller.config); err != nil {
+		return nil, err
+	}
+
+	if err = controller.parseBootCmd(); err != nil {
 		return nil, err
 	}
 
@@ -118,25 +132,10 @@ func (controller *Controller) RevertFinished(version uint64, status error, modul
  ******************************************************************************/
 
 func (controller *Controller) getRootFSUpdatePartition() (partition partitionInfo, err error) {
-	// We assume that active partition should be mounted at same time another root FS partition
-	// should be unmounted. Return first unmounted partition from root FS partition list.
-
-	stats, err := disk.Partitions(false)
-	if err != nil {
-		return partition, err
-	}
-
 	for _, partition = range controller.config.RootPartitions {
-		found := false
+		if partition.Device != controller.activeRootPart {
+			log.WithField("partition", partition.Device).Debug("Update root partition")
 
-		for _, stat := range stats {
-			if stat.Device == partition.Device {
-				found = true
-				break
-			}
-		}
-
-		if !found {
 			return partition, nil
 		}
 	}
@@ -181,6 +180,32 @@ func (controller *Controller) initFileSystemUpdateModule(id string, resourceProv
 	if err = fsModule.SetPartitionForUpdate(partition.Device, partition.FSType); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (controller *Controller) parseBootCmd() (err error) {
+	data, err := ioutil.ReadFile(controller.config.KernelCmdline)
+	if err != nil {
+		return err
+	}
+
+	options := strings.Split(string(data), " ")
+
+	for _, option := range options {
+		option = strings.TrimSpace(option)
+
+		switch {
+		case strings.HasPrefix(option, kernelRootPrefix):
+			controller.activeRootPart = strings.TrimPrefix(option, kernelRootPrefix)
+		}
+	}
+
+	if controller.activeRootPart == "" {
+		return errors.New("can't define active root FS")
+	}
+
+	log.WithField("partition", controller.activeRootPart).Debug("Active root partition")
 
 	return nil
 }

@@ -1,13 +1,9 @@
 package statecontroller_test
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
+	"io/ioutil"
 	"os"
-	"os/exec"
-	"path"
-	"path/filepath"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -40,6 +36,21 @@ var moduleMgr = testModuleMgr{
 		"bootloader": &testUpdateModule{}},
 }
 
+var configJSON = `
+{
+	"KernelCmdline" : "tmp/cmdline",
+	"RootPartitions" : [
+		{
+			"device" : "/dev/myRoot1",
+			"fstype" : "ext4"
+		},
+		{
+			"device" : "/dev/myRoot2",
+			"fstype" : "ext4"
+		}
+	]
+}`
+
 /*******************************************************************************
  * Init
  ******************************************************************************/
@@ -64,6 +75,10 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
 
+	if err := createCmdLine("opt1=val1 root=/dev/myRoot1 opt2=val2"); err != nil {
+		log.Fatalf("Can't create cmdline file: %s", err)
+	}
+
 	ret := m.Run()
 
 	if err = os.RemoveAll("tmp"); err != nil {
@@ -78,20 +93,6 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetVersion(t *testing.T) {
-	configJSON := `
-{
-	"RootPartitions" : [
-		{
-			"device" : "/dev/myPart1",
-			"fstype" : "ext4"
-		},
-		{
-			"device" : "/dev/myPart2",
-			"fstype" : "ext4"
-		}
-	]
-}`
-
 	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
 	if err != nil {
 		log.Fatalf("Error creating state controller: %s", err)
@@ -104,27 +105,7 @@ func TestGetVersion(t *testing.T) {
 }
 
 func TestCheckUpdatePartition(t *testing.T) {
-	configJSON := `
-{
-	"RootPartitions" : [
-		{
-			"device" : "%s",
-			"fstype" : "ext4"
-		},
-		{
-			"device" : "%s",
-			"fstype" : "ext4"
-		}
-	]
-}`
-
-	path, err := mountPartition()
-	if err != nil {
-		t.Fatalf("Can't mount rootfs: %s", err)
-	}
-	defer unmountPartition()
-
-	controller, err := statecontroller.New([]byte(fmt.Sprintf(configJSON, path, "/dev/myPart2")), &moduleMgr)
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
 	if err != nil {
 		log.Fatalf("Error creating state controller: %s", err)
 	}
@@ -140,7 +121,7 @@ func TestCheckUpdatePartition(t *testing.T) {
 		t.Fatal("Wrong module type")
 	}
 
-	if testModule.path != "/dev/myPart2" {
+	if testModule.path != "/dev/myRoot2" {
 		t.Errorf("Wrong update partition: %s", testModule.path)
 	}
 
@@ -173,55 +154,10 @@ func (module *testUpdateModule) SetPartitionForUpdate(path, fsType string) (err 
  * Private
  ******************************************************************************/
 
-func mountPartition() (device string, err error) {
-	if err = os.MkdirAll("tmp/mount", 0755); err != nil {
-		return "", err
+func createCmdLine(data string) (err error) {
+	if err = ioutil.WriteFile("tmp/cmdline", []byte(data), 0644); err != nil {
+		return err
 	}
 
-	if err = exec.Command("dd", "if=/dev/zero", "of=tmp/test.fs", "bs=1024", "count=1024").Run(); err != nil {
-		return "", err
-	}
-
-	if err = exec.Command("mkfs.ext4", "tmp/test.fs").Run(); err != nil {
-		return "", err
-	}
-
-	if err = exec.Command("mount", "tmp/test.fs", "tmp/mount").Run(); err != nil {
-		return "", err
-	}
-
-	blkInfo := struct {
-		BlockDevices []struct {
-			Name       string
-			Mountpoint string
-		}
-	}{}
-
-	outJSON, err := exec.Command("lsblk", "-J").Output()
-	if err != nil {
-		return "", err
-	}
-
-	if err = json.Unmarshal(outJSON, &blkInfo); err != nil {
-		return "", err
-	}
-
-	mountPoint, err := filepath.Abs("tmp/mount")
-	if err != nil {
-		return "", err
-	}
-
-	for _, device := range blkInfo.BlockDevices {
-		if device.Mountpoint == mountPoint {
-			return path.Join("/dev", device.Name), nil
-		}
-	}
-
-	return "", errors.New("loop device not found")
-}
-
-func unmountPartition() {
-	if err := exec.Command("umount", "tmp/mount").Run(); err != nil {
-		log.Errorf("Can't unmount partition: %s", err)
-	}
+	return nil
 }
