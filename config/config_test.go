@@ -32,10 +32,27 @@ import (
  ******************************************************************************/
 
 var cfg *config.Config
+var wrongConfigName = "aos_wrongconfig.cfg"
 
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func saveConfigFile(configName string, configContent string) (err error) {
+	if err = ioutil.WriteFile(path.Join("tmp", configName), []byte(configContent), 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createWrongConfigFile() (err error) {
+	configContent := ` SOME WRONG JSON FORMAT
+	}]
+}`
+
+	return saveConfigFile(wrongConfigName, configContent)
+}
 
 func createConfigFile() (err error) {
 	configContent := `{
@@ -57,11 +74,7 @@ func createConfigFile() (err error) {
 	}]
 }`
 
-	if err := ioutil.WriteFile(path.Join("tmp", "aos_updatemanager.cfg"), []byte(configContent), 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return saveConfigFile("aos_updatemanager.cfg", configContent)
 }
 
 func setup() (err error) {
@@ -150,5 +163,22 @@ func TestGetUpgradeDir(t *testing.T) {
 func TestGetWorkingDir(t *testing.T) {
 	if cfg.WorkingDir != "/var/aos/updatemanager" {
 		t.Errorf("Wrong working dir value: %s", cfg.WorkingDir)
+	}
+}
+
+func TestNewErrors(t *testing.T) {
+	// Executing new statement with nonexisting config file
+	if _, err := config.New("some_nonexisting_file"); err == nil {
+		t.Errorf("No error was returned for nonexisting config")
+	}
+
+	//Creating wrong config 
+	if err := createWrongConfigFile(); err != nil {
+		t.Errorf("Unable to create wrong config file. Err %s", err)
+	}
+
+	// Testing with wrong json format
+	if _, err := config.New(path.Join("tmp", wrongConfigName)); err == nil {
+		t.Errorf("No error was returned for config with wrong format")
 	}
 }
