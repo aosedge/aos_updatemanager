@@ -18,6 +18,7 @@
 package fsmodule
 
 import (
+	"aos_updatemanager/utils/partition"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -29,7 +30,6 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -240,31 +240,16 @@ func (metadata *fsUpdateMetadata) Validate(resourcePath, id string) (err error) 
 func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMetadata) (err error) {
 	log.Debug("Start incremental update dev=", module.partitionForUpdate.device, " sources=", metadata.Resources)
 
-	if err = os.MkdirAll(tmpMountpoint, 0755); err != nil {
-		return err
-	}
-
-	defer os.RemoveAll(tmpMountpoint)
-
-	if err := syscall.Mount(module.partitionForUpdate.device, tmpMountpoint, module.partitionForUpdate.fsType, syscall.MS_DIRSYNC, ""); err != nil {
+	if err = partition.Mount(module.partitionForUpdate.device,
+		tmpMountpoint, module.partitionForUpdate.fsType); err != nil {
 		return err
 	}
 
 	defer func() {
-		var umountErr error
-		var i int
-
-		for i = 0; i < umountRetryCount; i++ {
-			if umountErr = syscall.Unmount(tmpMountpoint, 0); umountErr == nil {
-				return
+		if umountErr := partition.Umount(tmpMountpoint); umountErr != nil {
+			if err == nil {
+				err = umountErr
 			}
-
-			log.Warning("Error unmount ", umountErr)
-			time.Sleep(1 * time.Second)
-		}
-
-		if err != nil {
-			err = umountErr
 		}
 	}()
 
