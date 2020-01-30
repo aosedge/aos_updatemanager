@@ -18,6 +18,7 @@
 package modulemanager_test
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"testing"
@@ -63,6 +64,9 @@ func TestMain(m *testing.M) {
 	modulemanager.Register("test", func(id string, configJSON []byte) (module interface{}, err error) {
 		return testmodule.New(id, configJSON)
 	})
+	modulemanager.Register("wrongtest", func(id string, configJSON []byte) (module interface{}, err error) {
+		return nil, errors.New("error")
+	})
 
 	ret := m.Run()
 
@@ -86,11 +90,11 @@ func TestGetModule(t *testing.T) {
 
 	moduleManager, err := modulemanager.New(&cfg)
 	if err != nil {
-		t.Fatalf("can't create module manager: %s", err)
+		t.Fatalf("Can't create module manager: %s", err)
 	}
 	defer func() {
 		if err := moduleManager.Close(); err != nil {
-			t.Errorf("can't close module manager: %s", err)
+			t.Errorf("Can't close module manager: %s", err)
 		}
 	}()
 
@@ -100,11 +104,102 @@ func TestGetModule(t *testing.T) {
 		module, err := moduleManager.GetModuleByID(id)
 
 		if module == nil {
-			t.Errorf("module %s should not be nil", id)
+			t.Errorf("Module %s should not be nil", id)
 		}
 
 		if err != nil {
-			t.Errorf("can't get module %s: %s", id, err)
+			t.Errorf("Can't get module %s: %s", id, err)
 		}
+	}
+
+	//Check GetModuleById for wrong id
+	module, err := moduleManager.GetModuleByID("id" + strconv.Itoa(numIds+2))
+	if module != nil && err == nil {
+		t.Error("Expecting error for nonexisting id")
+	}
+}
+
+func TestNoModules(t *testing.T) {
+	cfg := config.Config{Modules: make([]config.ModuleConfig, 0, 0)}
+	TryCreateModuleManager(&cfg, t)
+}
+
+func TestDisabledModules(t *testing.T) {
+	numIds := 5
+	cfg := config.Config{Modules: make([]config.ModuleConfig, 0, numIds)}
+
+	for i := 0; i < numIds; i++ {
+		cfg.Modules = append(cfg.Modules, config.ModuleConfig{
+			ID:       "id" + strconv.Itoa(i),
+			Module:   testmodule.Name,
+			Disabled: true})
+	}
+
+	TryCreateModuleManager(&cfg, t)
+}
+
+func TestNoFuncModule(t *testing.T) {
+	numIds := 1
+	cfg := config.Config{Modules: make([]config.ModuleConfig, 0, numIds)}
+
+	for i := 0; i < numIds; i++ {
+		cfg.Modules = append(cfg.Modules, config.ModuleConfig{
+			ID:     "id" + strconv.Itoa(i),
+			Module: "unknownFunc"})
+	}
+
+	TryCreateModuleManager(&cfg, t)
+}
+
+func TestDuplicateModule(t *testing.T) {
+	numIds := 5
+	cfg := config.Config{Modules: make([]config.ModuleConfig, 0, numIds)}
+
+	for i := 0; i < numIds; i++ {
+		cfg.Modules = append(cfg.Modules, config.ModuleConfig{
+			ID:     "id" + strconv.Itoa(i),
+			Module: testmodule.Name})
+	}
+	//NOTE: add duplicate module
+	cfg.Modules = append(cfg.Modules, config.ModuleConfig{
+		ID:     "id" + strconv.Itoa(1),
+		Module: testmodule.Name})
+
+	moduleManager, err := modulemanager.New(&cfg)
+	if err != nil {
+		t.Fatalf("Can't create module manager: %s", err)
+	}
+	defer func() {
+		if err := moduleManager.Close(); err != nil {
+			t.Errorf("Can't close module manager: %s", err)
+		}
+	}()
+}
+
+func TestErrorInFunc(t *testing.T) {
+	numIds := 1
+	cfg := config.Config{Modules: make([]config.ModuleConfig, 0, numIds)}
+
+	for i := 0; i < numIds; i++ {
+		cfg.Modules = append(cfg.Modules, config.ModuleConfig{
+			ID:     "id" + strconv.Itoa(i),
+			Module: "wrongtest"})
+	}
+
+	TryCreateModuleManager(&cfg, t)
+}
+
+/*******************************************************************************
+ * Private funcs
+ ******************************************************************************/
+
+func TryCreateModuleManager(cfg *config.Config, t *testing.T) {
+	moduleManager, err := modulemanager.New(cfg)
+	if err == nil {
+		if err := moduleManager.Close(); err != nil {
+			t.Errorf("Can't close module manager: %s", err)
+		}
+
+		t.Fatal("Expecting error here")
 	}
 }
