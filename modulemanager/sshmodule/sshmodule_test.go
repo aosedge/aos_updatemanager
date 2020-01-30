@@ -105,3 +105,81 @@ func TestUpgrade(t *testing.T) {
 		t.Errorf("Upgrade failed: %s", err)
 	}
 }
+
+func TestWrongJson(t *testing.T) {
+	configJSON := `{
+		Wrong json format
+		]
+	}`
+
+	module, err := sshmodule.New("TestComponent", []byte(configJSON))
+	if err == nil {
+		module.Close()
+		log.Fatalf("Expecting error here")
+	}
+}
+
+func TestUpgradeErrors(t *testing.T) {
+	// NOTE: test with nonexisting host
+	configJSON := `{
+		"Host": "localhst:22",
+		"User": "test",
+		"Password": "test",
+		"DestPath": "/tmp/remoteTestFile",
+		"Commands":[
+			"cd . ",
+			"pwd",
+			"ls"
+		]
+	}`
+
+	module, err := sshmodule.New("TestComponent", []byte(configJSON))
+	if err != nil {
+		log.Fatalf("Error creating module %s", err)
+	}
+	defer module.Close()
+
+	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	if err := module.Upgrade("tmp/testfile"); err == nil {
+		t.Errorf("Error expected because of wrong adress")
+	}
+}
+
+func TestUpgradeWrongCommands(t *testing.T) {
+	// NOTE: test with some wrong command
+	configJSON := `{
+		"Host": "localhost:22",
+		"User": "test",
+		"Password": "test",
+		"DestPath": "/tmp/remoteTestFile",
+		"Commands":[
+			"cd . ",
+			"some wrong command",
+			"ls"
+		]
+	}`
+
+	module, err := sshmodule.New("TestComponent", []byte(configJSON))
+	if err != nil {
+		log.Fatalf("Error creating module %s", err)
+	}
+	defer module.Close()
+
+	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	//NOTE: amoi - leaving this test to be failed right now. runCommands should handle error.
+	if err := module.Upgrade("tmp/testfile"); err == nil {
+		t.Errorf("Error expected because set of commands is wrong")
+	}
+}
+
+func TestModuleRevert(t *testing.T) {
+	if err := module.Revert(); err != nil {
+		t.Errorf("Revert failed %s", err)
+	}
+}
