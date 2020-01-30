@@ -85,6 +85,23 @@ func TestDBVersion(t *testing.T) {
 	db.Close()
 }
 
+func TestNewErrors(t *testing.T) {
+	// Check MkdirAll in New statement
+	db, err := New("/sys/rooooot/test.db")
+	if err == nil {
+		db.Close()
+		t.Fatal("expecting error with no access rights")
+	}
+
+	//Trying to create test.db with no access rights
+	//Check fail of the createConfigTable
+	db, err = New("/sys/test.db")
+	if err == nil {
+		db.Close()
+		t.Fatal("Expecting error with no access rights")
+	}
+}
+
 func TestState(t *testing.T) {
 	setState := 34
 	if err := db.SetState(setState); err != nil {
