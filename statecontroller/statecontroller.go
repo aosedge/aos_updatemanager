@@ -6,25 +6,41 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
+	"aos_updatemanager/utils/grub"
+	"aos_updatemanager/utils/partition"
 )
 
 /*******************************************************************************
  * Consts
  ******************************************************************************/
 
-const rootFSModuleID = "rootfs"
-const bootloaderModuleID = "bootloader"
+const (
+	rootFSModuleID     = "rootfs"
+	bootloaderModuleID = "bootloader"
+)
 
 const (
-	kernelRootPrefix    = "root="
-	kernelBootPrefix    = "NUANCE.boot="
-	kernelVersionPrefix = "NUANCE.version="
-	kernelBootFormat    = "(hd0,gpt%d)"
+	kernelRootPrefix      = "root="
+	kernelBootPrefix      = "NUANCE.boot="
+	kernelVersionPrefix   = "NUANCE.version="
+	kernelRootIndexPrefix = "NUANCE.rootIndex="
+	kernelBootFormat      = "(hd0,gpt%d)"
+)
+
+const bootMountPoint = "/tmp/aos/boot"
+
+const (
+	grubVersionVar   = "NUANCE_VERSION"
+	grubSwitchVar    = "NUANCE_TRY_SWITCH"
+	grubRootIndexVar = "NUANCE_ACTIVE_ROOT_INDEX"
 )
 
 /*******************************************************************************
@@ -37,6 +53,7 @@ type Controller struct {
 	config         controllerConfig
 	state          controllerState
 	version        uint64
+	rootIndex      uint64
 	activeRootPart string
 	activeBootPart string
 }
@@ -55,6 +72,7 @@ type partitionInfo struct {
 type controllerConfig struct {
 	KernelCmdline  string
 	StateFile      string
+	GRUBEnvFile    string
 	RootPartitions []partitionInfo
 	BootPartitions []partitionInfo
 }
@@ -89,6 +107,7 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 	controller = &Controller{
 		moduleProvider: moduleProvider,
 		config: controllerConfig{
+			GRUBEnvFile:   "EFI/BOOT/NUANCE/grubenv",
 			KernelCmdline: "/proc/cmdline",
 		},
 	}
@@ -110,6 +129,12 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 			return nil, err
 		}
 	}
+
+	// TODO: we should start system check and system recovery procedure at the beginning.
+	// * upgrade request should be blocked till this procedure is finished;
+	// * we should check if current rootIndex equals to NUANCE_ACTIVE_ROOT_INDEX in grub env variable.
+	//   If not and no upgrade in progress, it means that we try new root FS and something bad happens.
+	//   We have to reboot the system in this case.
 
 	return controller, nil
 }
@@ -137,6 +162,31 @@ func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err e
 		return err
 	}
 
+	if controller.state.UpgradeInProgress {
+		if controller.state.SwitchRootFS {
+			// We can't perform upgrade on root FS switch. Disable root FS switch and perform system reboot
+			// in order to be ready for new upgrades.
+			log.Error("New upgrade can't be performed during root FS switch. Reboot is required.")
+
+			if err = controller.finishUpgrade(); err != nil {
+				log.Errorf("Can't finish upgrade: %s", err)
+			}
+
+			if err = controller.systemReboot(); err != nil {
+				log.Errorf("Can't perform system reboot: %s", err)
+			}
+
+			return errors.New("new upgrade is impossible during root FS switch")
+		}
+
+		// We can perform new upgrade, just display the warning
+		log.Warning("New upgrade request while another is in progress. Cancel current upgrade.")
+	}
+
+	if err = controller.startUpgrade(version, moduleIds); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -148,7 +198,54 @@ func (controller *Controller) Revert(version uint64, moduleIds []string) (err er
 // UpgradeFinished notifies state controller about finish of upgrade
 func (controller *Controller) UpgradeFinished(version uint64, status error,
 	moduleStatus map[string]error) (postpone bool, err error) {
-	return false, nil
+	if !controller.state.UpgradeInProgress {
+		return false, errors.New("no upgrade was started")
+	}
+
+	if controller.state.UpgradeVersion != version {
+		err = errors.New("upgrade version mistmatch")
+		goto finishUpgrade
+	}
+
+	if status != nil {
+		err = status
+		goto finishUpgrade
+	}
+
+	switch {
+	case controller.isModuleUpgraded(rootFSModuleID):
+		if !controller.state.SwitchRootFS {
+			if err = controller.tryRootFS(); err != nil {
+				goto finishUpgrade
+			}
+
+			if err = controller.systemReboot(); err != nil {
+				goto finishUpgrade
+			}
+
+			return true, nil
+		}
+	}
+
+	if err = controller.updateGrubEnv(); err != nil {
+		if controller.state.SwitchRootFS {
+			if err := controller.systemReboot(); err != nil {
+				log.Errorf("Can't perform system reboot: %s", err)
+			}
+		}
+	}
+
+finishUpgrade:
+
+	if finishErr := controller.finishUpgrade(); finishErr != nil {
+		log.Errorf("Error finishing upgrade: %s", err)
+
+		if err == nil {
+			err = finishErr
+		}
+	}
+
+	return false, err
 }
 
 // RevertFinished notifies state controller about finish of revert
@@ -182,7 +279,17 @@ func (controller *Controller) getBootloaderUpdatePartition() (partition partitio
 		}
 	}
 
-	return partition, errors.New("no root FS update partition found")
+	return partition, errors.New("no bootloader update partition found")
+}
+
+func (controller *Controller) getBootloaderActivePartition() (partition partitionInfo, err error) {
+	for _, partition = range controller.config.BootPartitions {
+		if partition.Device == controller.activeBootPart {
+			return partition, nil
+		}
+	}
+
+	return partition, errors.New("no bootloader active partition found")
 }
 
 func (controller *Controller) initModules(moduleIds []string) (err error) {
@@ -204,7 +311,7 @@ func (controller *Controller) initModules(moduleIds []string) (err error) {
 }
 
 func (controller *Controller) initFileSystemUpdateModule(id string, resourceProvider func() (partitionInfo, error)) (err error) {
-	log.Info("Register module: ", id)
+	log.Debug("Init module: ", id)
 
 	module, err := controller.moduleProvider.GetModuleByID(id)
 	if err != nil {
@@ -270,6 +377,13 @@ func (controller *Controller) parseBootCmd() (err error) {
 			if controller.version, err = strconv.ParseUint(strings.TrimPrefix(option, kernelVersionPrefix), 10, 0); err != nil {
 				return err
 			}
+
+		case strings.HasPrefix(option, kernelRootIndexPrefix):
+			var err error
+
+			if controller.rootIndex, err = strconv.ParseUint(strings.TrimPrefix(option, kernelRootIndexPrefix), 10, 0); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -291,7 +405,12 @@ func (controller *Controller) parseBootCmd() (err error) {
 func (controller *Controller) initState() (err error) {
 	stateJSON, err := ioutil.ReadFile(controller.config.StateFile)
 	if os.IsNotExist(err) {
+		// create new state file with default values if not exist
 		log.Debug("Create new state file")
+
+		if err = os.MkdirAll(filepath.Dir(controller.config.StateFile), 0755); err != nil {
+			return err
+		}
 
 		if err = controller.saveState(); err != nil {
 			return err
@@ -322,6 +441,131 @@ func (controller *Controller) saveState() (err error) {
 	if err = ioutil.WriteFile(controller.config.StateFile, stateJSON, 0644); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (controller *Controller) isModuleUpgraded(id string) (result bool) {
+	if controller.state.UpgradeModules == nil {
+		return false
+	}
+
+	for _, module := range controller.state.UpgradeModules {
+		if module == id {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (controller *Controller) startUpgrade(version uint64, moduleIds []string) (err error) {
+	controller.state = controllerState{UpgradeVersion: version, UpgradeModules: moduleIds, UpgradeInProgress: true}
+
+	if err = controller.saveState(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) finishUpgrade() (err error) {
+	controller.state.UpgradeInProgress = false
+	controller.state.SwitchRootFS = false
+	controller.state.UpgradeModules = nil
+
+	if err = controller.saveState(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) updateGrubEnv() (err error) {
+	log.Debug("Update GRUB environment")
+
+	partInfo, err := controller.getBootloaderActivePartition()
+	if err != nil {
+		return err
+	}
+
+	if err = partition.Mount(partInfo.Device, bootMountPoint, partInfo.FSType); err != nil {
+		return err
+	}
+	defer func() {
+		if err := partition.Umount(bootMountPoint); err != nil {
+			log.Errorf("Can't unmount boot partition: %s", err)
+		}
+	}()
+
+	grub, err := grub.New(path.Join(bootMountPoint, controller.config.GRUBEnvFile))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if grubErr := grub.Close(); grubErr != nil {
+			if err == nil {
+				err = grubErr
+			}
+		}
+	}()
+
+	if err = grub.SetVariable(grubVersionVar, strconv.FormatUint(controller.state.UpgradeVersion, 10)); err != nil {
+		return err
+	}
+
+	if err = grub.SetVariable(grubRootIndexVar, strconv.FormatUint(controller.rootIndex, 10)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) tryRootFS() (err error) {
+	log.Debug("Try switch root FS")
+
+	controller.state.SwitchRootFS = true
+
+	if err = controller.saveState(); err != nil {
+		return err
+	}
+
+	partInfo, err := controller.getBootloaderActivePartition()
+	if err != nil {
+		return err
+	}
+
+	if err = partition.Mount(partInfo.Device, bootMountPoint, partInfo.FSType); err != nil {
+		return err
+	}
+	defer func() {
+		if err := partition.Umount(bootMountPoint); err != nil {
+			log.Errorf("Can't unmount boot partition: %s", err)
+		}
+	}()
+
+	grub, err := grub.New(path.Join(bootMountPoint, controller.config.GRUBEnvFile))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if grubErr := grub.Close(); grubErr != nil {
+			if err == nil {
+				err = grubErr
+			}
+		}
+	}()
+
+	if err = grub.SetVariable(grubSwitchVar, "1"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) systemReboot() (err error) {
+	// TODO: implement proper system reboot.
+	log.Info("System reboot")
 
 	return nil
 }
