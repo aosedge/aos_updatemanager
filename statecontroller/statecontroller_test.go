@@ -36,6 +36,18 @@ var moduleMgr = testModuleMgr{
 		"bootloader": &testUpdateModule{}},
 }
 
+var wrongModuleMgr = testModuleMgr{
+	modules: map[string]interface{}{
+		"wrongfs":     &testUpdateModule{},
+		"bootloader": &testUpdateModule{}},
+}
+
+var notImpModuleMgr = testModuleMgr{
+	modules: map[string]interface{}{
+		"rootfs":     nil,
+		"bootloader": &testUpdateModule{}},
+}
+
 var configJSON = `
 {
 	"KernelCmdline" : "tmp/cmdline",
@@ -103,16 +115,102 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
-func TestGetVersion(t *testing.T) {
+func TestGetters(t *testing.T) {
 	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
 	if err != nil {
-		log.Fatalf("Error creating state controller: %s", err)
+		t.Errorf("Error creating controller %s", err)
 	}
+
 	defer controller.Close()
 
 	if _, err := controller.GetVersion(); err != nil {
 		t.Errorf("Can't get system version: %s", err)
 	}
+	if _, err := controller.GetPlatformID(); err != nil {
+		t.Errorf("can't get system version: %s", err)
+	}
+}
+
+func TestNewModuleInputParams(t *testing.T) {
+	brokenConfigJSON := `
+{
+	Some broken json
+			"device" : "/dev/myPart1",
+			"fstype" : "ext4"
+		{
+			"device" : "/dev/myPart2",
+			"fstype" : "ext4"
+		}
+}`
+	configJSON := `
+{
+	"RootPartitions" : [
+		{
+			"device" : "/dev/myPart1",
+			"fstype" : "ext4"
+		},
+		{
+			"device" : "/dev/myPart2",
+			"fstype" : "ext4"
+		}
+	]
+}`
+
+
+	//Tesing module provider with wrong json
+	controller, err := statecontroller.New([]byte(brokenConfigJSON), &moduleMgr)
+	if err == nil {
+		controller.Close()
+		log.Fatal("Expecting error during controller creation")
+	}
+
+	//Tesing module provider with moduleProvider = nil
+	controller, err = statecontroller.New([]byte(configJSON), nil)
+	if err == nil {
+		controller.Close()
+		log.Fatal("Expecting error during controller creation")
+	}
+
+	//Tesing module provider with wrong moduleProvider
+	controller, err = statecontroller.New([]byte(configJSON), &wrongModuleMgr)
+	if err == nil {
+		controller.Close()
+		log.Fatal("Expecting error during controller creation")
+	}
+
+	//Tesing module provider with not impl rootfs in moduleProvider
+	controller, err = statecontroller.New([]byte(configJSON), &notImpModuleMgr)
+	if err == nil {
+		controller.Close()
+		log.Fatal("Expecting error during controller creation")
+	}
+
+}
+
+//TODO implement unit tests to Upgrade, Revert, UpgradeFinished and RevertFinished when they will be implemented
+
+func TestWORootPartition(t *testing.T) {
+	configJSON := `
+{
+	"SomePartitions" : [
+		{
+			"device" : "/dev/myPart1",
+			"fstype" : "ext4"
+		},
+		{
+			"device" : "/dev/myPart2",
+			"fstype" : "ext4"
+		}
+	]
+}`
+
+	//Tesing module provider with no RootPartition
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
+	if err == nil {
+		controller.Close()
+		log.Fatal("Expecting error during controller creation")
+	}
+
 }
 
 func TestCheckUpdatePartition(t *testing.T) {
