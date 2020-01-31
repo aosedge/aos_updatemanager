@@ -120,7 +120,7 @@ func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err e
 
 // Revert notifies state controller about start of system revert
 func (controller *Controller) Revert(version uint64, moduleIds []string) (err error) {
-	return nil
+	return errors.New("revert operation is not supported")
 }
 
 // UpgradeFinished notifies state controller about finish of upgrade
@@ -132,7 +132,7 @@ func (controller *Controller) UpgradeFinished(version uint64, status error,
 // RevertFinished notifies state controller about finish of revert
 func (controller *Controller) RevertFinished(version uint64, status error,
 	moduleStatus map[string]error) (postpone bool, err error) {
-	return false, nil
+	return false, errors.New("revert operation is not supported")
 }
 
 /*******************************************************************************
