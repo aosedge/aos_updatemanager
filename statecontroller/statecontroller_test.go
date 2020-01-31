@@ -42,11 +42,11 @@ var configJSON = `
 	"BootPartitions" : [
 		{
 			"device" : "/dev/myBoot1",
-			"fstype" : "ext4"
+			"fstype" : "vfat"
 		},
 		{
 			"device" : "/dev/myBoot2",
-			"fstype" : "ext4"
+			"fstype" : "vfat"
 		}
 	],
 	"RootPartitions" : [
@@ -121,14 +121,15 @@ func TestCheckUpdatePartition(t *testing.T) {
 	}
 	defer controller.Close()
 
-	module, err := moduleMgr.GetModuleByID("rootfs")
-	if err != nil {
-		t.Fatalf("Can't get rootfs module: %s", err)
+	if err = controller.Upgrade(1, []string{"rootfs", "bootloader"}); err != nil {
+		t.Fatalf("Can't upgrade state: %s", err)
 	}
 
-	testModule, ok := module.(*testUpdateModule)
-	if !ok {
-		t.Fatal("Wrong module type")
+	// Check rootFS module
+
+	testModule, err := getTestModule("rootfs")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
 	}
 
 	if testModule.path != "/dev/myRoot2" {
@@ -138,6 +139,21 @@ func TestCheckUpdatePartition(t *testing.T) {
 	if testModule.fsType != "ext4" {
 		t.Errorf("Wrong FS type: %s", testModule.fsType)
 	}
+
+	// Check bootloader module
+
+	if testModule, err = getTestModule("bootloader"); err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	if testModule.path != "/dev/myBoot2" {
+		t.Errorf("Wrong update partition: %s", testModule.path)
+	}
+
+	if testModule.fsType != "vfat" {
+		t.Errorf("Wrong FS type: %s", testModule.fsType)
+	}
+
 }
 
 /*******************************************************************************
@@ -170,4 +186,19 @@ func createCmdLine(data string) (err error) {
 	}
 
 	return nil
+}
+
+func getTestModule(id string) (testModule *testUpdateModule, err error) {
+	module, err := moduleMgr.GetModuleByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var ok bool
+
+	if testModule, ok = module.(*testUpdateModule); !ok {
+		return nil, errors.New("wrong module type")
+	}
+
+	return testModule, nil
 }

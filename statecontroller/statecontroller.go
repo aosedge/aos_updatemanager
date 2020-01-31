@@ -89,10 +89,6 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 		return nil, err
 	}
 
-	if err = controller.initModules(); err != nil {
-		return nil, err
-	}
-
 	return controller, nil
 }
 
@@ -115,6 +111,10 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 
 // Upgrade notifies state controller about start of system upgrade
 func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err error) {
+	if err = controller.initModules(moduleIds); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -163,13 +163,19 @@ func (controller *Controller) getBootloaderUpdatePartition() (partition partitio
 	return partition, errors.New("no root FS update partition found")
 }
 
-func (controller *Controller) initModules() (err error) {
-	if err := controller.initFileSystemUpdateModule(rootFSModuleID, controller.getRootFSUpdatePartition); err != nil {
-		return err
-	}
+func (controller *Controller) initModules(moduleIds []string) (err error) {
+	for _, id := range moduleIds {
+		switch id {
+		case rootFSModuleID:
+			if err := controller.initFileSystemUpdateModule(rootFSModuleID, controller.getRootFSUpdatePartition); err != nil {
+				return err
+			}
 
-	if err := controller.initFileSystemUpdateModule(bootloaderModuleID, controller.getBootloaderUpdatePartition); err != nil {
-		return err
+		case bootloaderModuleID:
+			if err := controller.initFileSystemUpdateModule(bootloaderModuleID, controller.getBootloaderUpdatePartition); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
