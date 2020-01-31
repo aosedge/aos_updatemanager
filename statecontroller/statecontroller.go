@@ -114,22 +114,24 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 }
 
 // Upgrade notifies state controller about start of system upgrade
-func (controller *Controller) Upgrade(version uint64) (err error) {
+func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err error) {
 	return nil
 }
 
 // Revert notifies state controller about start of system revert
-func (controller *Controller) Revert(version uint64) (err error) {
+func (controller *Controller) Revert(version uint64, moduleIds []string) (err error) {
 	return nil
 }
 
 // UpgradeFinished notifies state controller about finish of upgrade
-func (controller *Controller) UpgradeFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error) {
+func (controller *Controller) UpgradeFinished(version uint64, status error,
+	moduleStatus map[string]error) (postpone bool, err error) {
 	return false, nil
 }
 
 // RevertFinished notifies state controller about finish of revert
-func (controller *Controller) RevertFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error) {
+func (controller *Controller) RevertFinished(version uint64, status error,
+	moduleStatus map[string]error) (postpone bool, err error) {
 	return false, nil
 }
 

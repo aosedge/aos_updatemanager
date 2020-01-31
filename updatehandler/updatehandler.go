@@ -128,8 +128,8 @@ type Storage interface {
 type StateController interface {
 	GetVersion() (version uint64, err error)
 	GetPlatformID() (id string, err error)
-	Upgrade(version uint64) (err error)
-	Revert(version uint64) (err error)
+	Upgrade(version uint64, moduleIds []string) (err error)
+	Revert(version uint64, moduleIds []string) (err error)
 	UpgradeFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
 	RevertFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
 }
@@ -452,7 +452,7 @@ func (handler *Handler) upgrade(path string, stage int) {
 
 		case upgradeStartStateControllerStage:
 			if handler.stateController != nil {
-				if handler.lastError = handler.stateController.Upgrade(handler.operationVersion); handler.lastError != nil {
+				if handler.lastError = handler.upgradeStateController(); handler.lastError != nil {
 					stage = upgradeFinishStage
 					break
 				}
@@ -522,7 +522,7 @@ func (handler *Handler) revert(stage int) {
 
 		case revertStartStateControllerStage:
 			if handler.stateController != nil {
-				if handler.lastError = handler.stateController.Revert(handler.operationVersion); handler.lastError != nil {
+				if handler.lastError = handler.revertStateController(); handler.lastError != nil {
 					stage = upgradeFinishStage
 					break
 				}
@@ -574,6 +574,57 @@ func (handler *Handler) revert(stage int) {
 	}
 }
 
+func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
+	metadataJSON, err := ioutil.ReadFile(path.Join(handler.upgradeDir, metadataFileName))
+	if err != nil {
+		return metadata, err
+	}
+
+	if err = json.Unmarshal(metadataJSON, &metadata); err != nil {
+		return metadata, err
+	}
+
+	return metadata, err
+}
+
+func (handler *Handler) upgradeStateController() (err error) {
+	metadata, err := handler.getImageMetadata()
+	if err != nil {
+		return err
+	}
+
+	moduleIds := make([]string, 0, len(metadata.UpdateItems))
+
+	for _, item := range metadata.UpdateItems {
+		moduleIds = append(moduleIds, item.Type)
+	}
+
+	if err = handler.stateController.Upgrade(handler.operationVersion, moduleIds); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (handler *Handler) revertStateController() (err error) {
+	moduleStatuses, err := handler.storage.GetModuleStatuses()
+	if err != nil {
+		return err
+	}
+
+	moduleIds := make([]string, 0, len(moduleStatuses))
+
+	for id := range moduleStatuses {
+		moduleIds = append(moduleIds, id)
+	}
+
+	if err = handler.stateController.Revert(handler.operationVersion, moduleIds); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (handler *Handler) updateModule(id, path string) (err error) {
 	log.WithField("id", id).Debug("Update module")
 
@@ -595,14 +646,8 @@ func (handler *Handler) updateModule(id, path string) (err error) {
 }
 
 func (handler *Handler) updateModules() (err error) {
-	metadataJSON, err := ioutil.ReadFile(path.Join(handler.upgradeDir, metadataFileName))
+	metadata, err := handler.getImageMetadata()
 	if err != nil {
-		return err
-	}
-
-	var metadata imageMetadata
-
-	if err = json.Unmarshal(metadataJSON, &metadata); err != nil {
 		return err
 	}
 
