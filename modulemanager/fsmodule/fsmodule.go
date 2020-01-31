@@ -65,7 +65,10 @@ type fsUpdateMetadata struct {
 
 const metaDataFilename = "metadata.json"
 const tmpMountpoint = "/tmp/aos/mountpoint"
-const ostreeRepoFolder = ".ostree_repo"
+const (
+	ostreeRepoFolder = ".ostree_repo"
+	ostreeBranchName = "nuance_ota"
+)
 const (
 	incrementalType = "incremental"
 	fullType        = "full"
@@ -284,6 +287,22 @@ func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMet
 	log.Debug("Ostree checkout to commit ", metadata.Commit)
 	if output, err := exec.Command("ostree", "--repo="+repoPath, "checkout", metadata.Commit,
 		"-H", "-U", "--union", tmpMountpoint).CombinedOutput(); err != nil {
+		return fmt.Errorf("ostree error %s code: %v", string(output), err)
+	}
+
+	log.Debug("Cleanup ostree repo")
+	if output, err := exec.Command("ostree", "--repo="+repoPath, "refs", "--delete",
+		ostreeBranchName).CombinedOutput(); err != nil {
+		return fmt.Errorf("ostree error %s code: %v", string(output), err)
+	}
+
+	if output, err := exec.Command("ostree", "--repo="+repoPath, "refs", "--create="+ostreeBranchName,
+		metadata.Commit).CombinedOutput(); err != nil {
+		return fmt.Errorf("ostree error %s code: %v", string(output), err)
+	}
+
+	if output, err := exec.Command("ostree", "--repo="+repoPath, "prune", ostreeBranchName, "--refs-only",
+		"--depth=0").CombinedOutput(); err != nil {
 		return fmt.Errorf("ostree error %s code: %v", string(output), err)
 	}
 
