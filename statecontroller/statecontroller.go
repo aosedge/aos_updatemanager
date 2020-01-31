@@ -20,9 +20,10 @@ const rootFSModuleID = "rootfs"
 const bootloaderModuleID = "bootloader"
 
 const (
-	kernelRootPrefix = "root="
-	kernelBootPrefix = "NUANCE.boot="
-	kernelBootFormat = "(hd0,gpt%d)"
+	kernelRootPrefix    = "root="
+	kernelBootPrefix    = "NUANCE.boot="
+	kernelVersionPrefix = "NUANCE.version="
+	kernelBootFormat    = "(hd0,gpt%d)"
 )
 
 /*******************************************************************************
@@ -33,6 +34,7 @@ const (
 type Controller struct {
 	moduleProvider ModuleProvider
 	config         controllerConfig
+	version        uint64
 	activeRootPart string
 	activeBootPart string
 }
@@ -101,7 +103,7 @@ func (controller *Controller) Close() (err error) {
 
 // GetVersion returns current installed image version
 func (controller *Controller) GetVersion() (version uint64, err error) {
-	return 0, nil
+	return controller.version, nil
 }
 
 // GetPlatformID returns platform ID
@@ -240,6 +242,13 @@ func (controller *Controller) parseBootCmd() (err error) {
 				if configPart == grubPart {
 					controller.activeBootPart = partition.Device
 				}
+			}
+
+		case strings.HasPrefix(option, kernelVersionPrefix):
+			var err error
+
+			if controller.version, err = strconv.ParseUint(strings.TrimPrefix(option, kernelVersionPrefix), 10, 0); err != nil {
+				return err
 			}
 		}
 	}
