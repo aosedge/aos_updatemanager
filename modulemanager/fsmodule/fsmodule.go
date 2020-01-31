@@ -170,7 +170,7 @@ func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) 
 		return err
 	}
 
-	log.Info("Start full fs Update partition ", module.partitionForUpdate.device, "from ", metadata.Resources)
+	log.Info("Start full fs Update partition ", module.partitionForUpdate.device, " from ", metadata.Resources)
 
 	var stat syscall.Statfs_t
 
@@ -252,13 +252,12 @@ func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMet
 		var i int
 
 		for i = 0; i < umountRetryCount; i++ {
-			if errLocal := syscall.Unmount(tmpMountpoint, 0); errLocal != nil {
-				log.Warning("Error unmount ", errLocal)
-				umountErr = errLocal
-				time.Sleep(1 * time.Second)
-			} else {
+			if umountErr = syscall.Unmount(tmpMountpoint, 0); umountErr == nil {
 				return
 			}
+
+			log.Warning("Error unmount ", umountErr)
+			time.Sleep(1 * time.Second)
 		}
 
 		if err != nil {
@@ -272,9 +271,9 @@ func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMet
 	}
 
 	log.Debug("Apply static delta ")
-	command := exec.Command("ostree", "--repo="+repoPath, "static-delta", "apply-offline", metadata.Resources)
-	if err := command.Run(); err != nil {
-		return err
+	if output, err := exec.Command("ostree", "--repo="+repoPath, "static-delta", "apply-offline",
+		metadata.Resources).CombinedOutput(); err != nil {
+		return fmt.Errorf("ostree error %s code: %v", string(output), err)
 	}
 
 	log.Debug("Cleanup hard links ")
@@ -283,9 +282,9 @@ func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMet
 	}
 
 	log.Debug("Ostree checkout to commit ", metadata.Commit)
-	command = exec.Command("ostree", "--repo="+repoPath, "checkout", metadata.Commit, "-H", "-U", "--union", tmpMountpoint)
-	if err := command.Run(); err != nil {
-		return err
+	if output, err := exec.Command("ostree", "--repo="+repoPath, "checkout", metadata.Commit,
+		"-H", "-U", "--union", tmpMountpoint).CombinedOutput(); err != nil {
+		return fmt.Errorf("ostree error %s code: %v", string(output), err)
 	}
 
 	return nil
