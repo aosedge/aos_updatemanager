@@ -39,6 +39,7 @@ var moduleMgr = testModuleMgr{
 var configJSON = `
 {
 	"KernelCmdline" : "tmp/cmdline",
+	"StateFile" : "tmp/state",
 	"BootPartitions" : [
 		{
 			"device" : "/dev/myBoot1",

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ const (
 type Controller struct {
 	moduleProvider ModuleProvider
 	config         controllerConfig
+	state          controllerState
 	version        uint64
 	activeRootPart string
 	activeBootPart string
@@ -52,8 +54,16 @@ type partitionInfo struct {
 
 type controllerConfig struct {
 	KernelCmdline  string
+	StateFile      string
 	RootPartitions []partitionInfo
 	BootPartitions []partitionInfo
+}
+
+type controllerState struct {
+	UpgradeVersion    uint64
+	UpgradeModules    []string
+	SwitchRootFS      bool
+	UpgradeInProgress bool
 }
 
 type fsModule interface {
@@ -89,6 +99,16 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 
 	if err = controller.parseBootCmd(); err != nil {
 		return nil, err
+	}
+
+	if err = controller.initState(); err != nil {
+		return nil, err
+	}
+
+	if controller.state.UpgradeInProgress {
+		if err = controller.initModules(controller.state.UpgradeModules); err != nil {
+			return nil, err
+		}
 	}
 
 	return controller, nil
@@ -264,6 +284,44 @@ func (controller *Controller) parseBootCmd() (err error) {
 	}
 
 	log.WithField("partition", controller.activeBootPart).Debug("Active boot partition")
+
+	return nil
+}
+
+func (controller *Controller) initState() (err error) {
+	stateJSON, err := ioutil.ReadFile(controller.config.StateFile)
+	if os.IsNotExist(err) {
+		log.Debug("Create new state file")
+
+		if err = controller.saveState(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if err = json.Unmarshal(stateJSON, &controller.state); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) saveState() (err error) {
+	log.Debug("Save state file")
+
+	stateJSON, err := json.Marshal(&controller.state)
+	if err != nil {
+		return err
+	}
+
+	if err = ioutil.WriteFile(controller.config.StateFile, stateJSON, 0644); err != nil {
+		return err
+	}
 
 	return nil
 }
