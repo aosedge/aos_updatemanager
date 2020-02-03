@@ -39,6 +39,12 @@ import (
  ******************************************************************************/
 
 const serverURL = "wss://localhost:8088"
+// Server creation types
+const (
+	serverTypeSuccess = iota
+	serverTypeFail 
+)
+
 
 /*******************************************************************************
  * Types
@@ -50,6 +56,13 @@ type testClient struct {
 }
 
 type testUpdater struct {
+	version        uint64
+	operation      string
+	status         string
+	statusCallback func(status string)
+}
+
+type testFailUpdater struct {
 	version        uint64
 	operation      string
 	status         string
@@ -74,41 +87,9 @@ func init() {
  ******************************************************************************/
 
 func TestMain(m *testing.M) {
-	configJSON := `{
-	"Cert": "../data/crt.pem",
-	"Key":  "../data/key.pem"
-}`
-
-	var cfg config.Config
-
-	decoder := json.NewDecoder(strings.NewReader(configJSON))
-	// Parse config
-	if err := decoder.Decode(&cfg); err != nil {
-		log.Fatalf("Can't parse config: %s", err)
-	}
-
-	url, err := url.Parse(serverURL)
-	if err != nil {
-		log.Fatalf("Can't parse url: %s", err)
-	}
-
-	cfg.ServerURL = url.Host
-
-	server, err := umserver.New(&cfg, &testUpdater{status: "success"})
-	if err != nil {
-		log.Fatalf("Can't create ws server: %s", err)
-	}
-	defer server.Close()
-
-	// There is raise condition: after new listen is not started yet
-	// so we need this delay to wait for listen
-	time.Sleep(time.Second)
-
 	ret := m.Run()
 
 	time.Sleep(time.Second)
-
-	server.Close()
 
 	os.Exit(ret)
 }
@@ -118,6 +99,9 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetStatus(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
 	client, err := newTestClient(serverURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
@@ -137,6 +121,9 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestSystemUpgrade(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
 	client, err := newTestClient(serverURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
@@ -160,6 +147,9 @@ func TestSystemUpgrade(t *testing.T) {
 }
 
 func TestSystemRevert(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
 	client, err := newTestClient(serverURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
@@ -182,9 +172,167 @@ func TestSystemRevert(t *testing.T) {
 	}
 }
 
+func TestUnsupportedRequest(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	request := umprotocol.UpgradeReq{ImageVersion: 3}
+
+	if err = client.sendRequest("WrongRequest", &request, &response, 5*time.Second); err == nil {
+		t.Fatal("Error is expected here")
+	}
+
+	// Test for the unsupported version
+	if err = client.sendVersionedRequest("WrongRequest", &request, &response, 5*time.Second, 255); err == nil {
+		t.Fatal("Error is expected here")
+	}
+
+	// Test with completely wrong message format
+	message := "Some wrong messageo"
+
+	if err = client.sendRawRequest(&message, &response, 5*time.Second); err == nil {
+		t.Fatal("Error is expected here")
+	}
+}
+
+
+func TestNilDataRequest(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	message := umprotocol.Message{
+		Header: umprotocol.Header{
+			Version:     umprotocol.Version,
+			MessageType: umprotocol.UpgradeRequestType,
+		},
+	}
+
+	message.Data = nil
+
+	if err = client.sendRawRequest(&message, &response, 5*time.Second); err == nil {
+		t.Fatal("Expected error here")
+	}
+}
+
+func TestUpgradeFail(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeFail)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	request := umprotocol.UpgradeReq{ImageVersion: 3}
+
+	if err := client.sendRequest(umprotocol.UpgradeRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Status != umprotocol.FailedStatus {
+		t.Errorf("Wrong updater status: %s", response.Status)
+	}
+
+	if response.Operation != umprotocol.UpgradeOperation {
+		t.Errorf("Wrong operation: %s", response.Operation)
+	}
+}
+
+func TestRevertFail(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeFail)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	request := umprotocol.RevertReq{ImageVersion: 3}
+
+	if err := client.sendRequest(umprotocol.RevertRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Status != umprotocol.FailedStatus {
+		t.Errorf("Wrong updater status: %s", response.Status)
+	}
+
+	if response.Operation != umprotocol.RevertOperation {
+		t.Errorf("Wrong operation: %s", response.Operation)
+	}
+}
+
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+ func CreateServerConfig(serverAddress string) (cfg config.Config) {
+	configJSON := `{
+	"Cert": "../data/crt.pem",
+	"Key":  "../data/key.pem"
+}`
+
+	decoder := json.NewDecoder(strings.NewReader(configJSON))
+	// Parse config
+	if err := decoder.Decode(&cfg); err != nil {
+		log.Fatalf("Can't parse config: %s", err)
+	}
+
+	url, err := url.Parse(serverAddress)
+	if err != nil {
+		log.Fatalf("Can't parse url: %s", err)
+	}
+
+	cfg.ServerURL = url.Host
+
+	return cfg
+ }
+
+// Success or die
+func newTestServer(url string, serverType int) (server *umserver.Server) {
+	cfg := CreateServerConfig(serverURL)
+	var updater umserver.Updater
+
+	if serverType == serverTypeSuccess {
+		updater = &testUpdater{status : "success"}
+	} else {
+		updater = &testFailUpdater{status : "success"}
+	}
+
+	server, err := umserver.New(&cfg, updater)
+	if err != nil {
+		log.Fatalf("Can't create ws server: %s", err)
+	}
+
+	// There is raise condition: after new listen is not started yet
+	// so we need this delay to wait for listen
+	time.Sleep(time.Second)
+
+	return server
+}
 
 func newTestClient(url string) (client *testClient, err error) {
 	client = &testClient{messageChannel: make(chan []byte, 1)}
@@ -209,9 +357,13 @@ func (client *testClient) messageHandler(message []byte) {
 }
 
 func (client *testClient) sendRequest(messageType string, request, response interface{}, timeout time.Duration) (err error) {
+	return client.sendVersionedRequest(messageType, request, response, timeout, umprotocol.Version)
+}
+//NOTE: amoiseev Setting optional parameter to be able to set wrong version in header
+func (client *testClient) sendVersionedRequest(messageType string, request, response interface{}, timeout time.Duration, version uint64) (err error) {
 	message := umprotocol.Message{
 		Header: umprotocol.Header{
-			Version:     umprotocol.Version,
+			Version:     version,
 			MessageType: messageType,
 		},
 	}
@@ -219,6 +371,11 @@ func (client *testClient) sendRequest(messageType string, request, response inte
 	if message.Data, err = json.Marshal(request); err != nil {
 		return err
 	}
+
+	return client.sendRawRequest(message, response, timeout)
+}
+
+func (client *testClient) sendRawRequest(message, response interface{}, timeout time.Duration) (err error) {
 
 	if err = client.wsClient.SendMessage(&message); err != nil {
 		return err
@@ -286,5 +443,41 @@ func (updater *testUpdater) Revert(version uint64) (err error) {
 }
 
 func (updater *testUpdater) SetStatusCallback(callback func(status string)) {
+	updater.statusCallback = callback
+}
+
+/*******************************************************************************
+ * testFailUpdater implementation
+ ******************************************************************************/
+
+func (updater *testFailUpdater) GetCurrentVersion() (version uint64) {
+	return updater.version
+}
+
+func (updater *testFailUpdater) GetOperationVersion() (version uint64) {
+	return updater.version
+}
+
+func (updater *testFailUpdater) GetLastOperation() (operation string) {
+	return updater.operation
+}
+
+func (updater *testFailUpdater) GetStatus() (status string) {
+	return updater.status
+}
+
+func (updater *testFailUpdater) GetLastError() (err error) {
+	return nil
+}
+
+func (updater *testFailUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
+	return errors.New("UnitTest: failed update")
+}
+
+func (updater *testFailUpdater) Revert(version uint64) (err error) {
+	return errors.New("UnitTest: failed revert")
+}
+
+func (updater *testFailUpdater) SetStatusCallback(callback func(status string)) {
 	updater.statusCallback = callback
 }
