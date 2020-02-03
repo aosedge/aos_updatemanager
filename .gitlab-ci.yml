@@ -15,7 +15,7 @@ test:
   stage: test
   script:
     - apt update
-    - apt install -y ostree 
+    - apt install -y ostree grub-common
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - echo "-------   Run Lint -------"
     - ci/lint.sh
@@ -26,7 +26,7 @@ coverage:
   stage: test
   script:
     - apt update
-    - apt install -y ostree 
+    - apt install -y ostree grub-common
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - go test $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
