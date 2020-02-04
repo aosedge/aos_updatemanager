@@ -72,10 +72,18 @@ func New(name string) (db *Database, err error) {
 		}
 	}
 
-	sqlite, err := sql.Open("sqlite3", name)
+	var sqlite *sql.DB
+
+	sqlite, err = sql.Open("sqlite3", name)
 	if err != nil {
 		return db, err
 	}
+
+	defer func() {
+		if err != nil {
+			sqlite.Close()
+		}
+	}()
 
 	db = &Database{sqlite}
 
