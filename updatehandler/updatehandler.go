@@ -152,8 +152,6 @@ type imageMetadata struct {
 
 // New returns pointer to new Handler
 func New(cfg *config.Config, moduleProvider ModuleProvider, stateController StateController, storage Storage) (handler *Handler, err error) {
-	log.Debug("Create update handler")
-
 	handler = &Handler{
 		stateController: stateController,
 		storage:         storage,
@@ -176,6 +174,8 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 			return nil, err
 		}
 	}
+
+	log.WithField("imageVersion", handler.currentVersion).Debug("Create update handler")
 
 	if handler.state, err = handler.storage.GetState(); err != nil {
 		return nil, err
@@ -626,7 +626,7 @@ func (handler *Handler) revertStateController() (err error) {
 }
 
 func (handler *Handler) updateModule(id, path string) (err error) {
-	log.WithField("id", id).Debug("Update module")
+	log.WithField("id", id).Info("Update module")
 
 	module, err := handler.moduleProvider.GetModuleByID(id)
 	if err != nil {

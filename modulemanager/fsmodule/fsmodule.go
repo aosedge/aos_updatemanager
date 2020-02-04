@@ -104,7 +104,8 @@ func (module *FileSystemModule) GetID() (id string) {
 
 // Upgrade upgrade module
 func (module *FileSystemModule) Upgrade(folderPath string) (err error) {
-	log.Info("FileSystemModule Upgrade request : ", folderPath)
+	log.WithField("folderPath", folderPath).Debug("fsmodule upgrade request")
+
 	jsonFile, err := os.Open(path.Join(folderPath, metaDataFilename))
 	if err != nil {
 		return err
@@ -149,7 +150,10 @@ func (module *FileSystemModule) SetPartitionForUpdate(path, fsType string) (err 
 
 // Full fs update
 func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) (err error) {
-	log.Debug("Start full file system update, destination: ", module.partitionForUpdate.device)
+	log.WithFields(log.Fields{
+		"device": module.partitionForUpdate.device,
+		"from":   metadata.Resources}).Debug("Full fs update")
+
 	partition, err := os.OpenFile(module.partitionForUpdate.device, os.O_RDWR, 0666)
 	if err != nil {
 		return err
@@ -172,8 +176,6 @@ func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) 
 	if err != nil {
 		return err
 	}
-
-	log.Info("Start full fs Update partition ", module.partitionForUpdate.device, " from ", metadata.Resources)
 
 	var stat syscall.Statfs_t
 
@@ -206,10 +208,11 @@ func (module *FileSystemModule) performFullFsUpdate(metadata *fsUpdateMetadata) 
 		}
 		// is this the end of the data?
 		if err == io.EOF {
-			log.Info("Write partition done, written: ", total)
 			break
 		}
 	}
+
+	log.WithField("written", total).Debug("Write partition done, written")
 
 	return nil
 }
@@ -238,7 +241,9 @@ func (metadata *fsUpdateMetadata) Validate(resourcePath, id string) (err error) 
 }
 
 func (module *FileSystemModule) performIncrementalFsUpdate(metadata *fsUpdateMetadata) (err error) {
-	log.Debug("Start incremental update dev=", module.partitionForUpdate.device, " sources=", metadata.Resources)
+	log.WithFields(log.Fields{
+		"device": module.partitionForUpdate.device,
+		"from":   metadata.Resources}).Debug("Incremental fs update")
 
 	if err = partition.Mount(module.partitionForUpdate.device,
 		tmpMountpoint, module.partitionForUpdate.fsType); err != nil {
