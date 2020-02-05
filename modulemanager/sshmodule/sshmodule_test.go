@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 		"Host": "localhost:22",
 		"User": "test",
 		"Password": "test",
-		"DestPath": "remoteTestFile",
+		"DestPath": "/tmp/remoteTestFile",
 		"Commands":[
 			"cd . ",
 			"pwd",
