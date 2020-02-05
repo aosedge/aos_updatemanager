@@ -468,8 +468,14 @@ func (handler *Handler) upgrade(path string, stage int) {
 			if handler.stateController != nil {
 				var postpone bool
 				var moduleStatuses map[string]error
+				var err error
 
-				if moduleStatuses, handler.lastError = handler.storage.GetModuleStatuses(); handler.lastError != nil {
+				if moduleStatuses, err = handler.storage.GetModuleStatuses(); err != nil {
+					if handler.lastError == nil {
+						handler.lastError = err
+					}
+
+					stage = upgradeFinishStage
 					break
 				}
 
@@ -679,7 +685,13 @@ func (handler *Handler) updateModules() (err error) {
 
 		status = handler.updateModule(item.Type, path.Join(handler.upgradeDir, item.Path))
 
-		if err = handler.storage.AddModuleStatus(item.Type, status); err != nil {
+		err = handler.storage.AddModuleStatus(item.Type, status)
+
+		if status != nil {
+			return status
+		}
+
+		if err != nil {
 			return err
 		}
 	}
