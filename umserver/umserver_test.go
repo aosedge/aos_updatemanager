@@ -39,12 +39,12 @@ import (
  ******************************************************************************/
 
 const serverURL = "wss://localhost:8088"
+
 // Server creation types
 const (
 	serverTypeSuccess = iota
-	serverTypeFail 
+	serverTypeFail
 )
-
 
 /*******************************************************************************
  * Types
@@ -203,7 +203,6 @@ func TestUnsupportedRequest(t *testing.T) {
 	}
 }
 
-
 func TestNilDataRequest(t *testing.T) {
 	server := newTestServer(serverURL, serverTypeSuccess)
 	defer server.Close()
@@ -284,12 +283,11 @@ func TestRevertFail(t *testing.T) {
 	}
 }
 
-
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
- func CreateServerConfig(serverAddress string) (cfg config.Config) {
+func CreateServerConfig(serverAddress string) (cfg config.Config) {
 	configJSON := `{
 	"Cert": "../data/crt.pem",
 	"Key":  "../data/key.pem"
@@ -309,7 +307,7 @@ func TestRevertFail(t *testing.T) {
 	cfg.ServerURL = url.Host
 
 	return cfg
- }
+}
 
 // Success or die
 func newTestServer(url string, serverType int) (server *umserver.Server) {
@@ -317,9 +315,9 @@ func newTestServer(url string, serverType int) (server *umserver.Server) {
 	var updater umserver.Updater
 
 	if serverType == serverTypeSuccess {
-		updater = &testUpdater{status : "success"}
+		updater = &testUpdater{status: "success"}
 	} else {
-		updater = &testFailUpdater{status : "success"}
+		updater = &testFailUpdater{status: "success"}
 	}
 
 	server, err := umserver.New(&cfg, updater)
@@ -359,6 +357,7 @@ func (client *testClient) messageHandler(message []byte) {
 func (client *testClient) sendRequest(messageType string, request, response interface{}, timeout time.Duration) (err error) {
 	return client.sendVersionedRequest(messageType, request, response, timeout, umprotocol.Version)
 }
+
 //NOTE: amoiseev Setting optional parameter to be able to set wrong version in header
 func (client *testClient) sendVersionedRequest(messageType string, request, response interface{}, timeout time.Duration, version uint64) (err error) {
 	message := umprotocol.Message{

@@ -172,7 +172,7 @@ func TestNewErrors(t *testing.T) {
 		t.Errorf("No error was returned for nonexisting config")
 	}
 
-	//Creating wrong config 
+	//Creating wrong config
 	if err := createWrongConfigFile(); err != nil {
 		t.Errorf("Unable to create wrong config file. Err %s", err)
 	}

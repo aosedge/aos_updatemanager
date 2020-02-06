@@ -38,7 +38,7 @@ var moduleMgr = testModuleMgr{
 
 var wrongModuleMgr = testModuleMgr{
 	modules: map[string]interface{}{
-		"wrongfs":     &testUpdateModule{},
+		"wrongfs":    &testUpdateModule{},
 		"bootloader": &testUpdateModule{}},
 }
 
@@ -155,7 +155,6 @@ func TestNewModuleInputParams(t *testing.T) {
 		}
 	]
 }`
-
 
 	//Tesing module provider with wrong json
 	controller, err := statecontroller.New([]byte(brokenConfigJSON), &moduleMgr)
