@@ -466,21 +466,9 @@ func (handler *Handler) upgrade(path string, stage int) {
 
 		case upgradeFinishStateControllerStage:
 			if handler.stateController != nil {
-				var postpone bool
-				var moduleStatuses map[string]error
-				var err error
+				postpone := false
 
-				if moduleStatuses, err = handler.storage.GetModuleStatuses(); err != nil {
-					if handler.lastError == nil {
-						handler.lastError = err
-					}
-
-					stage = upgradeFinishStage
-					break
-				}
-
-				if postpone, handler.lastError = handler.stateController.UpgradeFinished(
-					handler.operationVersion, handler.lastError, moduleStatuses); postpone {
+				if postpone, handler.lastError = handler.upgradeFinishStateController(); postpone {
 					return
 				}
 			}
@@ -546,15 +534,9 @@ func (handler *Handler) revert(stage int) {
 
 		case revertFinishStateControllerStage:
 			if handler.stateController != nil {
-				var postpone bool
-				var moduleStatuses map[string]error
+				postpone := false
 
-				if moduleStatuses, handler.lastError = handler.storage.GetModuleStatuses(); handler.lastError != nil {
-					break
-				}
-
-				if postpone, handler.lastError = handler.stateController.RevertFinished(
-					handler.operationVersion, handler.lastError, moduleStatuses); postpone {
+				if postpone, handler.lastError = handler.revertFinishStateController(); postpone {
 					return
 				}
 			}
@@ -612,6 +594,16 @@ func (handler *Handler) upgradeStateController() (err error) {
 	return nil
 }
 
+func (handler *Handler) upgradeFinishStateController() (postpone bool, err error) {
+	var moduleStatuses map[string]error
+
+	if moduleStatuses, err = handler.storage.GetModuleStatuses(); err != nil {
+		return false, err
+	}
+
+	return handler.stateController.UpgradeFinished(handler.operationVersion, handler.lastError, moduleStatuses)
+}
+
 func (handler *Handler) revertStateController() (err error) {
 	moduleStatuses, err := handler.storage.GetModuleStatuses()
 	if err != nil {
@@ -629,6 +621,16 @@ func (handler *Handler) revertStateController() (err error) {
 	}
 
 	return nil
+}
+
+func (handler *Handler) revertFinishStateController() (postpone bool, err error) {
+	var moduleStatuses map[string]error
+
+	if moduleStatuses, err = handler.storage.GetModuleStatuses(); handler.lastError != nil {
+		return false, err
+	}
+
+	return handler.stateController.RevertFinished(handler.operationVersion, handler.lastError, moduleStatuses)
 }
 
 func (handler *Handler) updateModule(id, path string) (err error) {
