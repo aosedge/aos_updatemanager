@@ -82,7 +82,7 @@ type Handler struct {
 	moduleProvider  ModuleProvider
 
 	upgradeDir       string
-	state            int
+	state            handlerState
 	currentVersion   uint64
 	operationVersion uint64
 	lastError        error
@@ -148,6 +148,10 @@ type imageMetadata struct {
 	UpdateItems       []itemMetadata `json:"updateItems"`
 }
 
+type handlerState int
+type upgradeStage int
+type revertStage int
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
@@ -180,9 +184,12 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 
 	log.WithField("imageVersion", handler.currentVersion).Debug("Create update handler")
 
-	if handler.state, err = handler.storage.GetState(); err != nil {
+	state, err := handler.storage.GetState()
+	if err != nil {
 		return nil, err
 	}
+
+	handler.state = handlerState(state)
 
 	if handler.operationVersion, err = handler.storage.GetOperationVersion(); err != nil {
 		return nil, err
@@ -203,7 +210,7 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 	}
 
 	if handler.state == upgradingState {
-		go handler.upgrade(imagePath, stage)
+		go handler.upgrade(imagePath, upgradeStage(stage))
 	}
 
 	if handler.state == revertingState {
@@ -319,7 +326,7 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 
 	handler.state = upgradingState
 
-	if err = handler.storage.SetState(handler.state); err != nil {
+	if err = handler.storage.SetState(int(handler.state)); err != nil {
 		return err
 	}
 
@@ -357,7 +364,7 @@ func (handler *Handler) Revert(version uint64) (err error) {
 
 	handler.state = revertingState
 
-	if err = handler.storage.SetState(handler.state); err != nil {
+	if err = handler.storage.SetState(int(handler.state)); err != nil {
 		return err
 	}
 
@@ -380,7 +387,23 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (handler *Handler) operationFinished(newState int, operationError error) {
+func (stage upgradeStage) String() string {
+	return [...]string{
+		"Init", "Unpack", "StartStateController", "UpgradeModules",
+		"RevertModules", "FinishStateController", "Finish"}[stage]
+}
+
+func (stage revertStage) String() string {
+	return [...]string{
+		"Init", "StartStateController", "RevertModules", "FinishStateController", "Finish"}[stage]
+}
+
+func (state handlerState) String() string {
+	return [...]string{
+		"Upgraded", "Upgrading", "Reverted", "Reverting"}[state]
+}
+
+func (handler *Handler) operationFinished(newState handlerState, operationError error) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -392,7 +415,7 @@ func (handler *Handler) operationFinished(newState int, operationError error) {
 
 	handler.state = newState
 
-	if err := handler.storage.SetState(handler.state); err != nil {
+	if err := handler.storage.SetState(int(handler.state)); err != nil {
 		log.Errorf("Can't set state: %s", err)
 	}
 
@@ -419,7 +442,7 @@ func (handler *Handler) operationFinished(newState int, operationError error) {
 	handler.statusChannel <- status
 }
 
-func (handler *Handler) upgrade(path string, stage int) {
+func (handler *Handler) upgrade(path string, stage upgradeStage) {
 	for {
 		log.WithField("stage", stage).Debug("Upgrade stage changed")
 
@@ -494,7 +517,7 @@ func (handler *Handler) upgrade(path string, stage int) {
 			}
 		}
 
-		if err := handler.storage.SetOperationStage(stage); err != nil {
+		if err := handler.storage.SetOperationStage(int(stage)); err != nil {
 			handler.operationFinished(upgradedState, err)
 			return
 		}
