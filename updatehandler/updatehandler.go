@@ -665,6 +665,7 @@ func (handler *Handler) updateModule(id, path string) (err error) {
 	}
 
 	if err = updateModule.Upgrade(path); err != nil {
+		log.WithField("id", id).Errorf("Update module failed: %s", err)
 		return err
 	}
 
@@ -720,7 +721,7 @@ func (handler *Handler) updateModules() (err error) {
 }
 
 func (handler *Handler) revertModule(id string) (err error) {
-	log.WithField("id", id).Debug("Revert module")
+	log.WithField("id", id).Info("Revert module")
 
 	module, err := handler.moduleProvider.GetModuleByID(id)
 	if err != nil {
@@ -733,6 +734,7 @@ func (handler *Handler) revertModule(id string) (err error) {
 	}
 
 	if err = updateModule.Revert(); err != nil {
+		log.WithField("id", id).Errorf("Revert module failed: %s", err)
 		return err
 	}
 

@@ -18,6 +18,7 @@
 package updatehandler_test
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -29,8 +30,6 @@ import (
 	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
-	"aos_updatemanager/modulemanager"
-	"aos_updatemanager/modulemanager/testmodule"
 	"aos_updatemanager/updatehandler"
 )
 
@@ -53,11 +52,27 @@ type testStorage struct {
 	moduleStatuses map[string]error
 }
 
+type testModuleProvider struct {
+	modules map[string]interface{}
+}
+
+type testModule struct {
+	status error
+}
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
 var updater *updatehandler.Handler
+
+var moduleProvider = testModuleProvider{
+	modules: map[string]interface{}{
+		"id1": &testModule{},
+		"id2": &testModule{},
+		"id3": &testModule{},
+	},
+}
 
 /*******************************************************************************
  * Init
@@ -83,26 +98,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Can't crate tmp dir: %s", err)
 	}
 
-	modulemanager.Register(testmodule.Name, func(id string, configJSON []byte) (module interface{}, err error) {
-		return testmodule.New(id, configJSON)
-	})
-
-	moduleManager, err := modulemanager.New(&config.Config{
-		Modules: []config.ModuleConfig{
-			config.ModuleConfig{
-				ID:     "id1",
-				Module: "test"},
-			config.ModuleConfig{
-				ID:     "id2",
-				Module: "test"},
-			config.ModuleConfig{
-				ID:     "id3",
-				Module: "test"}}})
-	if err != nil {
-		log.Fatalf("Can't create module manager: %s", err)
-	}
-
-	if updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, moduleManager, nil, &testStorage{moduleStatuses: make(map[string]error)}); err != nil {
+	if updater, err = updatehandler.New(&config.Config{UpgradeDir: "tmp"}, &moduleProvider, nil, &testStorage{moduleStatuses: make(map[string]error)}); err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -205,6 +201,57 @@ func TestUpgradeRevert(t *testing.T) {
 
 	if err := updater.GetLastError(); err != nil {
 		t.Errorf("Upgrade error: %s", err)
+	}
+}
+
+func TestUpgradeFailed(t *testing.T) {
+	version := updater.GetCurrentVersion()
+
+	imageInfo, err := createImage("tmp/testimage.bin")
+
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	module, err := getTestModule("id2")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	module.status = errors.New("upgrade error")
+
+	if err := updater.Upgrade(version+1, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	select {
+	case <-time.After(5 * time.Second):
+		t.Error("wait operation timeout")
+
+	case status := <-updater.StatusChannel():
+		if status != umprotocol.FailedStatus {
+			t.Fatal("Upgrade should fails")
+		}
+	}
+
+	if updater.GetCurrentVersion() != version {
+		t.Error("Wrong current version")
+	}
+
+	if updater.GetOperationVersion() != version+1 {
+		t.Error("Wrong operation version")
+	}
+
+	if updater.GetLastOperation() != umprotocol.UpgradeOperation {
+		t.Error("Wrong operation")
+	}
+
+	if updater.GetStatus() != umprotocol.FailedStatus {
+		t.Error("Wrong status")
+	}
+
+	if err := updater.GetLastError(); err == nil {
+		t.Error("Wrong last error")
 	}
 }
 
@@ -333,4 +380,40 @@ func (storage *testStorage) ClearModuleStatuses() (err error) {
 	storage.moduleStatuses = make(map[string]error)
 
 	return nil
+}
+
+func (module *testModule) GetID() (id string) {
+	return ""
+}
+
+func (module *testModule) Upgrade(path string) (err error) {
+	return module.status
+}
+
+func (module *testModule) Revert() (err error) {
+	return module.status
+}
+
+func (provider *testModuleProvider) GetModuleByID(id string) (module interface{}, err error) {
+	testModule, ok := provider.modules[id]
+	if !ok {
+		return nil, errors.New("module not found")
+	}
+
+	return testModule, nil
+}
+
+func getTestModule(id string) (module *testModule, err error) {
+	m, err := moduleProvider.GetModuleByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var ok bool
+
+	if module, ok = m.(*testModule); !ok {
+		return nil, errors.New("wrong module type")
+	}
+
+	return module, nil
 }
