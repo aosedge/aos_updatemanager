@@ -130,12 +130,6 @@ func TestGetCurrentVersion(t *testing.T) {
 }
 
 func TestUpgradeRevert(t *testing.T) {
-	statusChannel := make(chan string)
-
-	updater.SetStatusCallback(func(status string) {
-		statusChannel <- status
-	})
-
 	version := updater.GetCurrentVersion()
 
 	version++
@@ -154,7 +148,7 @@ func TestUpgradeRevert(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Error("wait operation timeout")
 
-	case status := <-statusChannel:
+	case status := <-updater.StatusChannel():
 		if status != umprotocol.SuccessStatus {
 			t.Fatalf("Upgrade failed: %s", updater.GetLastError())
 		}
@@ -190,7 +184,7 @@ func TestUpgradeRevert(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Error("wait operation timeout")
 
-	case <-statusChannel:
+	case <-updater.StatusChannel():
 	}
 
 	if updater.GetCurrentVersion() != version {

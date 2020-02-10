@@ -68,6 +68,8 @@ const (
 const bundleDir = "bundleDir"
 const metadataFileName = "metadata.json"
 
+const statusChannelSize = 1
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -85,7 +87,7 @@ type Handler struct {
 	operationVersion uint64
 	lastError        error
 
-	statusCallaback func(status string)
+	statusChannel chan string
 }
 
 // UpdateModule interface for module plugin
@@ -157,6 +159,7 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 		storage:         storage,
 		moduleProvider:  moduleProvider,
 		upgradeDir:      path.Join(cfg.UpgradeDir, bundleDir),
+		statusChannel:   make(chan string, statusChannelSize),
 	}
 
 	if _, err := os.Stat(handler.upgradeDir); os.IsNotExist(err) {
@@ -363,16 +366,14 @@ func (handler *Handler) Revert(version uint64) (err error) {
 	return nil
 }
 
-// SetStatusCallback sets callback which will be called when upgrade/revert is finished
-func (handler *Handler) SetStatusCallback(callback func(status string)) {
-	handler.Lock()
-	defer handler.Unlock()
-
-	handler.statusCallaback = callback
+// StatusChannel this channel is used to notify when upgrade/revert is finished
+func (handler *Handler) StatusChannel() (statusChannel <-chan string) {
+	return handler.statusChannel
 }
 
 // Close closes update handler
 func (handler *Handler) Close() {
+	close(handler.statusChannel)
 }
 
 /*******************************************************************************
@@ -409,19 +410,13 @@ func (handler *Handler) operationFinished(newState int, operationError error) {
 		log.Errorf("Can't set current version: %s", err)
 	}
 
-	if handler.statusCallaback != nil {
-		status := umprotocol.SuccessStatus
+	status := umprotocol.SuccessStatus
 
-		if operationError != nil {
-			status = umprotocol.FailedStatus
-		}
-
-		statusCallback := handler.statusCallaback
-
-		handler.Unlock()
-		statusCallback(status)
-		handler.Lock()
+	if operationError != nil {
+		status = umprotocol.FailedStatus
 	}
+
+	handler.statusChannel <- status
 }
 
 func (handler *Handler) upgrade(path string, stage int) {

@@ -56,17 +56,17 @@ type testClient struct {
 }
 
 type testUpdater struct {
-	version        uint64
-	operation      string
-	status         string
-	statusCallback func(status string)
+	version       uint64
+	operation     string
+	status        string
+	statusChannel chan string
 }
 
 type testFailUpdater struct {
-	version        uint64
-	operation      string
-	status         string
-	statusCallback func(status string)
+	version       uint64
+	operation     string
+	status        string
+	statusChannel chan string
 }
 
 /*******************************************************************************
@@ -315,9 +315,9 @@ func newTestServer(url string, serverType int) (server *umserver.Server) {
 	var updater umserver.Updater
 
 	if serverType == serverTypeSuccess {
-		updater = &testUpdater{status: "success"}
+		updater = &testUpdater{status: "success", statusChannel: make(chan string)}
 	} else {
-		updater = &testFailUpdater{status: "success"}
+		updater = &testFailUpdater{status: "success", statusChannel: make(chan string)}
 	}
 
 	server, err := umserver.New(&cfg, updater)
@@ -422,10 +422,7 @@ func (updater *testUpdater) GetLastError() (err error) {
 func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
 	updater.version = version
 	updater.operation = umprotocol.UpgradeOperation
-
-	if updater.statusCallback != nil {
-		go updater.statusCallback(umprotocol.SuccessStatus)
-	}
+	updater.statusChannel <- umprotocol.SuccessStatus
 
 	return nil
 }
@@ -433,16 +430,13 @@ func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageIn
 func (updater *testUpdater) Revert(version uint64) (err error) {
 	updater.version = version
 	updater.operation = umprotocol.RevertOperation
-
-	if updater.statusCallback != nil {
-		go updater.statusCallback(umprotocol.SuccessStatus)
-	}
+	updater.statusChannel <- umprotocol.SuccessStatus
 
 	return nil
 }
 
-func (updater *testUpdater) SetStatusCallback(callback func(status string)) {
-	updater.statusCallback = callback
+func (updater *testUpdater) StatusChannel() (statusChannel <-chan string) {
+	return updater.statusChannel
 }
 
 /*******************************************************************************
@@ -477,6 +471,6 @@ func (updater *testFailUpdater) Revert(version uint64) (err error) {
 	return errors.New("UnitTest: failed revert")
 }
 
-func (updater *testFailUpdater) SetStatusCallback(callback func(status string)) {
-	updater.statusCallback = callback
+func (updater *testFailUpdater) StatusChannel() (statusChannel <-chan string) {
+	return updater.statusChannel
 }
