@@ -56,6 +56,8 @@ func Umount(mountPoint string) (err error) {
 
 	if err = retry(
 		func() error {
+			syscall.Sync()
+
 			return syscall.Unmount(mountPoint, 0)
 		},
 		func(err error) {
