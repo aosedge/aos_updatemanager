@@ -16,12 +16,12 @@ import (
  ******************************************************************************/
 
 // MakeTestPartition makes file with ext4 and attach it to loop device
-func MakeTestPartition(path string, size int) (device string, err error) {
+func MakeTestPartition(path, fsType string, size int) (device string, err error) {
 	if err := exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M", "count="+strconv.Itoa(size)).Run(); err != nil {
 		return "", err
 	}
 
-	if err := exec.Command("mkfs.ext4", path).Run(); err != nil {
+	if err := exec.Command("mkfs."+fsType, path).Run(); err != nil {
 		return "", err
 	}
 

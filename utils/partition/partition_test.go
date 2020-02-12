@@ -40,7 +40,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
 
-	if device, err = testtools.MakeTestPartition("tmp/partition", 8); err != nil {
+	if device, err = testtools.MakeTestPartition("tmp/partition", "ext4", 8); err != nil {
 		log.Fatalf("Can't create test partition: %s", err)
 	}
 

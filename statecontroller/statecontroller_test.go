@@ -2,13 +2,20 @@ package statecontroller_test
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/statecontroller"
+	"aos_updatemanager/utils/testtools"
 )
 
 /*******************************************************************************
@@ -54,25 +61,27 @@ var configJSON = `
 	"StateFile" : "tmp/state",
 	"BootPartitions" : [
 		{
-			"device" : "/dev/myBoot1",
+			"device" : "/dev/boot",
 			"fstype" : "vfat"
 		},
 		{
-			"device" : "/dev/myBoot2",
+			"device" : "/dev/boot",
 			"fstype" : "vfat"
 		}
 	],
 	"RootPartitions" : [
 		{
-			"device" : "/dev/myRoot1",
+			"device" : "/dev/root1",
 			"fstype" : "ext4"
 		},
 		{
-			"device" : "/dev/myRoot2",
+			"device" : "/dev/root2",
 			"fstype" : "ext4"
 		}
 	]
 }`
+
+var bootParts = []string{"", ""}
 
 /*******************************************************************************
  * Init
@@ -92,19 +101,30 @@ func init() {
  ******************************************************************************/
 
 func TestMain(m *testing.M) {
-	var err error
-
-	if err = os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0755); err != nil {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
 
-	if err := createCmdLine("opt1=val1 root=/dev/myRoot1 opt2=val2 NUANCE.boot=(hd0,gpt1)/EFI/BOOT"); err != nil {
-		log.Fatalf("Can't create cmdline file: %s", err)
+	for i := 0; i < 2; i++ {
+		device, err := createBootPartition("tmp/boot" + strconv.Itoa(i))
+		if err != nil {
+			log.Fatalf("Can't create boot partition: %s", err)
+		}
+
+		configJSON = strings.Replace(configJSON, "/dev/boot", device, 1)
+
+		bootParts[i] = device
 	}
 
 	ret := m.Run()
 
-	if err = os.RemoveAll("tmp"); err != nil {
+	for _, bootPart := range bootParts {
+		if err := deleteBootPartition(bootPart); err != nil {
+			log.Errorf("Can't delete test boot part: %s", err)
+		}
+	}
+
+	if err := os.RemoveAll("tmp"); err != nil {
 		log.Fatalf("Error removing tmp dir: %s", err)
 	}
 
@@ -115,122 +135,33 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
-func TestGetters(t *testing.T) {
+func TestCheckUpdateRootfs(t *testing.T) {
+	if err := createCmdLine(bootParts[0], "/dev/root1", 0, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
 	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
 	if err != nil {
-		t.Errorf("Error creating controller %s", err)
+		t.Fatalf("Error creating state controller: %s", err)
 	}
-
-	defer controller.Close()
-
-	if _, err := controller.GetVersion(); err != nil {
-		t.Errorf("Can't get system version: %s", err)
-	}
-	if _, err := controller.GetPlatformID(); err != nil {
-		t.Errorf("can't get system version: %s", err)
-	}
-}
-
-func TestNewModuleInputParams(t *testing.T) {
-	brokenConfigJSON := `
-{
-	Some broken json
-			"device" : "/dev/myPart1",
-			"fstype" : "ext4"
-		{
-			"device" : "/dev/myPart2",
-			"fstype" : "ext4"
+	defer func() {
+		if err := controller.Close(); err != nil {
+			t.Errorf("Error closing state controller: %s", err)
 		}
-}`
-	configJSON := `
-{
-	"RootPartitions" : [
-		{
-			"device" : "/dev/myPart1",
-			"fstype" : "ext4"
-		},
-		{
-			"device" : "/dev/myPart2",
-			"fstype" : "ext4"
-		}
-	]
-}`
+	}()
 
-	//Tesing module provider with wrong json
-	controller, err := statecontroller.New([]byte(brokenConfigJSON), &moduleMgr)
-	if err == nil {
-		controller.Close()
-		log.Fatal("Expecting error during controller creation")
+	// Start upgrade rootfs
+
+	if err = controller.Upgrade(1, []string{"rootfs"}); err != nil {
+		t.Fatalf("Can't upgrade: %s", err)
 	}
-
-	//Tesing module provider with moduleProvider = nil
-	controller, err = statecontroller.New([]byte(configJSON), nil)
-	if err == nil {
-		controller.Close()
-		log.Fatal("Expecting error during controller creation")
-	}
-
-	//Tesing module provider with wrong moduleProvider
-	controller, err = statecontroller.New([]byte(configJSON), &wrongModuleMgr)
-	if err == nil {
-		controller.Close()
-		log.Fatal("Expecting error during controller creation")
-	}
-
-	//Tesing module provider with not impl rootfs in moduleProvider
-	controller, err = statecontroller.New([]byte(configJSON), &notImpModuleMgr)
-	if err == nil {
-		controller.Close()
-		log.Fatal("Expecting error during controller creation")
-	}
-
-}
-
-//TODO implement unit tests to Upgrade, Revert, UpgradeFinished and RevertFinished when they will be implemented
-
-func TestWORootPartition(t *testing.T) {
-	configJSON := `
-{
-	"SomePartitions" : [
-		{
-			"device" : "/dev/myPart1",
-			"fstype" : "ext4"
-		},
-		{
-			"device" : "/dev/myPart2",
-			"fstype" : "ext4"
-		}
-	]
-}`
-
-	//Tesing module provider with no RootPartition
-	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
-	if err == nil {
-		controller.Close()
-		log.Fatal("Expecting error during controller creation")
-	}
-
-}
-
-func TestCheckUpdatePartition(t *testing.T) {
-	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
-	if err != nil {
-		log.Fatalf("Error creating state controller: %s", err)
-	}
-	defer controller.Close()
-
-	if err = controller.Upgrade(1, []string{"rootfs", "bootloader"}); err != nil {
-		t.Fatalf("Can't upgrade state: %s", err)
-	}
-
-	// Check rootFS module
 
 	testModule, err := getTestModule("rootfs")
 	if err != nil {
 		t.Fatalf("Can't get test module: %s", err)
 	}
 
-	if testModule.path != "/dev/myRoot2" {
+	if testModule.path != "/dev/root2" {
 		t.Errorf("Wrong update partition: %s", testModule.path)
 	}
 
@@ -238,20 +169,81 @@ func TestCheckUpdatePartition(t *testing.T) {
 		t.Errorf("Wrong FS type: %s", testModule.fsType)
 	}
 
-	// Check bootloader module
+	// Upgrade finish rootfs
 
-	if testModule, err = getTestModule("bootloader"); err != nil {
-		t.Fatalf("Can't get test module: %s", err)
+	postpone, err := controller.UpgradeFinished(1, nil, map[string]error{"rootfs": nil})
+	if err != nil {
+		t.Fatalf("Can't finish upgrade: %s", err)
 	}
 
-	if testModule.path != "/dev/myBoot2" {
-		t.Errorf("Wrong update partition: %s", testModule.path)
+	if !postpone {
+		t.Fatal("Upgrade should be postponed")
 	}
 
-	if testModule.fsType != "vfat" {
-		t.Errorf("Wrong FS type: %s", testModule.fsType)
+	env, err := readEnvVariables(bootParts[0])
+	if err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
 	}
 
+	// Check that rootfs switch scheduled
+
+	trySwitch, ok := env["NUANCE_TRY_SWITCH"]
+	if !ok {
+		t.Errorf("NUANCE_TRY_SWITCH variable is not set")
+	}
+	if trySwitch != "1" {
+		t.Errorf("Wrong NUANCE_TRY_SWITCH value: %s", trySwitch)
+	}
+
+	if err = setEnvVariables(bootParts[0], map[string]string{"NUANCE_TRY_SWITCH": "0"}); err != nil {
+		t.Fatalf("Can't set grub env variables: %s", err)
+	}
+
+	// Reboot
+
+	if err := controller.Close(); err != nil {
+		t.Errorf("Error closing state controller: %s", err)
+	}
+
+	if err := createCmdLine(bootParts[0], "/dev/root2", 1, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	if controller, err = statecontroller.New([]byte(configJSON), &moduleMgr); err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+
+	postpone, err = controller.UpgradeFinished(1, nil, map[string]error{"rootfs": nil})
+	if err != nil {
+		t.Fatalf("Can't finish upgrade: %s", err)
+	}
+	if postpone {
+		t.Errorf("Upgrade should not be postponed")
+	}
+
+	if env, err = readEnvVariables(bootParts[0]); err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check version
+
+	version, ok := env["NUANCE_VERSION"]
+	if !ok {
+		t.Errorf("NUANCE_TRY_SWITCH variable is not set")
+	}
+	if version != "1" {
+		t.Errorf("Wrong NUANCE_TRY_SWITCH value: %s", version)
+	}
+
+	// Check active boot index
+
+	bootIndex, ok := env["NUANCE_ACTIVE_BOOT_INDEX"]
+	if !ok {
+		t.Errorf("NUANCE_ACTIVE_BOOT_INDEX variable is not set")
+	}
+	if bootIndex != "1" {
+		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndex)
+	}
 }
 
 /*******************************************************************************
@@ -278,8 +270,13 @@ func (module *testUpdateModule) SetPartitionForUpdate(path, fsType string) (err 
  * Private
  ******************************************************************************/
 
-func createCmdLine(data string) (err error) {
-	if err = ioutil.WriteFile("tmp/cmdline", []byte(data), 0644); err != nil {
+func createCmdLine(bootDevice, rootDevice string, bootIndex int, version uint64) (err error) {
+	if err = ioutil.WriteFile("tmp/cmdline",
+		[]byte(fmt.Sprintf("root=%s NUANCE.bootDevice=(hd0,gpt%s)/EFI/BOOT NUANCE.bootIndex=%d NUANCE.version=%d",
+			rootDevice,
+			regexp.MustCompile("[[:digit:]]*$").FindString(bootDevice),
+			bootIndex,
+			version)), 0644); err != nil {
 		return err
 	}
 
@@ -299,4 +296,82 @@ func getTestModule(id string) (testModule *testUpdateModule, err error) {
 	}
 
 	return testModule, nil
+}
+
+func createBootPartition(path string) (device string, err error) {
+	if err = os.MkdirAll("tmp/mount", 0755); err != nil {
+		return "", err
+	}
+
+	if device, err = testtools.MakeTestPartition(path, "vfat", 8); err != nil {
+		return "", err
+	}
+
+	log.Debugf("Create test partition: %s", device)
+
+	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
+		return "", err
+	}
+	defer syscall.Unmount("tmp/mount", 0)
+
+	if err = os.MkdirAll("tmp/mount/EFI/BOOT/NUANCE", 0755); err != nil {
+		return "", err
+	}
+
+	if output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "create").CombinedOutput(); err != nil {
+		return "", fmt.Errorf("can't create grubenv: %s, %s", output, err)
+	}
+
+	syscall.Sync()
+
+	return device, err
+}
+
+func deleteBootPartition(device string) (err error) {
+	syscall.Sync()
+
+	return testtools.DeleteTestPartition(device)
+}
+
+func readEnvVariables(device string) (vars map[string]string, err error) {
+	vars = make(map[string]string)
+
+	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
+		return nil, err
+	}
+	defer syscall.Unmount("tmp/mount", 0)
+
+	output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "list").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("can't read grubenv: %s, %s", output, err)
+	}
+
+	for _, item := range strings.Fields(string(output)) {
+		index := strings.Index(item, "=")
+		if index < 0 {
+			continue
+		}
+
+		vars[item[:index]] = item[index+1:]
+	}
+
+	return vars, nil
+}
+
+func setEnvVariables(device string, vars map[string]string) (err error) {
+	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
+		return err
+	}
+	defer syscall.Unmount("tmp/mount", 0)
+
+	for name, value := range vars {
+		output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "set", name+"="+value).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("can't set grubenv: %s, %s", output, err)
+		}
+	}
+
+	syscall.Sync()
+
+	return nil
 }
