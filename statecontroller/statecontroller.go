@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -52,6 +53,8 @@ type Controller struct {
 	grubBootIndex  int
 	activeRootPart int
 	activeBootPart int
+	systemStatus   systemStatus
+	sync.Mutex
 }
 
 // ModuleProvider module provider interface
@@ -108,6 +111,8 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 		},
 	}
 
+	controller.systemStatus.cond = sync.NewCond(controller)
+
 	if err = json.Unmarshal(configJSON, &controller.config); err != nil {
 		return nil, err
 	}
@@ -126,11 +131,7 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 		}
 	}
 
-	// TODO: we should start system check and system recovery procedure at the beginning.
-	// * upgrade request should be blocked till this procedure is finished;
-	// * we should check if current rootIndex equals to NUANCE_ACTIVE_ROOT_INDEX in grub env variable.
-	//   If not and no upgrade in progress, it means that we try new root FS and something bad happens.
-	//   We have to reboot the system in this case.
+	go controller.systemCheck()
 
 	return controller, nil
 }
@@ -154,6 +155,13 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 
 // Upgrade notifies state controller about start of system upgrade
 func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err error) {
+	controller.Lock()
+	defer controller.Unlock()
+
+	if err = controller.waitSystemCheckFinished(); err != nil {
+		return err
+	}
+
 	if err = controller.initModules(moduleIds); err != nil {
 		return err
 	}
@@ -188,12 +196,22 @@ func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err e
 
 // Revert notifies state controller about start of system revert
 func (controller *Controller) Revert(version uint64, moduleIds []string) (err error) {
+	controller.Lock()
+	defer controller.Unlock()
+
 	return errors.New("revert operation is not supported")
 }
 
 // UpgradeFinished notifies state controller about finish of upgrade
 func (controller *Controller) UpgradeFinished(version uint64, status error,
 	moduleStatus map[string]error) (postpone bool, err error) {
+	controller.Lock()
+	defer controller.Unlock()
+
+	if err = controller.waitSystemCheckFinished(); err != nil {
+		return false, err
+	}
+
 	if !controller.state.UpgradeInProgress {
 		return false, errors.New("no upgrade was started")
 	}
@@ -253,6 +271,14 @@ func (controller *Controller) RevertFinished(version uint64, status error,
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (controller *Controller) waitSystemCheckFinished() (err error) {
+	for !controller.systemStatus.checked {
+		controller.systemStatus.cond.Wait()
+	}
+
+	return controller.systemStatus.status
+}
 
 func (controller *Controller) getRootFSUpdatePartition() (partition partitionInfo) {
 	updatePart := (controller.activeRootPart + 1) % len(controller.config.RootPartitions)
