@@ -6,16 +6,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/utils/grub"
-	"aos_updatemanager/utils/partition"
 )
 
 /*******************************************************************************
@@ -475,34 +471,23 @@ func (controller *Controller) finishUpgrade() (err error) {
 func (controller *Controller) updateGrubEnv() (err error) {
 	log.Debug("Update GRUB environment")
 
-	bootPart := controller.config.BootPartitions[controller.activeBootPart]
-
-	if err = partition.Mount(bootPart.Device, bootMountPoint, bootPart.FSType); err != nil {
-		return err
-	}
-	defer func() {
-		if err := partition.Umount(bootMountPoint); err != nil {
-			log.Errorf("Can't unmount boot partition: %s", err)
-		}
-	}()
-
-	grub, err := grub.New(path.Join(bootMountPoint, controller.config.GRUBEnvFile))
+	env, err := controller.newGrubEnv(controller.activeBootPart)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if grubErr := grub.Close(); grubErr != nil {
+		if grubErr := env.close(); grubErr != nil {
 			if err == nil {
 				err = grubErr
 			}
 		}
 	}()
 
-	if err = grub.SetVariable(grubVersionVar, strconv.FormatUint(controller.state.UpgradeVersion, 10)); err != nil {
+	if err = env.grub.SetVariable(grubVersionVar, strconv.FormatUint(controller.state.UpgradeVersion, 10)); err != nil {
 		return err
 	}
 
-	if err = grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
+	if err = env.grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
 		return err
 	}
 
@@ -518,30 +503,19 @@ func (controller *Controller) tryRootFS() (err error) {
 		return err
 	}
 
-	bootPart := controller.config.BootPartitions[controller.activeBootPart]
-
-	if err = partition.Mount(bootPart.Device, bootMountPoint, bootPart.FSType); err != nil {
-		return err
-	}
-	defer func() {
-		if err := partition.Umount(bootMountPoint); err != nil {
-			log.Errorf("Can't unmount boot partition: %s", err)
-		}
-	}()
-
-	grub, err := grub.New(path.Join(bootMountPoint, controller.config.GRUBEnvFile))
+	env, err := controller.newGrubEnv(controller.activeBootPart)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if grubErr := grub.Close(); grubErr != nil {
+		if grubErr := env.close(); grubErr != nil {
 			if err == nil {
 				err = grubErr
 			}
 		}
 	}()
 
-	if err = grub.SetVariable(grubSwitchVar, "1"); err != nil {
+	if err = env.grub.SetVariable(grubSwitchVar, "1"); err != nil {
 		return err
 	}
 
