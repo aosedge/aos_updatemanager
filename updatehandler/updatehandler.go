@@ -130,7 +130,7 @@ type Storage interface {
 type StateController interface {
 	GetVersion() (version uint64, err error)
 	GetPlatformID() (id string, err error)
-	Upgrade(version uint64, moduleIds []string) (err error)
+	Upgrade(version uint64, modules map[string]string) (err error)
 	Revert(version uint64, moduleIds []string) (err error)
 	UpgradeFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
 	RevertFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
@@ -599,13 +599,13 @@ func (handler *Handler) upgradeStateController() (err error) {
 		return err
 	}
 
-	moduleIds := make([]string, 0, len(metadata.UpdateItems))
+	modules := make(map[string]string)
 
 	for _, item := range metadata.UpdateItems {
-		moduleIds = append(moduleIds, item.Type)
+		modules[item.Type] = item.Path
 	}
 
-	if err = handler.stateController.Upgrade(handler.operationVersion, moduleIds); err != nil {
+	if err = handler.stateController.Upgrade(handler.operationVersion, modules); err != nil {
 		return err
 	}
 

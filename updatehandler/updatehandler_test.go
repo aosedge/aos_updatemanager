@@ -492,7 +492,7 @@ func (controller *testStateController) GetPlatformID() (id string, err error) {
 	return "SomePlatform", nil
 }
 
-func (controller *testStateController) Upgrade(version uint64, moduleIds []string) (err error) {
+func (controller *testStateController) Upgrade(version uint64, modules map[string]string) (err error) {
 	return controller.status
 }
 

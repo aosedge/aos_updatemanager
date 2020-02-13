@@ -137,7 +137,14 @@ func (controller *Controller) checkUpgrade() (err error) {
 			}
 
 			// New root FS is ok, finish upgrade with success status
-			return controller.finishUpgrade(nil)
+			if err = controller.finishUpgrade(nil); err != nil {
+				return err
+			}
+
+			if err = controller.upgradeSecondFSPartition(rootFSModuleID, controller.getRootFSUpdatePartition()); err != nil {
+				// Do not return err in this case. Integrity check and recovery should resolve this.
+				log.Errorf("Can't upgrade second root FS partition: %s", err)
+			}
 		}
 	}
 

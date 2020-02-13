@@ -86,12 +86,13 @@ type controllerState struct {
 	UpgradeState   int
 	UpgradeStatus  string
 	UpgradeVersion uint64
-	UpgradeModules []string
+	UpgradeModules map[string]string
 	GrubBootIndex  int
 }
 
 type fsModule interface {
 	SetPartitionForUpdate(path, fsType string) (err error)
+	Upgrade(path string) (err error)
 }
 
 /*******************************************************************************
@@ -161,7 +162,7 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 }
 
 // Upgrade notifies state controller about start of system upgrade
-func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err error) {
+func (controller *Controller) Upgrade(version uint64, modules map[string]string) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
@@ -179,11 +180,11 @@ func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err e
 		return nil
 	}
 
-	if err = controller.initModules(moduleIds); err != nil {
+	if err = controller.initModules(modules); err != nil {
 		return err
 	}
 
-	if err = controller.startUpgrade(version, moduleIds); err != nil {
+	if err = controller.startUpgrade(version, modules); err != nil {
 		return err
 	}
 
@@ -260,6 +261,28 @@ func (controller *Controller) RevertFinished(version uint64, status error,
  * Private
  ******************************************************************************/
 
+func (controller *Controller) upgradeSecondFSPartition(id string, part partitionInfo) (err error) {
+	fsModule, err := controller.getFSModuleByID(id)
+	if err != nil {
+		return err
+	}
+
+	if err = fsModule.SetPartitionForUpdate(part.Device, part.FSType); err != nil {
+		return err
+	}
+
+	path, ok := controller.state.UpgradeModules[id]
+	if !ok {
+		return fmt.Errorf("module %s not found in state", id)
+	}
+
+	if err = fsModule.Upgrade(path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (controller *Controller) finishRootFSUpgrade() (postpone bool, err error) {
 	if controller.state.UpgradeState == upgradeStarted {
 		if err = controller.tryNewRootFS(); err != nil {
@@ -298,8 +321,8 @@ func (controller *Controller) getBootloaderUpdatePartition() (partition partitio
 	return controller.config.BootPartitions[updatePart]
 }
 
-func (controller *Controller) initModules(moduleIds []string) (err error) {
-	for _, id := range moduleIds {
+func (controller *Controller) initModules(modules map[string]string) (err error) {
+	for id := range modules {
 		switch id {
 		case rootFSModuleID:
 			if err := controller.initFileSystemUpdateModule(rootFSModuleID, controller.getRootFSUpdatePartition()); err != nil {
@@ -316,17 +339,26 @@ func (controller *Controller) initModules(moduleIds []string) (err error) {
 	return nil
 }
 
+func (controller *Controller) getFSModuleByID(id string) (module fsModule, err error) {
+	genericModule, err := controller.moduleProvider.GetModuleByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	module, ok := genericModule.(fsModule)
+	if !ok {
+		return nil, fmt.Errorf("module %s doesn't implement required interface", id)
+	}
+
+	return module, nil
+}
+
 func (controller *Controller) initFileSystemUpdateModule(id string, part partitionInfo) (err error) {
 	log.Debug("Init module: ", id)
 
-	module, err := controller.moduleProvider.GetModuleByID(id)
+	fsModule, err := controller.getFSModuleByID(id)
 	if err != nil {
 		return err
-	}
-
-	fsModule, ok := module.(fsModule)
-	if !ok {
-		return fmt.Errorf("module %s doesn't implement required interface", id)
 	}
 
 	if err = fsModule.SetPartitionForUpdate(part.Device, part.FSType); err != nil {
@@ -474,7 +506,7 @@ func (controller *Controller) isModuleUpgraded(id string) (result bool) {
 		return false
 	}
 
-	for _, module := range controller.state.UpgradeModules {
+	for module := range controller.state.UpgradeModules {
 		if module == id {
 			return true
 		}
@@ -483,11 +515,11 @@ func (controller *Controller) isModuleUpgraded(id string) (result bool) {
 	return false
 }
 
-func (controller *Controller) startUpgrade(version uint64, moduleIds []string) (err error) {
+func (controller *Controller) startUpgrade(version uint64, modules map[string]string) (err error) {
 	controller.state = controllerState{
 		UpgradeState:   upgradeStarted,
 		UpgradeVersion: version,
-		UpgradeModules: moduleIds,
+		UpgradeModules: modules,
 		GrubBootIndex:  controller.grubBootIndex,
 	}
 

@@ -152,7 +152,7 @@ func TestCheckUpdateRootfs(t *testing.T) {
 
 	// Start upgrade rootfs
 
-	if err = controller.Upgrade(1, []string{"rootfs"}); err != nil {
+	if err = controller.Upgrade(1, map[string]string{"rootfs": "/path/to/upgrade"}); err != nil {
 		t.Fatalf("Can't upgrade: %s", err)
 	}
 
@@ -244,6 +244,12 @@ func TestCheckUpdateRootfs(t *testing.T) {
 	if bootIndex != "1" {
 		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndex)
 	}
+
+	// Check that second partition is updated
+
+	if testModule.path != "/dev/root1" {
+		t.Errorf("Second root FS partition wasn't updated")
+	}
 }
 
 /*******************************************************************************
@@ -263,6 +269,10 @@ func (module *testUpdateModule) SetPartitionForUpdate(path, fsType string) (err 
 	module.path = path
 	module.fsType = fsType
 
+	return nil
+}
+
+func (module *testUpdateModule) Upgrade(path string) (err error) {
 	return nil
 }
 
