@@ -29,7 +29,7 @@ const (
 	kernelBootDevicePrefix = "NUANCE.bootDevice="
 	kernelVersionPrefix    = "NUANCE.version="
 	kernelBootIndexPrefix  = "NUANCE.bootIndex="
-	kernelBootFormat       = "(hd0,gpt%d)"
+	kernelBootFormat       = "(hd%d,gpt%d)"
 )
 
 const bootMountPoint = "/tmp/aos/boot"
@@ -359,9 +359,12 @@ func (controller *Controller) parseBootCmd() (err error) {
 		case strings.HasPrefix(option, kernelBootDevicePrefix):
 			option = strings.TrimPrefix(option, kernelBootDevicePrefix)
 
-			var grubPart int
+			var (
+				grubDisk int
+				grubPart int
+			)
 
-			if _, err = fmt.Sscanf(option, kernelBootFormat, &grubPart); err != nil {
+			if _, err = fmt.Sscanf(option, kernelBootFormat, &grubDisk, &grubPart); err != nil {
 				return err
 			}
 
