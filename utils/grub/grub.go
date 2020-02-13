@@ -113,7 +113,18 @@ func (instance *Instance) GetVariable(name string) (value string, err error) {
 		}
 	}
 
-	return "", errors.New("variable not found")
+	return "", fmt.Errorf("variable %s not found", name)
+}
+
+// GetVariables returns all env variables
+func (instance *Instance) GetVariables() (vars map[string]string, err error) {
+	vars = make(map[string]string)
+
+	for _, variable := range instance.data {
+		vars[variable.name] = variable.value
+	}
+
+	return vars, nil
 }
 
 // SetVariable sets env variable

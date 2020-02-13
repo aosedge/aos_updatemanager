@@ -45,6 +45,47 @@ func (controller *Controller) newGrubEnv(bootPart int) (env *grubEnv, err error)
 	return env, nil
 }
 
+func (env *grubEnv) init(controller *Controller) (err error) {
+	log.Debug("Initialize GRUB variables")
+
+	if err = env.grub.SetVariable(grubVersionVar, strconv.FormatUint(controller.version, 10)); err != nil {
+		return err
+	}
+
+	if err = env.grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (env *grubEnv) getVersion() (version uint64, err error) {
+	versionStr, err := env.grub.GetVariable(grubVersionVar)
+	if err != nil {
+		return 0, err
+	}
+
+	if version, err = strconv.ParseUint(versionStr, 10, 64); err != nil {
+		return 0, err
+	}
+
+	return version, nil
+}
+
+func (env *grubEnv) getBootIndex() (index int, err error) {
+	rootIndexStr, err := env.grub.GetVariable(grubBootIndexVar)
+	if err != nil {
+		return 0, err
+	}
+
+	index64, err := strconv.ParseInt(rootIndexStr, 10, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(index64), nil
+}
+
 func (env *grubEnv) close() (err error) {
 	err = env.grub.Close()
 
