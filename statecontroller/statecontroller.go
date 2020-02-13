@@ -80,6 +80,7 @@ type controllerState struct {
 	UpgradeVersion    uint64
 	UpgradeModules    []string
 	SwitchRootFS      bool
+	GrubBootIndex     int
 	UpgradeInProgress bool
 }
 
@@ -162,29 +163,25 @@ func (controller *Controller) Upgrade(version uint64, moduleIds []string) (err e
 		return err
 	}
 
-	if err = controller.initModules(moduleIds); err != nil {
-		return err
-	}
-
 	if controller.state.UpgradeInProgress {
 		if controller.state.SwitchRootFS {
 			// We can't perform upgrade on root FS switch. Disable root FS switch and perform system reboot
 			// in order to be ready for new upgrades.
 			log.Error("New upgrade can't be performed during root FS switch. Reboot is required.")
 
-			if err = controller.finishUpgrade(); err != nil {
-				log.Errorf("Can't finish upgrade: %s", err)
-			}
-
 			if err = controller.systemReboot(); err != nil {
-				log.Errorf("Can't perform system reboot: %s", err)
+				return controller.finishUpgrade(err)
 			}
 
-			return errors.New("new upgrade is impossible during root FS switch")
+			return controller.finishUpgrade(errors.New("new upgrade is impossible during root FS switch"))
 		}
 
 		// We can perform new upgrade, just display the warning
 		log.Warning("New upgrade request while another is in progress. Cancel current upgrade.")
+	}
+
+	if err = controller.initModules(moduleIds); err != nil {
+		return err
 	}
 
 	if err = controller.startUpgrade(version, moduleIds); err != nil {
@@ -217,49 +214,29 @@ func (controller *Controller) UpgradeFinished(version uint64, status error,
 	}
 
 	if controller.state.UpgradeVersion != version {
-		err = errors.New("upgrade version mistmatch")
-		goto finishUpgrade
+		return false, controller.finishUpgrade(errors.New("upgrade version mistmatch"))
 	}
 
 	if status != nil {
-		err = status
-		goto finishUpgrade
+		return false, controller.finishUpgrade(status)
 	}
 
 	switch {
 	case controller.isModuleUpgraded(rootFSModuleID):
-		if !controller.state.SwitchRootFS {
-			if err = controller.tryRootFS(); err != nil {
-				goto finishUpgrade
-			}
-
-			if err = controller.systemReboot(); err != nil {
-				goto finishUpgrade
-			}
-
-			return true, nil
+		if postpone, err = controller.finishRootFSUpgrade(); err != nil {
+			return false, controller.finishUpgrade(err)
 		}
+	}
+
+	if postpone {
+		return true, nil
 	}
 
 	if err = controller.updateGrubEnv(); err != nil {
-		if controller.state.SwitchRootFS {
-			if err := controller.systemReboot(); err != nil {
-				log.Errorf("Can't perform system reboot: %s", err)
-			}
-		}
+		return false, controller.finishUpgrade(err)
 	}
 
-finishUpgrade:
-
-	if finishErr := controller.finishUpgrade(); finishErr != nil {
-		log.Errorf("Error finishing upgrade: %s", err)
-
-		if err == nil {
-			err = finishErr
-		}
-	}
-
-	return false, err
+	return false, controller.finishUpgrade(nil)
 }
 
 // RevertFinished notifies state controller about finish of revert
@@ -271,6 +248,27 @@ func (controller *Controller) RevertFinished(version uint64, status error,
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (controller *Controller) finishRootFSUpgrade() (postpone bool, err error) {
+	if !controller.state.SwitchRootFS {
+		if err = controller.tryRootFS(); err != nil {
+			return false, err
+		}
+
+		if err = controller.systemReboot(); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
+	// We are booted into the old partition - cancel the upgrade
+	if controller.state.GrubBootIndex == controller.grubBootIndex {
+		return false, errors.New("can't boot into new rootfs partition")
+	}
+
+	return false, nil
+}
 
 func (controller *Controller) waitSystemCheckFinished() (err error) {
 	for !controller.systemStatus.checked {
@@ -447,8 +445,6 @@ func (controller *Controller) initState() (err error) {
 }
 
 func (controller *Controller) saveState() (err error) {
-	log.Debug("Save state file")
-
 	stateJSON, err := json.Marshal(&controller.state)
 	if err != nil {
 		return err
@@ -485,16 +481,21 @@ func (controller *Controller) startUpgrade(version uint64, moduleIds []string) (
 	return nil
 }
 
-func (controller *Controller) finishUpgrade() (err error) {
+func (controller *Controller) finishUpgrade(status error) (err error) {
 	controller.state.UpgradeInProgress = false
 	controller.state.SwitchRootFS = false
+	controller.state.GrubBootIndex = 0
 	controller.state.UpgradeModules = nil
 
 	if err = controller.saveState(); err != nil {
-		return err
+		log.Errorf("Error finishing upgrade: %s", err)
+
+		if status == nil {
+			status = err
+		}
 	}
 
-	return nil
+	return status
 }
 
 func (controller *Controller) updateGrubEnv() (err error) {
@@ -527,6 +528,7 @@ func (controller *Controller) tryRootFS() (err error) {
 	log.Debug("Try switch root FS")
 
 	controller.state.SwitchRootFS = true
+	controller.state.GrubBootIndex = controller.grubBootIndex
 
 	if err = controller.saveState(); err != nil {
 		return err

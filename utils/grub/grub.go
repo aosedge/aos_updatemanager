@@ -84,8 +84,6 @@ func New(envFile string) (instance *Instance, err error) {
 
 		variable := envVariable{strings.ReplaceAll(data[0], "\\\\", "\\"), strings.ReplaceAll(data[1], "\\\\", "\\")}
 
-		log.WithFields(log.Fields{"name": variable.name, "value": variable.value}).Debug("GRUB env variable")
-
 		instance.data = append(instance.data, variable)
 		instance.size += len(line) + 1
 	}
