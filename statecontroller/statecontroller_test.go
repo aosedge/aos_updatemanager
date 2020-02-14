@@ -229,10 +229,10 @@ func TestCheckUpdateRootfs(t *testing.T) {
 
 	version, ok := env["NUANCE_VERSION"]
 	if !ok {
-		t.Errorf("NUANCE_TRY_SWITCH variable is not set")
+		t.Errorf("NUANCE_VERSION variable is not set")
 	}
 	if version != "1" {
-		t.Errorf("Wrong NUANCE_TRY_SWITCH value: %s", version)
+		t.Errorf("Wrong NUANCE_VERSION value: %s", version)
 	}
 
 	// Check active boot index

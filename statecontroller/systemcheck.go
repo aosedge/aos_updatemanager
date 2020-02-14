@@ -1,6 +1,7 @@
 package statecontroller
 
 import (
+	"errors"
 	"strconv"
 	"sync"
 
@@ -27,6 +28,10 @@ type grubInstance struct {
  * Private
  ******************************************************************************/
 
+// TODO: Implement invalid flag for root FS partition.
+// Make partition invalid during upgrading, restoring etc.
+// GRUB should not try to load invalid partition.
+
 func (controller *Controller) systemCheck() {
 	var err error
 
@@ -37,6 +42,10 @@ func (controller *Controller) systemCheck() {
 	}
 
 	if err = controller.checkBootState(); err != nil {
+		goto finish
+	}
+
+	if err = controller.checkUpgrade(); err != nil {
 		goto finish
 	}
 
@@ -98,14 +107,37 @@ func (controller *Controller) checkBootState() (err error) {
 		return err
 	}
 
-	if controller.grubBootIndex != rootIndex {
-		if !(controller.state.UpgradeInProgress && controller.state.SwitchRootFS) {
-			log.Warn("System started from inactive root FS partition. Make it active")
+	if controller.grubBootIndex != rootIndex && controller.state.UpgradeState == upgradeFinished {
+		log.Warn("System started from inactive root FS partition. Make it active")
 
-			// Make current partition as active. Next integrity check will try to recover bad partition.
-			if err = env.grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
-				return err
+		// Check if this partition is ok and make it as active. Next integrity check will try to recover bad partition.
+		// Could be situation when upgrade is in progress but state file corrupted and we are boot with new partition.
+		// TODO: detect this situation.
+		if err = env.grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// This function checks if we are in the middle of upgrade
+func (controller *Controller) checkUpgrade() (err error) {
+	if controller.state.UpgradeState == upgradeFinished {
+		return nil
+	}
+
+	log.Debug("Check upgrade state")
+
+	if controller.state.UpgradeState == upgradeTrySwitch {
+		if controller.isModuleUpgraded(rootFSModuleID) {
+			// New root FS boot failed, finish upgrade with failed status
+			if controller.state.GrubBootIndex == controller.grubBootIndex {
+				return controller.finishUpgrade(errors.New("new root FS boot failed"))
 			}
+
+			// New root FS is ok, finish upgrade with success status
+			return controller.finishUpgrade(nil)
 		}
 	}
 
