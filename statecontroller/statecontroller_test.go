@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -249,6 +250,45 @@ func TestCheckUpdateRootfs(t *testing.T) {
 
 	if testModule.path != "/dev/root1" {
 		t.Errorf("Second root FS partition wasn't updated")
+	}
+}
+
+func TestBootInactivePartition(t *testing.T) {
+	if err := setEnvVariables(bootParts[0], map[string]string{"NUANCE_ACTIVE_BOOT_INDEX": "0"}); err != nil {
+		t.Fatalf("Can't set grub env variables: %s", err)
+	}
+
+	if err := createCmdLine(bootParts[0], "/dev/root2", 1, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
+	if err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+	defer func() {
+		if err := controller.Close(); err != nil {
+			t.Errorf("Error closing state controller: %s", err)
+		}
+	}()
+
+	// Wait a little to finish system check
+
+	time.Sleep(1 * time.Second)
+
+	env, err := readEnvVariables(bootParts[0])
+	if err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check active boot index
+
+	bootIndex, ok := env["NUANCE_ACTIVE_BOOT_INDEX"]
+	if !ok {
+		t.Errorf("NUANCE_ACTIVE_BOOT_INDEX variable is not set")
+	}
+	if bootIndex != "1" {
+		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndex)
 	}
 }
 
