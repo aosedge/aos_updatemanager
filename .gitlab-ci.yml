@@ -9,7 +9,6 @@ before_script:
   - go get -u github.com/golang/dep/cmd/dep
   - cp -r $CI_PROJECT_DIR /go/src/
   - cd /go/src/aos_updatemanager/
-  - dep ensure
 
 test:
   stage: test
