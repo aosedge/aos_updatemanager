@@ -82,6 +82,7 @@ type Handler struct {
 	moduleProvider  ModuleProvider
 
 	upgradeDir       string
+	bundleDir        string
 	state            handlerState
 	currentVersion   uint64
 	operationVersion uint64
@@ -162,12 +163,13 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 		stateController: stateController,
 		storage:         storage,
 		moduleProvider:  moduleProvider,
-		upgradeDir:      path.Join(cfg.UpgradeDir, bundleDir),
+		upgradeDir:      cfg.UpgradeDir,
+		bundleDir:       path.Join(cfg.UpgradeDir, bundleDir),
 		statusChannel:   make(chan string, statusChannelSize),
 	}
 
-	if _, err := os.Stat(handler.upgradeDir); os.IsNotExist(err) {
-		if errMkdir := os.MkdirAll(handler.upgradeDir, 0755); errMkdir != nil {
+	if _, err := os.Stat(handler.bundleDir); os.IsNotExist(err) {
+		if errMkdir := os.MkdirAll(handler.bundleDir, 0755); errMkdir != nil {
 			return nil, errMkdir
 		}
 	}
@@ -293,7 +295,9 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return errors.New("can't upgrade after failed revert")
 	}
 
-	if err = image.CheckFileInfo(imageInfo.Path, image.FileInfo{
+	imagePath := path.Join(handler.upgradeDir, imageInfo.Path)
+
+	if err = image.CheckFileInfo(imagePath, image.FileInfo{
 		Sha256: imageInfo.Sha256,
 		Sha512: imageInfo.Sha512,
 		Size:   imageInfo.Size}); err != nil {
@@ -316,7 +320,7 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
-	if err = handler.storage.SetImagePath(imageInfo.Path); err != nil {
+	if err = handler.storage.SetImagePath(imagePath); err != nil {
 		return err
 	}
 
@@ -330,7 +334,7 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
-	go handler.upgrade(imageInfo.Path, upgradeInitStage)
+	go handler.upgrade(imagePath, upgradeInitStage)
 
 	return nil
 }
@@ -448,7 +452,7 @@ func (handler *Handler) upgrade(path string, stage upgradeStage) {
 
 		switch stage {
 		case upgradeInitStage:
-			if handler.lastError = os.RemoveAll(handler.upgradeDir); handler.lastError != nil {
+			if handler.lastError = os.RemoveAll(handler.bundleDir); handler.lastError != nil {
 				stage = upgradeFinishStage
 				break
 			}
@@ -456,12 +460,12 @@ func (handler *Handler) upgrade(path string, stage upgradeStage) {
 			stage = upgradeUnpackStage
 
 		case upgradeUnpackStage:
-			if handler.lastError = os.MkdirAll(handler.upgradeDir, 0755); handler.lastError != nil {
+			if handler.lastError = os.MkdirAll(handler.bundleDir, 0755); handler.lastError != nil {
 				stage = upgradeFinishStage
 				break
 			}
 
-			if handler.lastError = image.UntarGZArchive(path, handler.upgradeDir); handler.lastError != nil {
+			if handler.lastError = image.UntarGZArchive(path, handler.bundleDir); handler.lastError != nil {
 				stage = upgradeFinishStage
 				break
 			}
@@ -581,7 +585,7 @@ func (handler *Handler) revert(stage int) {
 }
 
 func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
-	metadataJSON, err := ioutil.ReadFile(path.Join(handler.upgradeDir, metadataFileName))
+	metadataJSON, err := ioutil.ReadFile(path.Join(handler.bundleDir, metadataFileName))
 	if err != nil {
 		return metadata, err
 	}
@@ -704,7 +708,7 @@ func (handler *Handler) updateModules() (err error) {
 			return status
 		}
 
-		status = handler.updateModule(item.Type, path.Join(handler.upgradeDir, item.Path))
+		status = handler.updateModule(item.Type, path.Join(handler.bundleDir, item.Path))
 
 		err = handler.storage.AddModuleStatus(item.Type, status)
 

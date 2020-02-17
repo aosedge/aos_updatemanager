@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -379,7 +380,7 @@ func createImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
 		return imageInfo, err
 	}
 
-	imageInfo.Path = imagePath
+	imageInfo.Path = filepath.Base(imagePath)
 	imageInfo.Sha256 = fileInfo.Sha256
 	imageInfo.Sha512 = fileInfo.Sha512
 	imageInfo.Size = fileInfo.Size
