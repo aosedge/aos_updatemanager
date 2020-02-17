@@ -427,22 +427,24 @@ func (controller *Controller) parseBootCmd() (err error) {
 }
 
 func (controller *Controller) initState() (err error) {
+	defer func() {
+		if err != nil {
+			log.Warnf("State file error: %s. Create new one.", err)
+
+			// create new state file with default values if not exist or any other error occurs
+			log.Debug("Create new state file")
+
+			if err = os.MkdirAll(filepath.Dir(controller.config.StateFile), 0755); err != nil {
+				return
+			}
+
+			if err = controller.saveState(); err != nil {
+				return
+			}
+		}
+	}()
+
 	stateJSON, err := ioutil.ReadFile(controller.config.StateFile)
-	if os.IsNotExist(err) {
-		// create new state file with default values if not exist
-		log.Debug("Create new state file")
-
-		if err = os.MkdirAll(filepath.Dir(controller.config.StateFile), 0755); err != nil {
-			return err
-		}
-
-		if err = controller.saveState(); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
 	if err != nil {
 		return err
 	}
