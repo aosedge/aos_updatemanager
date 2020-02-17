@@ -29,7 +29,7 @@ import (
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
 	"aos_updatemanager/modulemanager"
-	fsmodule "aos_updatemanager/modulemanager/fsmodule"
+	"aos_updatemanager/modulemanager/fsmodule"
 	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
@@ -147,11 +147,7 @@ func main() {
 }
 
 func registerModules() {
-	modulemanager.Register("rootfs", func(id string, configJSON []byte) (module interface{}, err error) {
-		return fsmodule.New(id, configJSON)
-	})
-
-	modulemanager.Register("bootloader", func(id string, configJSON []byte) (module interface{}, err error) {
+	modulemanager.Register("fsmodule", func(id string, configJSON []byte) (module interface{}, err error) {
 		return fsmodule.New(id, configJSON)
 	})
 }
