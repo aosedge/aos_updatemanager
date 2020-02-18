@@ -606,7 +606,7 @@ func (handler *Handler) upgradeStateController() (err error) {
 	modules := make(map[string]string)
 
 	for _, item := range metadata.UpdateItems {
-		modules[item.Type] = item.Path
+		modules[item.Type] = path.Join(handler.bundleDir, item.Path)
 	}
 
 	if err = handler.stateController.Upgrade(handler.operationVersion, modules); err != nil {
