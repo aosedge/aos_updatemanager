@@ -226,30 +226,40 @@ func TestCheckUpdateRootfs(t *testing.T) {
 		t.Fatalf("Can't read grub env variables: %s", err)
 	}
 
-	// Check version
+	// Check env var version
 
-	version, ok := env["NUANCE_VERSION"]
+	versionStr, ok := env["NUANCE_VERSION"]
 	if !ok {
 		t.Errorf("NUANCE_VERSION variable is not set")
 	}
-	if version != "1" {
-		t.Errorf("Wrong NUANCE_VERSION value: %s", version)
+	if versionStr != "1" {
+		t.Errorf("Wrong NUANCE_VERSION value: %s", versionStr)
 	}
 
-	// Check active boot index
+	// Check env active boot index
 
-	bootIndex, ok := env["NUANCE_ACTIVE_BOOT_INDEX"]
+	bootIndexStr, ok := env["NUANCE_ACTIVE_BOOT_INDEX"]
 	if !ok {
 		t.Errorf("NUANCE_ACTIVE_BOOT_INDEX variable is not set")
 	}
-	if bootIndex != "1" {
-		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndex)
+	if bootIndexStr != "1" {
+		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndexStr)
 	}
 
 	// Check that second partition is updated
 
 	if testModule.path != "/dev/root1" {
 		t.Errorf("Second root FS partition wasn't updated")
+	}
+
+	// Check if version is updated
+	version, err := controller.GetVersion()
+	if err != nil {
+		t.Fatalf("Can't get controller version: %s", err)
+	}
+
+	if version != 1 {
+		t.Errorf("Wrong controller version: %d", version)
 	}
 }
 

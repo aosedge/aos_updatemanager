@@ -532,11 +532,13 @@ func (controller *Controller) startUpgrade(version uint64, modules map[string]st
 
 func (controller *Controller) finishUpgrade(status error) (err error) {
 	if status == nil {
-		log.Debugf("Finish upgrade successfully")
+		controller.version = controller.state.UpgradeVersion
+
+		log.WithField("newVersion", controller.version).Debugf("Finish upgrade successfully")
 
 		status = controller.storeGrubEnv()
 	} else {
-		log.Errorf("Finish upgrade, status: %s", err)
+		log.Errorf("Finish upgrade, status: %s", status)
 	}
 
 	controller.state.GrubBootIndex = controller.grubBootIndex
