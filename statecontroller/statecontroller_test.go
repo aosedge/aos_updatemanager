@@ -73,17 +73,18 @@ var configJSON = `
 	],
 	"RootPartitions" : [
 		{
-			"device" : "/dev/root1",
+			"device" : "/dev/root",
 			"fstype" : "ext4"
 		},
 		{
-			"device" : "/dev/root2",
+			"device" : "/dev/root",
 			"fstype" : "ext4"
 		}
 	]
 }`
 
 var bootParts = []string{"", ""}
+var rootParts = []string{"", ""}
 
 /*******************************************************************************
  * Init
@@ -108,6 +109,7 @@ func TestMain(m *testing.M) {
 	}
 
 	for i := 0; i < 2; i++ {
+		// Create boot partition
 		device, err := createBootPartition("tmp/boot" + strconv.Itoa(i))
 		if err != nil {
 			log.Fatalf("Can't create boot partition: %s", err)
@@ -116,13 +118,30 @@ func TestMain(m *testing.M) {
 		configJSON = strings.Replace(configJSON, "/dev/boot", device, 1)
 
 		bootParts[i] = device
+
+		// Create root partition
+		if device, err = createRootPartition("tmp/root" + strconv.Itoa(i)); err != nil {
+			log.Fatalf("Can't create root partition: %s", err)
+		}
+
+		configJSON = strings.Replace(configJSON, "/dev/root", device, 1)
+
+		rootParts[i] = device
 	}
 
 	ret := m.Run()
 
+	// Delete boot partitions
 	for _, bootPart := range bootParts {
 		if err := deleteBootPartition(bootPart); err != nil {
 			log.Errorf("Can't delete test boot part: %s", err)
+		}
+	}
+
+	// Delete root partitions
+	for _, rootPart := range rootParts {
+		if err := deleteRootPartition(rootPart); err != nil {
+			log.Errorf("Can't delete test root part: %s", err)
 		}
 	}
 
@@ -138,7 +157,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestCheckUpdateRootfs(t *testing.T) {
-	if err := createCmdLine(bootParts[0], "/dev/root1", 0, 0); err != nil {
+	if err := createCmdLine(bootParts[0], rootParts[0], 0, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
@@ -158,12 +177,25 @@ func TestCheckUpdateRootfs(t *testing.T) {
 		t.Fatalf("Can't upgrade: %s", err)
 	}
 
+	env, err := readEnvVariables(bootParts[0])
+	if err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check if updating partition is disable
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
+	}
+
+	// Check if correct partition is selected for update
+
 	testModule, err := getTestModule("rootfs")
 	if err != nil {
 		t.Fatalf("Can't get test module: %s", err)
 	}
 
-	if testModule.path != "/dev/root2" {
+	if testModule.path != rootParts[1] {
 		t.Errorf("Wrong update partition: %s", testModule.path)
 	}
 
@@ -182,8 +214,7 @@ func TestCheckUpdateRootfs(t *testing.T) {
 		t.Fatal("Upgrade should be postponed")
 	}
 
-	env, err := readEnvVariables(bootParts[0])
-	if err != nil {
+	if env, err = readEnvVariables(bootParts[0]); err != nil {
 		t.Fatalf("Can't read grub env variables: %s", err)
 	}
 
@@ -191,6 +222,12 @@ func TestCheckUpdateRootfs(t *testing.T) {
 
 	if bootOK := getEnvVariable(t, env, "NUANCE_BOOT_OK"); bootOK != "1" {
 		t.Errorf("Wrong NUANCE_BOOT_OK value: %s", bootOK)
+	}
+
+	// Check that fallback partition is set
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "1" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
 	}
 
 	// Check that rootfs switch scheduled
@@ -209,7 +246,7 @@ func TestCheckUpdateRootfs(t *testing.T) {
 		t.Errorf("Error closing state controller: %s", err)
 	}
 
-	if err := createCmdLine(bootParts[0], "/dev/root2", 1, 0); err != nil {
+	if err := createCmdLine(bootParts[0], rootParts[1], 1, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
@@ -247,7 +284,7 @@ func TestCheckUpdateRootfs(t *testing.T) {
 
 	// Check that second partition is updated
 
-	if testModule.path != "/dev/root1" {
+	if testModule.path != rootParts[0] {
 		t.Errorf("Second root FS partition wasn't updated")
 	}
 
@@ -262,15 +299,16 @@ func TestCheckUpdateRootfs(t *testing.T) {
 	}
 }
 
-func TestBootFallbackPartition(t *testing.T) {
+func TestCheckUpdateRootfsFail(t *testing.T) {
 	if err := setEnvVariables(bootParts[0], map[string]string{
+		"NUANCE_IMAGE_VERSION":       "0",
 		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
 		"NUANCE_FALLBACK_BOOT_INDEX": "1",
 	}); err != nil {
 		t.Fatalf("Can't set grub env variables: %s", err)
 	}
 
-	if err := createCmdLine(bootParts[0], "/dev/root2", 1, 0); err != nil {
+	if err := createCmdLine(bootParts[0], rootParts[0], 0, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
@@ -284,9 +322,91 @@ func TestBootFallbackPartition(t *testing.T) {
 		}
 	}()
 
-	// Wait a little to finish system check
+	// Start upgrade rootfs
 
-	time.Sleep(1 * time.Second)
+	if err = controller.Upgrade(1, map[string]string{"rootfs": "/path/to/upgrade"}); err != nil {
+		t.Fatalf("Can't upgrade: %s", err)
+	}
+
+	env, err := readEnvVariables(bootParts[0])
+	if err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check if updating partition is disable
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
+	}
+
+	// Notify SC that rootfs update failed
+
+	postpone, err := controller.UpgradeFinished(1, errors.New("failed"), map[string]error{"rootfs": errors.New("failed")})
+	if err == nil {
+		t.Errorf("Upgrade should fail")
+	}
+
+	if postpone {
+		t.Errorf("Upgrade should not be postponed")
+	}
+
+	if env, err = readEnvVariables(bootParts[0]); err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check env var version
+
+	if version := getEnvVariable(t, env, "NUANCE_IMAGE_VERSION"); version != "0" {
+		t.Errorf("Wrong NUANCE_IMAGE_VERSION value: %s", version)
+	}
+
+	// Check env default and fallback boot indexes
+
+	if index := getEnvVariable(t, env, "NUANCE_DEFAULT_BOOT_INDEX"); index != "0" {
+		t.Errorf("Wrong NUANCE_DEFAULT_BOOT_INDEX value: %s", index)
+	}
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "1" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
+	}
+
+	// Check if version is updated
+	version, err := controller.GetVersion()
+	if err != nil {
+		t.Fatalf("Can't get controller version: %s", err)
+	}
+
+	if version != 0 {
+		t.Errorf("Wrong controller version: %d", version)
+	}
+}
+
+func TestBootFallbackPartition(t *testing.T) {
+	if err := setEnvVariables(bootParts[0], map[string]string{
+		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
+		"NUANCE_FALLBACK_BOOT_INDEX": "1",
+	}); err != nil {
+		t.Fatalf("Can't set grub env variables: %s", err)
+	}
+
+	if err := createCmdLine(bootParts[0], rootParts[1], 1, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
+	if err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+	defer func() {
+		if err := controller.Close(); err != nil {
+			t.Errorf("Error closing state controller: %s", err)
+		}
+	}()
+
+	// Call upgrade to wait system check finish
+	if err = controller.Upgrade(3, nil); err != nil {
+		t.Errorf("Upgrade failed: %s", err)
+	}
 
 	env, err := readEnvVariables(bootParts[0])
 	if err != nil {
@@ -369,7 +489,7 @@ func createBootPartition(path string) (device string, err error) {
 		return "", err
 	}
 
-	log.Debugf("Create test partition: %s", device)
+	log.Debugf("Create boot partition: %s", device)
 
 	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
 		return "", err
@@ -403,8 +523,45 @@ func createBootPartition(path string) (device string, err error) {
 	return device, err
 }
 
+func createRootPartition(path string) (device string, err error) {
+	if err = os.MkdirAll("tmp/mount", 0755); err != nil {
+		return "", err
+	}
+
+	if device, err = testtools.MakeTestPartition(path, "ext4", 16); err != nil {
+		return "", err
+	}
+
+	log.Debugf("Create test root partition: %s", device)
+
+	if err = syscall.Mount(device, "tmp/mount", "ext4", 0, ""); err != nil {
+		return "", err
+	}
+	defer func() {
+		if umountErr := umount("tmp/mount"); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
+
+	syscall.Sync()
+
+	return device, err
+}
+
 func deleteBootPartition(device string) (err error) {
 	syscall.Sync()
+
+	log.Debugf("Delete test boot partition: %s", device)
+
+	return testtools.DeleteTestPartition(device)
+}
+
+func deleteRootPartition(device string) (err error) {
+	syscall.Sync()
+
+	log.Debugf("Delete test root partition: %s", device)
 
 	return testtools.DeleteTestPartition(device)
 }

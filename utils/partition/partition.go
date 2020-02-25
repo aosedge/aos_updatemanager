@@ -1,6 +1,7 @@
 package partition
 
 import (
+	"io"
 	"os"
 	"syscall"
 
@@ -72,8 +73,37 @@ func Umount(mountPoint string) (err error) {
 	return nil
 }
 
+// Copy copies one partition to another
+func Copy(src string, dst string) (written int64, err error) {
+	if _, err = os.Stat(src); err != nil {
+		return 0, err
+	}
+
+	if _, err = os.Stat(dst); err != nil {
+		return 0, err
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+
+	if written, err = io.Copy(destination, source); err != nil {
+		return 0, err
+	}
+
+	return written, nil
+}
+
 /*******************************************************************************
- * Public
+ * Private
  ******************************************************************************/
 
 func retry(caller func() error, restorer func(error)) (err error) {

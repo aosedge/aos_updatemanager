@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/utils/grub"
+	"aos_updatemanager/utils/partition"
 )
 
 /*******************************************************************************
@@ -28,10 +29,6 @@ type grubInstance struct {
  * Private
  ******************************************************************************/
 
-// TODO: Implement invalid flag for root FS partition.
-// Make partition invalid during upgrading, restoring etc.
-// GRUB should not try to load invalid partition.
-
 func (controller *Controller) systemCheck() {
 	var err error
 
@@ -48,8 +45,6 @@ func (controller *Controller) systemCheck() {
 	if err = controller.checkUpgrade(); err != nil {
 		goto finish
 	}
-
-	// TODO: Add system integrity check and recovery here
 
 finish:
 
@@ -100,25 +95,42 @@ func (controller *Controller) checkBootState() (err error) {
 		return fmt.Errorf("unsupported GRUB config version: %d", cfgVersion)
 	}
 
+	if controller.grubFallbackBootIndex, err = env.getFallbackBootIndex(); err != nil {
+		return err
+	}
+
 	if controller.state.UpgradeState == upgradeFinished {
 		defaultBootIndex, err := env.getDefaultBootIndex()
 		if err != nil {
 			return err
 		}
 
-		if controller.grubBootIndex != defaultBootIndex {
+		if controller.grubCurrentBootIndex != defaultBootIndex {
+			// Could be situation when upgrade is in progress but state file corrupted. In this case
+			// current index != default index and fallback index is not set.
+			if controller.grubFallbackBootIndex == -1 {
+				log.Warn("Root FS try scheduled but no upgrade is in progress. Switch to default.")
+
+				controller.systemReboot()
+
+				return errors.New("root FS try scheduled but no upgrade is in progress")
+			}
+
 			log.Warn("System started from inactive root FS partition. Make it active")
 
 			// Check if this partition is ok and make it as active. Next integrity check will try to recover bad partition.
-			// Could be situation when upgrade is in progress but state file corrupted and we are boot with new partition.
-			// TODO: detect this situation.
-			if err = env.setDefaultBootIndex(controller.grubBootIndex); err != nil {
+			if err = env.setDefaultBootIndex(controller.grubCurrentBootIndex); err != nil {
 				return err
 			}
 
-			if err = env.setFallbackBootIndex(defaultBootIndex); err != nil {
+			// Disable fallback partition, SC will try to recover it
+			if err = controller.disableFallbackPartition(env); err != nil {
 				return err
 			}
+		}
+
+		if err = controller.restoreFallbackPartition(env); err != nil {
+			return err
 		}
 	}
 
@@ -140,7 +152,7 @@ func (controller *Controller) checkUpgrade() (err error) {
 	if controller.state.UpgradeState == upgradeTrySwitch {
 		if controller.isModuleUpgraded(rootFSModuleID) {
 			// New root FS boot failed, finish upgrade with failed status
-			if controller.state.GrubBootIndex == controller.grubBootIndex {
+			if controller.state.GrubBootIndex == controller.grubCurrentBootIndex {
 				return controller.finishUpgrade(errors.New("new root FS boot failed"))
 			}
 
@@ -155,6 +167,30 @@ func (controller *Controller) checkUpgrade() (err error) {
 			}
 		}
 	}
+
+	return nil
+}
+
+// This function checks if fallback partition needs to be restored and tries to restore it.
+// It could be if update failed etc.
+func (controller *Controller) restoreFallbackPartition(env *grubEnv) (err error) {
+	if controller.grubFallbackBootIndex != -1 {
+		return nil
+	}
+
+	log.Debug("Restoring fallback partition...")
+
+	written, err := partition.Copy(controller.config.RootPartitions[controller.activeRootPart].Device,
+		controller.getRootFSUpdatePartition().Device)
+	if err != nil {
+		return err
+	}
+
+	if err = controller.enableFallbackPartition(env); err != nil {
+		return err
+	}
+
+	log.Debugf("Fallback partition is restored. %d bytes copied.", written)
 
 	return nil
 }

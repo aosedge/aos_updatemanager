@@ -57,14 +57,15 @@ const (
 
 // Controller state controller instance
 type Controller struct {
-	moduleProvider ModuleProvider
-	config         controllerConfig
-	state          controllerState
-	version        uint64
-	grubBootIndex  int
-	activeRootPart int
-	activeBootPart int
-	systemStatus   systemStatus
+	moduleProvider        ModuleProvider
+	config                controllerConfig
+	state                 controllerState
+	version               uint64
+	grubCurrentBootIndex  int
+	grubFallbackBootIndex int
+	activeRootPart        int
+	activeBootPart        int
+	systemStatus          systemStatus
 	sync.Mutex
 }
 
@@ -381,7 +382,7 @@ func (controller *Controller) parseBootCmd() (err error) {
 
 	controller.activeBootPart = -1
 	controller.activeRootPart = -1
-	controller.grubBootIndex = -1
+	controller.grubCurrentBootIndex = -1
 
 	options := strings.Split(string(data), " ")
 
@@ -436,15 +437,15 @@ func (controller *Controller) parseBootCmd() (err error) {
 				return err
 			}
 
-			controller.grubBootIndex = int(rootIndex)
+			controller.grubCurrentBootIndex = int(rootIndex)
 		}
 	}
 
-	if controller.grubBootIndex < 0 {
+	if controller.grubCurrentBootIndex < 0 {
 		return errors.New("can't define grub boot index")
 	}
 
-	log.WithField("index", controller.grubBootIndex).Debug("GRUB boot index")
+	log.WithField("index", controller.grubCurrentBootIndex).Debug("GRUB boot index")
 
 	if controller.activeRootPart < 0 {
 		return errors.New("can't define active root FS")
@@ -521,11 +522,33 @@ func (controller *Controller) isModuleUpgraded(id string) (result bool) {
 }
 
 func (controller *Controller) startUpgrade(version uint64, modules map[string]string) (err error) {
+	_, updateRootFS := modules[rootFSModuleID]
+
+	if updateRootFS {
+		env, err := controller.newGrubEnv(controller.activeBootPart)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if grubErr := env.close(); grubErr != nil {
+				if err == nil {
+					err = grubErr
+				}
+			}
+		}()
+
+		// Disable updating (fallback) partition during update. It is required in case of unexpected reboot,
+		// GRUB will not boot from this partition.
+		if err = controller.disableFallbackPartition(env); err != nil {
+			return err
+		}
+	}
+
 	controller.state = controllerState{
 		UpgradeState:   upgradeStarted,
 		UpgradeVersion: version,
 		UpgradeModules: modules,
-		GrubBootIndex:  controller.grubBootIndex,
+		GrubBootIndex:  controller.grubCurrentBootIndex,
 	}
 
 	if err = controller.saveState(); err != nil {
@@ -536,17 +559,33 @@ func (controller *Controller) startUpgrade(version uint64, modules map[string]st
 }
 
 func (controller *Controller) finishUpgrade(status error) (err error) {
+	env, err := controller.newGrubEnv(controller.activeBootPart)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if grubErr := env.close(); grubErr != nil {
+			if err == nil {
+				err = grubErr
+			}
+		}
+	}()
+
 	if status == nil {
 		controller.version = controller.state.UpgradeVersion
 
 		log.WithField("newVersion", controller.version).Debugf("Finish upgrade successfully")
 
-		status = controller.storeGrubEnv()
+		status = controller.updateGrubEnv(env)
 	} else {
 		log.Errorf("Finish upgrade, status: %s", status)
 	}
 
-	controller.state.GrubBootIndex = controller.grubBootIndex
+	if err = controller.restoreFallbackPartition(env); err != nil {
+		return err
+	}
+
+	controller.state.GrubBootIndex = controller.grubCurrentBootIndex
 	controller.state.UpgradeState = upgradeFinished
 	controller.state.UpgradeStatus = ""
 
@@ -561,32 +600,22 @@ func (controller *Controller) finishUpgrade(status error) (err error) {
 	return status
 }
 
-func (controller *Controller) storeGrubEnv() (err error) {
-	log.Debug("Store GRUB environment")
-
-	env, err := controller.newGrubEnv(controller.activeBootPart)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if grubErr := env.close(); grubErr != nil {
-			if err == nil {
-				err = grubErr
-			}
-		}
-	}()
+func (controller *Controller) updateGrubEnv(env *grubEnv) (err error) {
+	log.Debug("Update GRUB environment")
 
 	defaultBootIndex, err := env.getDefaultBootIndex()
 	if err != nil {
 		return err
 	}
 
-	if defaultBootIndex != controller.grubBootIndex {
-		if err = env.setDefaultBootIndex(controller.grubBootIndex); err != nil {
+	if defaultBootIndex != controller.grubCurrentBootIndex {
+		if err = env.setDefaultBootIndex(controller.grubCurrentBootIndex); err != nil {
 			return err
 		}
 
-		if err = env.setFallbackBootIndex(defaultBootIndex); err != nil {
+		controller.grubFallbackBootIndex = defaultBootIndex
+
+		if err = env.setFallbackBootIndex(controller.grubFallbackBootIndex); err != nil {
 			return err
 		}
 	}
@@ -613,7 +642,31 @@ func (controller *Controller) tryNewRootFS() (err error) {
 		}
 	}()
 
+	if err = controller.enableFallbackPartition(env); err != nil {
+		return err
+	}
+
 	if err = env.grub.SetVariable(grubSwitchVar, "1"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) enableFallbackPartition(env *grubEnv) (err error) {
+	controller.grubFallbackBootIndex = (controller.grubCurrentBootIndex + 1) % 2
+
+	if err = env.setFallbackBootIndex(controller.grubFallbackBootIndex); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) disableFallbackPartition(env *grubEnv) (err error) {
+	controller.grubFallbackBootIndex = -1
+
+	if err = env.setFallbackBootIndex(controller.grubFallbackBootIndex); err != nil {
 		return err
 	}
 

@@ -107,6 +107,10 @@ func (env *grubEnv) getFallbackBootIndex() (index int, err error) {
 		return 0, err
 	}
 
+	if indexStr == "" {
+		return -1, nil
+	}
+
 	index64, err := strconv.ParseInt(indexStr, 10, 0)
 	if err != nil {
 		return 0, err
@@ -116,7 +120,13 @@ func (env *grubEnv) getFallbackBootIndex() (index int, err error) {
 }
 
 func (env *grubEnv) setFallbackBootIndex(index int) (err error) {
-	if err = env.grub.SetVariable(grubFallbackBootIndexVar, strconv.FormatInt(int64(index), 10)); err != nil {
+	indexStr := ""
+
+	if index != -1 {
+		indexStr = strconv.FormatInt(int64(index), 10)
+	}
+
+	if err = env.grub.SetVariable(grubFallbackBootIndexVar, indexStr); err != nil {
 		return err
 	}
 
