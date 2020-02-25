@@ -35,10 +35,15 @@ const (
 const bootMountPoint = "/tmp/aos/boot"
 
 const (
-	grubVersionVar   = "NUANCE_VERSION"
-	grubSwitchVar    = "NUANCE_TRY_SWITCH"
-	grubBootIndexVar = "NUANCE_ACTIVE_BOOT_INDEX"
+	grubCfgVersionVar        = "NUANCE_GRUB_CFG_VERSION"
+	grubImageVersionVar      = "NUANCE_IMAGE_VERSION"
+	grubSwitchVar            = "NUANCE_TRY_SWITCH"
+	grubDefaultBootIndexVar  = "NUANCE_DEFAULT_BOOT_INDEX"
+	grubFallbackBootIndexVar = "NUANCE_FALLBACK_BOOT_INDEX"
+	grubBootOK               = "NUANCE_BOOT_OK"
 )
+
+const grubCfgVersion = 1
 
 const (
 	upgradeFinished = iota
@@ -571,13 +576,22 @@ func (controller *Controller) storeGrubEnv() (err error) {
 		}
 	}()
 
-	if err = env.grub.SetVariable(grubVersionVar,
-		strconv.FormatUint(controller.state.UpgradeVersion, 10)); err != nil {
+	defaultBootIndex, err := env.getDefaultBootIndex()
+	if err != nil {
 		return err
 	}
 
-	if err = env.grub.SetVariable(grubBootIndexVar,
-		strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
+	if defaultBootIndex != controller.grubBootIndex {
+		if err = env.setDefaultBootIndex(controller.grubBootIndex); err != nil {
+			return err
+		}
+
+		if err = env.setFallbackBootIndex(defaultBootIndex); err != nil {
+			return err
+		}
+	}
+
+	if err = env.setImageVersion(controller.state.UpgradeVersion); err != nil {
 		return err
 	}
 

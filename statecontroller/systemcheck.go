@@ -2,7 +2,7 @@ package statecontroller
 
 import (
 	"errors"
-	"strconv"
+	"fmt"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -91,31 +91,39 @@ func (controller *Controller) checkBootState() (err error) {
 		}
 	}()
 
-	envVars, err := env.grub.GetVariables()
+	cfgVersion, err := env.getGrubCfgVersion()
 	if err != nil {
 		return err
 	}
 
-	if len(envVars) == 0 {
-		if err = env.init(controller); err != nil {
+	if cfgVersion != grubCfgVersion {
+		return fmt.Errorf("unsupported GRUB config version: %d", cfgVersion)
+	}
+
+	if controller.state.UpgradeState == upgradeFinished {
+		defaultBootIndex, err := env.getDefaultBootIndex()
+		if err != nil {
 			return err
+		}
+
+		if controller.grubBootIndex != defaultBootIndex {
+			log.Warn("System started from inactive root FS partition. Make it active")
+
+			// Check if this partition is ok and make it as active. Next integrity check will try to recover bad partition.
+			// Could be situation when upgrade is in progress but state file corrupted and we are boot with new partition.
+			// TODO: detect this situation.
+			if err = env.setDefaultBootIndex(controller.grubBootIndex); err != nil {
+				return err
+			}
+
+			if err = env.setFallbackBootIndex(defaultBootIndex); err != nil {
+				return err
+			}
 		}
 	}
 
-	rootIndex, err := env.getBootIndex()
-	if err != nil {
+	if err = env.grub.SetVariable(grubBootOK, "1"); err != nil {
 		return err
-	}
-
-	if controller.grubBootIndex != rootIndex && controller.state.UpgradeState == upgradeFinished {
-		log.Warn("System started from inactive root FS partition. Make it active")
-
-		// Check if this partition is ok and make it as active. Next integrity check will try to recover bad partition.
-		// Could be situation when upgrade is in progress but state file corrupted and we are boot with new partition.
-		// TODO: detect this situation.
-		if err = env.grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
-			return err
-		}
 	}
 
 	return nil

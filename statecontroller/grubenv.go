@@ -45,22 +45,8 @@ func (controller *Controller) newGrubEnv(bootPart int) (env *grubEnv, err error)
 	return env, nil
 }
 
-func (env *grubEnv) init(controller *Controller) (err error) {
-	log.Debug("Initialize GRUB variables")
-
-	if err = env.grub.SetVariable(grubVersionVar, strconv.FormatUint(controller.version, 10)); err != nil {
-		return err
-	}
-
-	if err = env.grub.SetVariable(grubBootIndexVar, strconv.FormatInt(int64(controller.grubBootIndex), 10)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (env *grubEnv) getVersion() (version uint64, err error) {
-	versionStr, err := env.grub.GetVariable(grubVersionVar)
+func (env *grubEnv) getGrubCfgVersion() (version uint64, err error) {
+	versionStr, err := env.grub.GetVariable(grubCfgVersionVar)
 	if err != nil {
 		return 0, err
 	}
@@ -72,18 +58,69 @@ func (env *grubEnv) getVersion() (version uint64, err error) {
 	return version, nil
 }
 
-func (env *grubEnv) getBootIndex() (index int, err error) {
-	rootIndexStr, err := env.grub.GetVariable(grubBootIndexVar)
+func (env *grubEnv) getImageVersion() (version uint64, err error) {
+	versionStr, err := env.grub.GetVariable(grubImageVersionVar)
 	if err != nil {
 		return 0, err
 	}
 
-	index64, err := strconv.ParseInt(rootIndexStr, 10, 0)
+	if version, err = strconv.ParseUint(versionStr, 10, 64); err != nil {
+		return 0, err
+	}
+
+	return version, nil
+}
+
+func (env *grubEnv) setImageVersion(version uint64) (err error) {
+	if err = env.grub.SetVariable(grubImageVersionVar, strconv.FormatUint(version, 10)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (env *grubEnv) getDefaultBootIndex() (index int, err error) {
+	indexStr, err := env.grub.GetVariable(grubDefaultBootIndexVar)
+	if err != nil {
+		return 0, err
+	}
+
+	index64, err := strconv.ParseInt(indexStr, 10, 0)
 	if err != nil {
 		return 0, err
 	}
 
 	return int(index64), nil
+}
+
+func (env *grubEnv) setDefaultBootIndex(index int) (err error) {
+	if err = env.grub.SetVariable(grubDefaultBootIndexVar, strconv.FormatInt(int64(index), 10)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (env *grubEnv) getFallbackBootIndex() (index int, err error) {
+	indexStr, err := env.grub.GetVariable(grubFallbackBootIndexVar)
+	if err != nil {
+		return 0, err
+	}
+
+	index64, err := strconv.ParseInt(indexStr, 10, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(index64), nil
+}
+
+func (env *grubEnv) setFallbackBootIndex(index int) (err error) {
+	if err = env.grub.SetVariable(grubFallbackBootIndexVar, strconv.FormatInt(int64(index), 10)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (env *grubEnv) close() (err error) {

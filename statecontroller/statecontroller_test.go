@@ -14,6 +14,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/utils/testtools"
@@ -186,13 +187,15 @@ func TestCheckUpdateRootfs(t *testing.T) {
 		t.Fatalf("Can't read grub env variables: %s", err)
 	}
 
+	// Check boot OK
+
+	if bootOK := getEnvVariable(t, env, "NUANCE_BOOT_OK"); bootOK != "1" {
+		t.Errorf("Wrong NUANCE_BOOT_OK value: %s", bootOK)
+	}
+
 	// Check that rootfs switch scheduled
 
-	trySwitch, ok := env["NUANCE_TRY_SWITCH"]
-	if !ok {
-		t.Errorf("NUANCE_TRY_SWITCH variable is not set")
-	}
-	if trySwitch != "1" {
+	if trySwitch := getEnvVariable(t, env, "NUANCE_TRY_SWITCH"); trySwitch != "1" {
 		t.Errorf("Wrong NUANCE_TRY_SWITCH value: %s", trySwitch)
 	}
 
@@ -228,22 +231,18 @@ func TestCheckUpdateRootfs(t *testing.T) {
 
 	// Check env var version
 
-	versionStr, ok := env["NUANCE_VERSION"]
-	if !ok {
-		t.Errorf("NUANCE_VERSION variable is not set")
-	}
-	if versionStr != "1" {
-		t.Errorf("Wrong NUANCE_VERSION value: %s", versionStr)
+	if version := getEnvVariable(t, env, "NUANCE_IMAGE_VERSION"); version != "1" {
+		t.Errorf("Wrong NUANCE_IMAGE_VERSION value: %s", version)
 	}
 
-	// Check env active boot index
+	// Check env default and fallback boot indexes
 
-	bootIndexStr, ok := env["NUANCE_ACTIVE_BOOT_INDEX"]
-	if !ok {
-		t.Errorf("NUANCE_ACTIVE_BOOT_INDEX variable is not set")
+	if index := getEnvVariable(t, env, "NUANCE_DEFAULT_BOOT_INDEX"); index != "1" {
+		t.Errorf("Wrong NUANCE_DEFAULT_BOOT_INDEX value: %s", index)
 	}
-	if bootIndexStr != "1" {
-		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndexStr)
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "0" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
 	}
 
 	// Check that second partition is updated
@@ -263,8 +262,11 @@ func TestCheckUpdateRootfs(t *testing.T) {
 	}
 }
 
-func TestBootInactivePartition(t *testing.T) {
-	if err := setEnvVariables(bootParts[0], map[string]string{"NUANCE_ACTIVE_BOOT_INDEX": "0"}); err != nil {
+func TestBootFallbackPartition(t *testing.T) {
+	if err := setEnvVariables(bootParts[0], map[string]string{
+		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
+		"NUANCE_FALLBACK_BOOT_INDEX": "1",
+	}); err != nil {
 		t.Fatalf("Can't set grub env variables: %s", err)
 	}
 
@@ -291,14 +293,14 @@ func TestBootInactivePartition(t *testing.T) {
 		t.Fatalf("Can't read grub env variables: %s", err)
 	}
 
-	// Check active boot index
+	// Check default and fallback boot indexes
 
-	bootIndex, ok := env["NUANCE_ACTIVE_BOOT_INDEX"]
-	if !ok {
-		t.Errorf("NUANCE_ACTIVE_BOOT_INDEX variable is not set")
+	if index := getEnvVariable(t, env, "NUANCE_DEFAULT_BOOT_INDEX"); index != "1" {
+		t.Errorf("Wrong NUANCE_DEFAULT_BOOT_INDEX value: %s", index)
 	}
-	if bootIndex != "1" {
-		t.Errorf("Wrong NUANCE_ACTIVE_BOOT_INDEX value: %s", bootIndex)
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "0" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
 	}
 }
 
@@ -372,13 +374,27 @@ func createBootPartition(path string) (device string, err error) {
 	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
 		return "", err
 	}
-	defer syscall.Unmount("tmp/mount", 0)
+	defer func() {
+		if umountErr := umount("tmp/mount"); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
 
 	if err = os.MkdirAll("tmp/mount/EFI/BOOT/NUANCE", 0755); err != nil {
 		return "", err
 	}
 
 	if output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "create").CombinedOutput(); err != nil {
+		return "", fmt.Errorf("can't create grubenv: %s, %s", output, err)
+	}
+
+	if output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "set",
+		"NUANCE_GRUB_CFG_VERSION=1",
+		"NUANCE_IMAGE_VERSION=0",
+		"NUANCE_DEFAULT_BOOT_INDEX=0",
+		"NUANCE_FALLBACK_BOOT_INDEX=1").CombinedOutput(); err != nil {
 		return "", fmt.Errorf("can't create grubenv: %s, %s", output, err)
 	}
 
@@ -396,10 +412,16 @@ func deleteBootPartition(device string) (err error) {
 func readEnvVariables(device string) (vars map[string]string, err error) {
 	vars = make(map[string]string)
 
-	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
+	if err = syscall.Mount(device, "tmp/mount", "vfat", unix.MS_RDONLY, ""); err != nil {
 		return nil, err
 	}
-	defer syscall.Unmount("tmp/mount", 0)
+	defer func() {
+		if umountErr := umount("tmp/mount"); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
 
 	output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "list").CombinedOutput()
 	if err != nil {
@@ -422,7 +444,13 @@ func setEnvVariables(device string, vars map[string]string) (err error) {
 	if err = syscall.Mount(device, "tmp/mount", "vfat", 0, ""); err != nil {
 		return err
 	}
-	defer syscall.Unmount("tmp/mount", 0)
+	defer func() {
+		if umountErr := umount("tmp/mount"); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
 
 	for name, value := range vars {
 		output, err := exec.Command("grub-editenv", "tmp/mount/EFI/BOOT/NUANCE/grubenv", "set", name+"="+value).CombinedOutput()
@@ -434,4 +462,30 @@ func setEnvVariables(device string, vars map[string]string) (err error) {
 	syscall.Sync()
 
 	return nil
+}
+
+func umount(mountPoint string) (err error) {
+	for i := 0; i < 3; i++ {
+		syscall.Sync()
+
+		if err = syscall.Unmount(mountPoint, 0); err == nil {
+			return
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	log.Errorf("Can't umount %s: %s", mountPoint, err)
+
+	return err
+}
+
+func getEnvVariable(t *testing.T, vars map[string]string, name string) (value string) {
+	var ok bool
+
+	if value, ok = vars[name]; !ok {
+		t.Errorf("variable %s not found", name)
+	}
+
+	return value
 }
