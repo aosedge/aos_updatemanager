@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -86,6 +87,7 @@ type controllerConfig struct {
 	GRUBEnvFile    string
 	RootPartitions []partitionInfo
 	BootPartitions []partitionInfo
+	PerformReboot  bool
 }
 
 type controllerState struct {
@@ -674,8 +676,15 @@ func (controller *Controller) disableFallbackPartition(env *grubEnv) (err error)
 }
 
 func (controller *Controller) systemReboot() (err error) {
-	// TODO: implement proper system reboot.
 	log.Info("System reboot")
+
+	syscall.Sync()
+
+	if controller.config.PerformReboot {
+		if err = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
