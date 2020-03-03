@@ -251,6 +251,10 @@ func (controller *Controller) UpgradeFinished(version uint64, status error,
 			return false, controller.finishUpgrade(nil)
 		}
 
+		if err = controller.systemReboot(); err != nil {
+			return false, err
+		}
+
 		return true, nil
 	}
 
@@ -294,10 +298,6 @@ func (controller *Controller) upgradeSecondFSPartition(id string, part partition
 func (controller *Controller) finishRootFSUpgrade() (postpone bool, err error) {
 	if controller.state.UpgradeState == upgradeStarted {
 		if err = controller.tryNewRootFS(); err != nil {
-			return false, err
-		}
-
-		if err = controller.systemReboot(); err != nil {
 			return false, err
 		}
 
