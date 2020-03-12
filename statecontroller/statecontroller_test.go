@@ -77,26 +77,8 @@ var configJSON = `
 {
 	"KernelCmdline" : "$cmdline",
 	"StateFile" : "$state",
-	"BootPartitions" : [
-		{
-			"device" : "$device",
-			"fstype" : "vfat"
-		},
-		{
-			"device" : "$device",
-			"fstype" : "vfat"
-		}
-	],
-	"RootPartitions" : [
-		{
-			"device" : "$device",
-			"fstype" : "ext4"
-		},
-		{
-			"device" : "$device",
-			"fstype" : "ext4"
-		}
-	]
+	"BootPartitions" : ["$device", "$device"],
+	"RootPartitions" : ["$device", "$device"]
 }`
 
 var disk *testtools.TestDisk

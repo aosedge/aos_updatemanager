@@ -25,9 +25,8 @@ type grubEnv struct {
 func (controller *Controller) newGrubEnv(bootPart int) (env *grubEnv, err error) {
 	env = &grubEnv{mountPoint: bootMountPoint + strconv.Itoa(bootPart)}
 
-	partInfo := controller.config.BootPartitions[bootPart]
-
-	if err = partition.Mount(partInfo.Device, env.mountPoint, partInfo.FSType); err != nil {
+	if err = partition.Mount(controller.bootPartInfo[bootPart].Device, env.mountPoint,
+		controller.bootPartInfo[bootPart].Type); err != nil {
 		return nil, err
 	}
 	defer func() {

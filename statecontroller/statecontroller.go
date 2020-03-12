@@ -14,6 +14,8 @@ import (
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
+
+	"aos_updatemanager/utils/partition"
 )
 
 /*******************************************************************************
@@ -66,6 +68,8 @@ type Controller struct {
 	grubFallbackBootIndex int
 	activeRootPart        int
 	activeBootPart        int
+	bootPartInfo          []partition.Info
+	rootPartInfo          []partition.Info
 	systemStatus          systemStatus
 	sync.Mutex
 }
@@ -76,17 +80,12 @@ type ModuleProvider interface {
 	GetModuleByID(id string) (module interface{}, err error)
 }
 
-type partitionInfo struct {
-	Device string
-	FSType string
-}
-
 type controllerConfig struct {
 	KernelCmdline  string
 	StateFile      string
 	GRUBEnvFile    string
-	RootPartitions []partitionInfo
-	BootPartitions []partitionInfo
+	RootPartitions []string
+	BootPartitions []string
 	PerformReboot  bool
 }
 
@@ -130,6 +129,10 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 	controller.systemStatus.cond = sync.NewCond(controller)
 
 	if err = json.Unmarshal(configJSON, &controller.config); err != nil {
+		return nil, err
+	}
+
+	if err = controller.updatePartInfo(); err != nil {
 		return nil, err
 	}
 
@@ -273,13 +276,13 @@ func (controller *Controller) RevertFinished(version uint64, status error,
  * Private
  ******************************************************************************/
 
-func (controller *Controller) upgradeSecondFSPartition(id string, part partitionInfo) (err error) {
+func (controller *Controller) upgradeSecondFSPartition(id string, part partition.Info) (err error) {
 	fsModule, err := controller.getFSModuleByID(id)
 	if err != nil {
 		return err
 	}
 
-	if err = fsModule.SetPartitionForUpdate(part.Device, part.FSType); err != nil {
+	if err = fsModule.SetPartitionForUpdate(part.Device, part.Type); err != nil {
 		return err
 	}
 
@@ -317,16 +320,16 @@ func (controller *Controller) waitSystemCheckFinished() (err error) {
 	return controller.systemStatus.status
 }
 
-func (controller *Controller) getRootFSUpdatePartition() (partition partitionInfo) {
+func (controller *Controller) getRootFSUpdatePartition() (partition partition.Info) {
 	updatePart := (controller.activeRootPart + 1) % len(controller.config.RootPartitions)
 
-	return controller.config.RootPartitions[updatePart]
+	return controller.rootPartInfo[updatePart]
 }
 
-func (controller *Controller) getBootloaderUpdatePartition() (partition partitionInfo) {
+func (controller *Controller) getBootloaderUpdatePartition() (partition partition.Info) {
 	updatePart := (controller.activeBootPart + 1) % len(controller.config.BootPartitions)
 
-	return controller.config.BootPartitions[updatePart]
+	return controller.bootPartInfo[updatePart]
 }
 
 func (controller *Controller) initModules(modules map[string]string) (err error) {
@@ -361,7 +364,7 @@ func (controller *Controller) getFSModuleByID(id string) (module fsModule, err e
 	return module, nil
 }
 
-func (controller *Controller) initFileSystemUpdateModule(id string, part partitionInfo) (err error) {
+func (controller *Controller) initFileSystemUpdateModule(id string, part partition.Info) (err error) {
 	log.Debug("Init module: ", id)
 
 	fsModule, err := controller.getFSModuleByID(id)
@@ -369,8 +372,34 @@ func (controller *Controller) initFileSystemUpdateModule(id string, part partiti
 		return err
 	}
 
-	if err = fsModule.SetPartitionForUpdate(part.Device, part.FSType); err != nil {
+	if err = fsModule.SetPartitionForUpdate(part.Device, part.Type); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) updatePartInfo() (err error) {
+	controller.bootPartInfo = make([]partition.Info, 0, len(controller.config.BootPartitions))
+
+	for _, part := range controller.config.BootPartitions {
+		info, err := partition.GetInfo(part)
+		if err != nil {
+			return err
+		}
+
+		controller.bootPartInfo = append(controller.bootPartInfo, info)
+	}
+
+	controller.rootPartInfo = make([]partition.Info, 0, len(controller.config.RootPartitions))
+
+	for _, part := range controller.config.RootPartitions {
+		info, err := partition.GetInfo(part)
+		if err != nil {
+			return err
+		}
+
+		controller.rootPartInfo = append(controller.rootPartInfo, info)
 	}
 
 	return nil
@@ -396,7 +425,7 @@ func (controller *Controller) parseBootCmd() (err error) {
 			partStr := strings.TrimPrefix(option, kernelRootPrefix)
 
 			for i, partition := range controller.config.RootPartitions {
-				if partition.Device == partStr {
+				if partition == partStr {
 					controller.activeRootPart = i
 					break
 				}
@@ -415,7 +444,7 @@ func (controller *Controller) parseBootCmd() (err error) {
 			}
 
 			for i, partition := range controller.config.BootPartitions {
-				partStr := regexp.MustCompile("[[:digit:]]*$").FindString(partition.Device)
+				partStr := regexp.MustCompile("[[:digit:]]*$").FindString(partition)
 				configPart, err := strconv.Atoi(partStr)
 				if err != nil {
 					return err
@@ -454,14 +483,14 @@ func (controller *Controller) parseBootCmd() (err error) {
 	}
 
 	log.WithField("partition",
-		controller.config.RootPartitions[controller.activeRootPart].Device).Debug("Active root partition")
+		controller.rootPartInfo[controller.activeRootPart].Device).Debug("Active root partition")
 
 	if controller.activeBootPart < 0 {
 		return errors.New("can't define active boot FS")
 	}
 
 	log.WithField("partition",
-		controller.config.BootPartitions[controller.activeBootPart].Device).Debug("Active boot partition")
+		controller.bootPartInfo[controller.activeBootPart].Device).Debug("Active boot partition")
 
 	return nil
 }

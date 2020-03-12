@@ -180,7 +180,7 @@ func (controller *Controller) restoreFallbackPartition(env *grubEnv) (err error)
 
 	log.Debug("Restoring fallback partition...")
 
-	written, err := partition.Copy(controller.config.RootPartitions[controller.activeRootPart].Device,
+	written, err := partition.Copy(controller.rootPartInfo[controller.activeRootPart].Device,
 		controller.getRootFSUpdatePartition().Device)
 	if err != nil {
 		return err
