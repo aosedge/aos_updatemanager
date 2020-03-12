@@ -1,10 +1,16 @@
 package partition
 
+// #cgo pkg-config: blkid
+// #include <blkid.h>
+import "C"
+
 import (
+	"errors"
 	"io"
 	"os"
 	"syscall"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -14,13 +20,31 @@ import (
 
 const retryCount = 3
 
+const (
+	tagTypeLabel    = "LABEL"
+	tagTypeFSType   = "TYPE"
+	tagTypePartUUID = "PARTUUID"
+)
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+// Info partition info
+type Info struct {
+	Device   string
+	Type     string
+	Label    string
+	PartUUID uuid.UUID
+}
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // Mount creates mount point and mount device to it
 func Mount(device string, mountPoint string, fsType string) (err error) {
-	log.WithFields(log.Fields{"device": device, "mountPoint": mountPoint}).Debug("Mount partition")
+	log.WithFields(log.Fields{"device": device, "type": fsType, "mountPoint": mountPoint}).Debug("Mount partition")
 
 	if err = os.MkdirAll(mountPoint, 0755); err != nil {
 		return err
@@ -100,6 +124,52 @@ func Copy(src string, dst string) (written int64, err error) {
 	}
 
 	return written, nil
+}
+
+// GetInfo returns partition info
+func GetInfo(device string) (info Info, err error) {
+	var (
+		blkdev   C.blkid_dev
+		blkcache C.blkid_cache
+	)
+
+	if ret := C.blkid_get_cache(&blkcache, C.CString("/dev/null")); ret != 0 {
+		return Info{}, errors.New("can't get blkid cache")
+	}
+
+	if blkdev = C.blkid_get_dev(blkcache, C.CString(device), C.BLKID_DEV_NORMAL); blkdev == nil {
+		return Info{}, errors.New("can't get blkid device")
+	}
+
+	info.Device = C.GoString(C.blkid_dev_devname(blkdev))
+
+	iter := C.blkid_tag_iterate_begin(blkdev)
+
+	var (
+		tagType  *C.char
+		tagValue *C.char
+	)
+
+	for C.blkid_tag_next(iter, &tagType, &tagValue) == 0 {
+		switch C.GoString(tagType) {
+		case tagTypeLabel:
+			info.Label = C.GoString(tagValue)
+
+		case tagTypeFSType:
+			info.Type = C.GoString(tagValue)
+
+		case tagTypePartUUID:
+			var err error
+
+			if info.PartUUID, err = uuid.Parse(C.GoString(tagValue)); err != nil {
+				log.Errorf("Can't parse PARTUUID")
+			}
+		}
+	}
+
+	C.blkid_tag_iterate_end(iter)
+
+	return info, nil
 }
 
 /*******************************************************************************
