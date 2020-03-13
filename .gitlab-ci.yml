@@ -5,6 +5,8 @@ stages:
   - build
 
 before_script:
+  - apt update
+  - apt install -y libefivar-dev libefiboot-dev libblkid-dev
   - go get -u golang.org/x/lint/golint
   - ln -svf $CI_PROJECT_DIR /go/src/aos_updatemanager
   - cd /go/src/aos_updatemanager
@@ -12,8 +14,7 @@ before_script:
 test:
   stage: test
   script:
-    - apt update
-    - apt install -y ostree grub-common dosfstools
+    - apt install -y ostree grub-common dosfstools parted udev
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - echo "-------   Run Lint -------"
     - ci/lint.sh
@@ -23,8 +24,7 @@ test:
 coverage:
   stage: test
   script:
-    - apt update
-    - apt install -y ostree grub-common dosfstools
+    - apt install -y ostree grub-common dosfstools parted udev
     - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
