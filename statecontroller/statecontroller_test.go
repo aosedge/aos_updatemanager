@@ -47,6 +47,7 @@ type testUpdateModule struct {
 
 type testEfiProvider struct {
 	current   uint16
+	next      uint16
 	bootOrder []uint16
 	items     map[uuid.UUID]uint16
 }
@@ -440,6 +441,128 @@ func TestBootFallbackPartition(t *testing.T) {
 	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "0" {
 		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
 	}
+
+	// Finish upgrade
+	if _, err = controller.UpgradeFinished(3, nil, nil); err != nil {
+		t.Errorf("Finish upgrade failed: %s", err)
+	}
+}
+
+func TestCheckUpdateBootfs(t *testing.T) {
+	efiProvider.SetBootOrder([]uint16{efiProvider.getBootID(partBoot0), efiProvider.getBootID(partBoot1)})
+	efiProvider.setCurrentBoot(partBoot0)
+
+	if err := setEnvVariables(partBoot0, map[string]string{
+		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
+		"NUANCE_FALLBACK_BOOT_INDEX": "1",
+	}); err != nil {
+		t.Fatalf("Can't set grub env variables: %s", err)
+	}
+
+	if err := createCmdLine(partRoot0, 0, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider)
+	if err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+	defer func() {
+		if err := controller.Close(); err != nil {
+			t.Errorf("Error closing state controller: %s", err)
+		}
+	}()
+
+	// Start upgrade bootfs
+
+	if err = controller.Upgrade(1, map[string]string{"bootloader": "/path/to/upgrade"}); err != nil {
+		t.Fatalf("Can't upgrade: %s", err)
+	}
+
+	// Check if correct partition is selected for update
+
+	testModule, err := getTestModule("bootloader")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	if testModule.path != disk.Partitions[partBoot1].Device {
+		t.Errorf("Wrong update partition: %s", testModule.path)
+	}
+
+	if testModule.fsType != disk.Partitions[partBoot1].Type {
+		t.Errorf("Wrong FS type: %s", testModule.fsType)
+	}
+
+	// Check if updating bootloader is disable
+
+	if efiProvider.isInBootOrder(partBoot1) {
+		t.Errorf("Update boot should not be in boot order")
+	}
+
+	// Upgrade finish bootfs
+
+	postpone, err := controller.UpgradeFinished(1, nil, map[string]error{"bootloader": nil})
+	if err != nil {
+		t.Fatalf("Can't finish upgrade: %s", err)
+	}
+
+	if !postpone {
+		t.Fatal("Upgrade should be postponed")
+	}
+
+	// Check that new bootloader boot is scheduled
+
+	nextBoot, _ := efiProvider.GetBootNext()
+	if nextBoot != efiProvider.getBootID(partBoot1) {
+		t.Errorf("Wrong next boot: %d", nextBoot)
+	}
+
+	// Reboot
+
+	if err := controller.Close(); err != nil {
+		t.Errorf("Error closing state controller: %s", err)
+	}
+
+	efiProvider.setCurrentBoot(partBoot1)
+
+	if controller, err = statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider); err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+
+	postpone, err = controller.UpgradeFinished(1, nil, map[string]error{"rootfs": nil})
+	if err != nil {
+		t.Fatalf("Can't finish upgrade: %s", err)
+	}
+	if postpone {
+		t.Errorf("Upgrade should not be postponed")
+	}
+
+	// Check boot order
+
+	if !efiProvider.isInBootOrder(partBoot0) || !efiProvider.isInBootOrder(partBoot1) {
+		t.Errorf("Both bootloader should be in boot order")
+	}
+
+	if efiProvider.bootOrderPos(partBoot0) <= efiProvider.bootOrderPos(partBoot1) {
+		t.Errorf("Bootloader boot order should be changed")
+	}
+
+	// Check that second partition is updated
+
+	if testModule.path != disk.Partitions[partBoot0].Device {
+		t.Errorf("Second bootloader partition wasn't updated")
+	}
+
+	// Check if version is updated
+	version, err := controller.GetVersion()
+	if err != nil {
+		t.Fatalf("Can't get controller version: %s", err)
+	}
+
+	if version != 1 {
+		t.Errorf("Wrong controller version: %d", version)
+	}
 }
 
 /*******************************************************************************
@@ -481,10 +604,12 @@ func (provider *testEfiProvider) GetBootCurrent() (id uint16, err error) {
 }
 
 func (provider *testEfiProvider) GetBootNext() (id uint16, err error) {
-	return 0, nil
+	return provider.next, nil
 }
 
 func (provider *testEfiProvider) SetBootNext(id uint16) (err error) {
+	provider.next = id
+
 	return nil
 }
 
@@ -523,6 +648,26 @@ func (provider *testEfiProvider) getBootID(index int) (id uint16) {
 	}
 
 	return id
+}
+
+func (provider *testEfiProvider) isInBootOrder(index int) (result bool) {
+	for _, boot := range provider.bootOrder {
+		if boot == provider.getBootID(index) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (provider *testEfiProvider) bootOrderPos(index int) (pos int) {
+	for i, boot := range provider.bootOrder {
+		if boot == provider.getBootID(index) {
+			return i
+		}
+	}
+
+	return -1
 }
 
 func createCmdLine(rootDeviceIndex int, bootIndex int, version uint64) (err error) {

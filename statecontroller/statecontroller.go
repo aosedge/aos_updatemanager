@@ -107,6 +107,7 @@ type controllerState struct {
 	UpgradeVersion uint64
 	UpgradeModules map[string]string
 	GrubBootIndex  int
+	EFIBootIndex   int
 }
 
 type fsModule interface {
@@ -253,9 +254,14 @@ func (controller *Controller) UpgradeFinished(version uint64, status error,
 		return false, controller.finishUpgrade(status)
 	}
 
-	switch {
-	case controller.isModuleUpgraded(rootFSModuleID):
+	if isModuleUpgraded(rootFSModuleID, controller.state.UpgradeModules) {
 		if postpone, err = controller.finishRootFSUpgrade(); err != nil {
+			return false, controller.finishUpgrade(err)
+		}
+	}
+
+	if isModuleUpgraded(bootloaderModuleID, controller.state.UpgradeModules) {
+		if postpone, err = controller.finishBootloaderUpgrade(); err != nil {
 			return false, controller.finishUpgrade(err)
 		}
 	}
@@ -314,6 +320,20 @@ func (controller *Controller) upgradeSecondFSPartition(id string, part partition
 func (controller *Controller) finishRootFSUpgrade() (postpone bool, err error) {
 	if controller.state.UpgradeState == upgradeStarted {
 		if err = controller.tryNewRootFS(); err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
+	log.Warn("System reboot is scheduled")
+
+	return false, nil
+}
+
+func (controller *Controller) finishBootloaderUpgrade() (postpone bool, err error) {
+	if controller.state.UpgradeState == upgradeStarted {
+		if err = controller.tryNewBootloader(); err != nil {
 			return false, err
 		}
 
@@ -539,24 +559,20 @@ func (controller *Controller) saveState() (err error) {
 	return nil
 }
 
-func (controller *Controller) isModuleUpgraded(id string) (result bool) {
-	if controller.state.UpgradeModules == nil {
+func isModuleUpgraded(id string, modules map[string]string) (result bool) {
+	if modules == nil {
 		return false
 	}
 
-	for module := range controller.state.UpgradeModules {
-		if module == id {
-			return true
-		}
+	if _, ok := modules[id]; !ok {
+		return false
 	}
 
-	return false
+	return true
 }
 
 func (controller *Controller) startUpgrade(version uint64, modules map[string]string) (err error) {
-	_, updateRootFS := modules[rootFSModuleID]
-
-	if updateRootFS {
+	if isModuleUpgraded(rootFSModuleID, modules) {
 		env, err := controller.newGrubEnv(controller.activeBootPart)
 		if err != nil {
 			return err
@@ -576,11 +592,21 @@ func (controller *Controller) startUpgrade(version uint64, modules map[string]st
 		}
 	}
 
+	if isModuleUpgraded(bootloaderModuleID, modules) {
+		// Disable updating (fallback) bootloader during update. It is required in case of unexpected reboot,
+		// system will not boot from this bootloader.
+
+		if err = controller.disableFallbackBootloader(); err != nil {
+			return err
+		}
+	}
+
 	controller.state = controllerState{
 		UpgradeState:   upgradeStarted,
 		UpgradeVersion: version,
 		UpgradeModules: modules,
 		GrubBootIndex:  controller.grubCurrentBootIndex,
+		EFIBootIndex:   controller.activeBootPart,
 	}
 
 	if err = controller.saveState(); err != nil {
@@ -604,11 +630,15 @@ func (controller *Controller) finishUpgrade(status error) (err error) {
 	}()
 
 	if status == nil {
-		controller.version = controller.state.UpgradeVersion
+		status = controller.updateBootOrder()
 
-		log.WithField("newVersion", controller.version).Debugf("Finish upgrade successfully")
+		if status == nil {
+			controller.version = controller.state.UpgradeVersion
 
-		status = controller.updateGrubEnv(env)
+			log.WithField("newVersion", controller.version).Debugf("Finish upgrade successfully")
+
+			status = controller.updateGrubEnv(env)
+		}
 	} else {
 		log.Errorf("Finish upgrade, status: %s", status)
 	}
@@ -659,6 +689,17 @@ func (controller *Controller) updateGrubEnv(env *grubEnv) (err error) {
 	return nil
 }
 
+func (controller *Controller) updateBootOrder() (err error) {
+	activeBoot := controller.bootEFIIds[controller.activeBootPart]
+	fallbackBoot := controller.bootEFIIds[(controller.activeBootPart+1)%len(controller.bootEFIIds)]
+
+	if err = controller.efiProvider.SetBootOrder([]uint16{activeBoot, fallbackBoot}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (controller *Controller) tryNewRootFS() (err error) {
 	log.Debug("Try switch to new root FS")
 
@@ -685,6 +726,18 @@ func (controller *Controller) tryNewRootFS() (err error) {
 	return nil
 }
 
+func (controller *Controller) tryNewBootloader() (err error) {
+	log.Debug("Try switch to new bootloader")
+
+	nextBoot := controller.bootEFIIds[(controller.activeBootPart+1)%len(controller.bootEFIIds)]
+
+	if err = controller.efiProvider.SetBootNext(nextBoot); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (controller *Controller) enableFallbackPartition(env *grubEnv) (err error) {
 	controller.grubFallbackBootIndex = (controller.grubCurrentBootIndex + 1) % 2
 
@@ -699,6 +752,32 @@ func (controller *Controller) disableFallbackPartition(env *grubEnv) (err error)
 	controller.grubFallbackBootIndex = -1
 
 	if err = env.setFallbackBootIndex(controller.grubFallbackBootIndex); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (controller *Controller) disableFallbackBootloader() (err error) {
+	bootOrder, err := controller.efiProvider.GetBootOrder()
+	if err != nil {
+		return err
+	}
+
+	i := 0
+
+	for _, boot := range bootOrder {
+		if controller.bootEFIIds[(controller.activeBootPart+1)%len(controller.bootEFIIds)] == boot {
+			continue
+		}
+
+		bootOrder[i] = boot
+		i++
+	}
+
+	bootOrder = bootOrder[:i]
+
+	if err = controller.efiProvider.SetBootOrder(bootOrder); err != nil {
 		return err
 	}
 

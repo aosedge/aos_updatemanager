@@ -150,7 +150,8 @@ func (controller *Controller) checkUpgrade() (err error) {
 	log.Debug("Check upgrade state")
 
 	if controller.state.UpgradeState == upgradeTrySwitch {
-		if controller.isModuleUpgraded(rootFSModuleID) {
+
+		if isModuleUpgraded(rootFSModuleID, controller.state.UpgradeModules) {
 			// New root FS boot failed, finish upgrade with failed status
 			if controller.state.GrubBootIndex == controller.grubCurrentBootIndex {
 				return controller.finishUpgrade(errors.New("new root FS boot failed"))
@@ -164,6 +165,23 @@ func (controller *Controller) checkUpgrade() (err error) {
 			if err = controller.upgradeSecondFSPartition(rootFSModuleID, controller.getRootFSUpdatePartition()); err != nil {
 				// Do not return err in this case. Integrity check and recovery should resolve this.
 				log.Errorf("Can't upgrade second root FS partition: %s", err)
+			}
+		}
+
+		if isModuleUpgraded(bootloaderModuleID, controller.state.UpgradeModules) {
+			// New bootloader boot failed, finish upgrade with failed status
+			if controller.state.EFIBootIndex == controller.activeBootPart {
+				return controller.finishUpgrade(errors.New("new bootloader boot failed"))
+			}
+
+			// New root FS is ok, finish upgrade with success status
+			if err = controller.finishUpgrade(nil); err != nil {
+				return err
+			}
+
+			if err = controller.upgradeSecondFSPartition(bootloaderModuleID, controller.getBootloaderUpdatePartition()); err != nil {
+				// Do not return err in this case. Integrity check and recovery should resolve this.
+				log.Errorf("Can't upgrade second bootloader partition: %s", err)
 			}
 		}
 	}
