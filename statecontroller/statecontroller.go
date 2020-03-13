@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -729,9 +731,56 @@ func (controller *Controller) tryNewRootFS() (err error) {
 func (controller *Controller) tryNewBootloader() (err error) {
 	log.Debug("Try switch to new bootloader")
 
-	nextBoot := controller.bootEFIIds[(controller.activeBootPart+1)%len(controller.bootEFIIds)]
+	fallbackIndex := (controller.activeBootPart + 1) % len(controller.bootEFIIds)
+
+	nextBoot := controller.bootEFIIds[fallbackIndex]
 
 	if err = controller.efiProvider.SetBootNext(nextBoot); err != nil {
+		return err
+	}
+
+	activeBootMountPoint := bootMountPoint + strconv.Itoa(controller.activeBootPart)
+
+	if err = partition.Mount(controller.bootPartInfo[controller.activeBootPart].Device,
+		activeBootMountPoint,
+		controller.bootPartInfo[controller.activeBootPart].Type); err != nil {
+		return err
+	}
+	defer func() {
+		if err := partition.Umount(activeBootMountPoint); err != nil {
+			log.Errorf("Can't unmount boot partition: %s", err)
+		}
+	}()
+
+	fallbackBootMountPoint := bootMountPoint + strconv.Itoa(fallbackIndex)
+
+	if err = partition.Mount(controller.bootPartInfo[fallbackIndex].Device, fallbackBootMountPoint,
+		controller.bootPartInfo[fallbackIndex].Type); err != nil {
+		return err
+	}
+	defer func() {
+		if err := partition.Umount(fallbackBootMountPoint); err != nil {
+			log.Errorf("Can't unmount boot partition: %s", err)
+		}
+	}()
+
+	source, err := os.Open(path.Join(activeBootMountPoint, controller.config.GRUBEnvFile))
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(path.Join(fallbackBootMountPoint, controller.config.GRUBEnvFile))
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
+
+	if _, err = io.Copy(destination, source); err != nil {
+		return err
+	}
+
+	if err = destination.Sync(); err != nil {
 		return err
 	}
 

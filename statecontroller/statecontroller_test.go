@@ -565,6 +565,221 @@ func TestCheckUpdateBootfs(t *testing.T) {
 	}
 }
 
+func TestCheckUpdateBootfsRootfs(t *testing.T) {
+	efiProvider.SetBootOrder([]uint16{efiProvider.getBootID(partBoot0), efiProvider.getBootID(partBoot1)})
+	efiProvider.setCurrentBoot(partBoot0)
+
+	if err := setEnvVariables(partBoot0, map[string]string{
+		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
+		"NUANCE_FALLBACK_BOOT_INDEX": "1",
+	}); err != nil {
+		t.Fatalf("Can't set grub env variables: %s", err)
+	}
+
+	if err := createCmdLine(partRoot0, 0, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider)
+	if err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+	defer func() {
+		if err := controller.Close(); err != nil {
+			t.Errorf("Error closing state controller: %s", err)
+		}
+	}()
+
+	// Start upgrade bootfs, rootfs
+
+	if err = controller.Upgrade(1, map[string]string{
+		"bootloader": "/path/to/upgrade",
+		"rootfs":     "/path/to/upgrade"}); err != nil {
+		t.Fatalf("Can't upgrade: %s", err)
+	}
+
+	// Check if correct partition is selected for update
+
+	testModule, err := getTestModule("bootloader")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	if testModule.path != disk.Partitions[partBoot1].Device {
+		t.Errorf("Wrong update partition: %s", testModule.path)
+	}
+
+	if testModule.fsType != disk.Partitions[partBoot1].Type {
+		t.Errorf("Wrong FS type: %s", testModule.fsType)
+	}
+
+	testModule, err = getTestModule("rootfs")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	if testModule.path != disk.Partitions[partRoot1].Device {
+		t.Errorf("Wrong update partition: %s", testModule.path)
+	}
+
+	if testModule.fsType != disk.Partitions[partRoot1].Type {
+		t.Errorf("Wrong FS type: %s", testModule.fsType)
+	}
+
+	// Check if updating bootloader is disable
+
+	if efiProvider.isInBootOrder(partBoot1) {
+		t.Errorf("Update boot should not be in boot order")
+	}
+
+	// Check if updating partition is disable
+
+	env, err := readEnvVariables(partBoot0)
+	if err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
+	}
+
+	// Upgrade finish bootfs, rootfs
+
+	postpone, err := controller.UpgradeFinished(1, nil, map[string]error{
+		"bootloader": nil,
+		"rootfs":     nil})
+	if err != nil {
+		t.Fatalf("Can't finish upgrade: %s", err)
+	}
+
+	if !postpone {
+		t.Fatal("Upgrade should be postponed")
+	}
+
+	// Check that new bootloader boot is scheduled
+
+	nextBoot, _ := efiProvider.GetBootNext()
+	if nextBoot != efiProvider.getBootID(partBoot1) {
+		t.Errorf("Wrong next boot: %d", nextBoot)
+	}
+
+	if env, err = readEnvVariables(partBoot0); err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check boot OK
+
+	if bootOK := getEnvVariable(t, env, "NUANCE_BOOT_OK"); bootOK != "1" {
+		t.Errorf("Wrong NUANCE_BOOT_OK value: %s", bootOK)
+	}
+
+	// Check that fallback partition is set
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "1" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
+	}
+
+	// Check that rootfs switch scheduled
+
+	if trySwitch := getEnvVariable(t, env, "NUANCE_TRY_SWITCH"); trySwitch != "1" {
+		t.Errorf("Wrong NUANCE_TRY_SWITCH value: %s", trySwitch)
+	}
+
+	if err = setEnvVariables(partBoot0, map[string]string{"NUANCE_TRY_SWITCH": "0"}); err != nil {
+		t.Fatalf("Can't set grub env variables: %s", err)
+	}
+
+	// Reboot
+
+	if err := controller.Close(); err != nil {
+		t.Errorf("Error closing state controller: %s", err)
+	}
+
+	efiProvider.setCurrentBoot(partBoot1)
+
+	if err := createCmdLine(partRoot1, 1, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	if controller, err = statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider); err != nil {
+		t.Fatalf("Error creating state controller: %s", err)
+	}
+
+	postpone, err = controller.UpgradeFinished(1, nil, map[string]error{"rootfs": nil})
+	if err != nil {
+		t.Fatalf("Can't finish upgrade: %s", err)
+	}
+	if postpone {
+		t.Errorf("Upgrade should not be postponed")
+	}
+
+	if env, err = readEnvVariables(partBoot1); err != nil {
+		t.Fatalf("Can't read grub env variables: %s", err)
+	}
+
+	// Check env var version
+
+	if version := getEnvVariable(t, env, "NUANCE_IMAGE_VERSION"); version != "1" {
+		t.Errorf("Wrong NUANCE_IMAGE_VERSION value: %s", version)
+	}
+
+	// Check env default and fallback boot indexes
+
+	if index := getEnvVariable(t, env, "NUANCE_DEFAULT_BOOT_INDEX"); index != "1" {
+		t.Errorf("Wrong NUANCE_DEFAULT_BOOT_INDEX value: %s", index)
+	}
+
+	if index := getEnvVariable(t, env, "NUANCE_FALLBACK_BOOT_INDEX"); index != "0" {
+		t.Errorf("Wrong NUANCE_FALLBACK_BOOT_INDEX value: %s", index)
+	}
+
+	// Check that second partition is updated
+
+	testModule, err = getTestModule("rootfs")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	if testModule.path != disk.Partitions[partRoot0].Device {
+		t.Errorf("Second root FS partition wasn't updated")
+	}
+
+	testModule, err = getTestModule("bootloader")
+	if err != nil {
+		t.Fatalf("Can't get test module: %s", err)
+	}
+
+	if testModule.path != disk.Partitions[partBoot0].Device {
+		t.Errorf("Second root FS partition wasn't updated")
+	}
+
+	// Check boot order
+
+	if !efiProvider.isInBootOrder(partBoot0) || !efiProvider.isInBootOrder(partBoot1) {
+		t.Errorf("Both bootloader should be in boot order")
+	}
+
+	if efiProvider.bootOrderPos(partBoot0) <= efiProvider.bootOrderPos(partBoot1) {
+		t.Errorf("Bootloader boot order should be changed")
+	}
+
+	// Check that second partition is updated
+
+	if testModule.path != disk.Partitions[partBoot0].Device {
+		t.Errorf("Second bootloader partition wasn't updated")
+	}
+
+	// Check if version is updated
+	version, err := controller.GetVersion()
+	if err != nil {
+		t.Fatalf("Can't get controller version: %s", err)
+	}
+
+	if version != 1 {
+		t.Errorf("Wrong controller version: %d", version)
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/
