@@ -7,12 +7,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/utils/partition"
@@ -28,11 +28,10 @@ const (
 )
 
 const (
-	kernelRootPrefix       = "root="
-	kernelBootDevicePrefix = "NUANCE.bootDevice="
-	kernelVersionPrefix    = "NUANCE.version="
-	kernelBootIndexPrefix  = "NUANCE.bootIndex="
-	kernelBootFormat       = "(hd%d,gpt%d)"
+	kernelRootPrefix      = "root="
+	kernelVersionPrefix   = "NUANCE.version="
+	kernelBootIndexPrefix = "NUANCE.bootIndex="
+	kernelBootFormat      = "(hd%d,gpt%d)"
 )
 
 const bootMountPoint = "/tmp/aos/boot"
@@ -61,6 +60,7 @@ const (
 // Controller state controller instance
 type Controller struct {
 	moduleProvider        ModuleProvider
+	efiProvider           EFIProvider
 	config                controllerConfig
 	state                 controllerState
 	version               uint64
@@ -68,6 +68,7 @@ type Controller struct {
 	grubFallbackBootIndex int
 	activeRootPart        int
 	activeBootPart        int
+	bootEFIIds            []uint16
 	bootPartInfo          []partition.Info
 	rootPartInfo          []partition.Info
 	systemStatus          systemStatus
@@ -78,6 +79,17 @@ type Controller struct {
 type ModuleProvider interface {
 	// GetModuleByID returns module by id
 	GetModuleByID(id string) (module interface{}, err error)
+}
+
+// EFIProvider provider for accessing EFI vars
+type EFIProvider interface {
+	GetBootByPartUUID(partUUID uuid.UUID) (id uint16, err error)
+	GetBootCurrent() (bootCurrent uint16, err error)
+	GetBootNext() (bootNext uint16, err error)
+	SetBootNext(bootNext uint16) (err error)
+	DeleteBootNext() (err error)
+	GetBootOrder() (bootOrder []uint16, err error)
+	SetBootOrder(bootOrder []uint16) (err error)
 }
 
 type controllerConfig struct {
@@ -111,7 +123,7 @@ type fsModule interface {
  ******************************************************************************/
 
 // New creates new state controller instance
-func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controller, err error) {
+func New(configJSON []byte, moduleProvider ModuleProvider, efiProvider EFIProvider) (controller *Controller, err error) {
 	log.Info("Create state constoller")
 
 	if moduleProvider == nil {
@@ -120,6 +132,7 @@ func New(configJSON []byte, moduleProvider ModuleProvider) (controller *Controll
 
 	controller = &Controller{
 		moduleProvider: moduleProvider,
+		efiProvider:    efiProvider,
 		config: controllerConfig{
 			GRUBEnvFile:   "EFI/BOOT/NUANCE/grubenv",
 			KernelCmdline: "/proc/cmdline",
@@ -391,6 +404,17 @@ func (controller *Controller) updatePartInfo() (err error) {
 		controller.bootPartInfo = append(controller.bootPartInfo, info)
 	}
 
+	controller.bootEFIIds = make([]uint16, 0, len(controller.config.BootPartitions))
+
+	for _, info := range controller.bootPartInfo {
+		boot, err := controller.efiProvider.GetBootByPartUUID(info.PartUUID)
+		if err != nil {
+			return err
+		}
+
+		controller.bootEFIIds = append(controller.bootEFIIds, boot)
+	}
+
 	controller.rootPartInfo = make([]partition.Info, 0, len(controller.config.RootPartitions))
 
 	for _, part := range controller.config.RootPartitions {
@@ -431,30 +455,6 @@ func (controller *Controller) parseBootCmd() (err error) {
 				}
 			}
 
-		case strings.HasPrefix(option, kernelBootDevicePrefix):
-			option = strings.TrimPrefix(option, kernelBootDevicePrefix)
-
-			var (
-				grubDisk int
-				grubPart int
-			)
-
-			if _, err = fmt.Sscanf(option, kernelBootFormat, &grubDisk, &grubPart); err != nil {
-				return err
-			}
-
-			for i, partition := range controller.config.BootPartitions {
-				partStr := regexp.MustCompile("[[:digit:]]*$").FindString(partition)
-				configPart, err := strconv.Atoi(partStr)
-				if err != nil {
-					return err
-				}
-
-				if configPart == grubPart {
-					controller.activeBootPart = i
-				}
-			}
-
 		case strings.HasPrefix(option, kernelVersionPrefix):
 			var err error
 
@@ -485,8 +485,9 @@ func (controller *Controller) parseBootCmd() (err error) {
 	log.WithField("partition",
 		controller.rootPartInfo[controller.activeRootPart].Device).Debug("Active root partition")
 
-	if controller.activeBootPart < 0 {
-		return errors.New("can't define active boot FS")
+	controller.activeBootPart, err = controller.getCurrentBootIndex()
+	if err != nil {
+		return err
 	}
 
 	log.WithField("partition",
@@ -702,6 +703,21 @@ func (controller *Controller) disableFallbackPartition(env *grubEnv) (err error)
 	}
 
 	return nil
+}
+
+func (controller *Controller) getCurrentBootIndex() (index int, err error) {
+	current, err := controller.efiProvider.GetBootCurrent()
+	if err != nil {
+		return -1, err
+	}
+
+	for i, boot := range controller.bootEFIIds {
+		if current == boot {
+			return i, nil
+		}
+	}
+
+	return -1, errors.New("can't get current boot index")
 }
 
 func (controller *Controller) systemReboot() (err error) {

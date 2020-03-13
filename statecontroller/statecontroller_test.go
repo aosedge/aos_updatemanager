@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -45,6 +45,12 @@ type testUpdateModule struct {
 	fsType string
 }
 
+type testEfiProvider struct {
+	current   uint16
+	bootOrder []uint16
+	items     map[uuid.UUID]uint16
+}
+
 /*******************************************************************************
  * Var
  ******************************************************************************/
@@ -72,6 +78,8 @@ var notImpModuleMgr = testModuleMgr{
 		"rootfs":     nil,
 		"bootloader": &testUpdateModule{}},
 }
+
+var efiProvider = testEfiProvider{items: make(map[uuid.UUID]uint16)}
 
 var configJSON = `
 {
@@ -128,6 +136,9 @@ func TestMain(m *testing.M) {
 	configJSON = strings.Replace(configJSON, "$cmdline", path.Join(tmpDir, "cmdline"), 1)
 	configJSON = strings.Replace(configJSON, "$state", path.Join(tmpDir, "state"), 1)
 
+	efiProvider.items[disk.Partitions[partBoot0].PartUUID] = 0x0012
+	efiProvider.items[disk.Partitions[partBoot1].PartUUID] = 0x0014
+
 	for _, part := range disk.Partitions {
 		configJSON = strings.Replace(configJSON, "$device", part.Device, 1)
 	}
@@ -158,11 +169,13 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestCheckUpdateRootfs(t *testing.T) {
-	if err := createCmdLine(partBoot0, partRoot0, 0, 0); err != nil {
+	efiProvider.setCurrentBoot(partBoot0)
+
+	if err := createCmdLine(partRoot0, 0, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
-	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider)
 	if err != nil {
 		t.Fatalf("Error creating state controller: %s", err)
 	}
@@ -247,11 +260,11 @@ func TestCheckUpdateRootfs(t *testing.T) {
 		t.Errorf("Error closing state controller: %s", err)
 	}
 
-	if err := createCmdLine(partBoot0, partRoot1, 1, 0); err != nil {
+	if err := createCmdLine(partRoot1, 1, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
-	if controller, err = statecontroller.New([]byte(configJSON), &moduleMgr); err != nil {
+	if controller, err = statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider); err != nil {
 		t.Fatalf("Error creating state controller: %s", err)
 	}
 
@@ -301,6 +314,8 @@ func TestCheckUpdateRootfs(t *testing.T) {
 }
 
 func TestCheckUpdateRootfsFail(t *testing.T) {
+	efiProvider.setCurrentBoot(partBoot0)
+
 	if err := setEnvVariables(partBoot0, map[string]string{
 		"NUANCE_IMAGE_VERSION":       "0",
 		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
@@ -309,11 +324,11 @@ func TestCheckUpdateRootfsFail(t *testing.T) {
 		t.Fatalf("Can't set grub env variables: %s", err)
 	}
 
-	if err := createCmdLine(partBoot0, partRoot0, 0, 0); err != nil {
+	if err := createCmdLine(partRoot0, 0, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
-	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider)
 	if err != nil {
 		t.Fatalf("Error creating state controller: %s", err)
 	}
@@ -383,6 +398,8 @@ func TestCheckUpdateRootfsFail(t *testing.T) {
 }
 
 func TestBootFallbackPartition(t *testing.T) {
+	efiProvider.setCurrentBoot(partBoot0)
+
 	if err := setEnvVariables(partBoot0, map[string]string{
 		"NUANCE_DEFAULT_BOOT_INDEX":  "0",
 		"NUANCE_FALLBACK_BOOT_INDEX": "1",
@@ -390,11 +407,11 @@ func TestBootFallbackPartition(t *testing.T) {
 		t.Fatalf("Can't set grub env variables: %s", err)
 	}
 
-	if err := createCmdLine(partBoot0, partRoot1, 1, 0); err != nil {
+	if err := createCmdLine(partRoot1, 1, 0); err != nil {
 		t.Fatalf("Can't create cmdline file: %s", err)
 	}
 
-	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr)
+	controller, err := statecontroller.New([]byte(configJSON), &moduleMgr, &efiProvider)
 	if err != nil {
 		t.Fatalf("Error creating state controller: %s", err)
 	}
@@ -449,15 +466,69 @@ func (module *testUpdateModule) Upgrade(path string) (err error) {
 	return nil
 }
 
+func (provider *testEfiProvider) GetBootByPartUUID(partUUID uuid.UUID) (id uint16, err error) {
+	ok := false
+
+	if id, ok = provider.items[partUUID]; !ok {
+		return 0, errors.New("item not found")
+	}
+
+	return id, nil
+}
+
+func (provider *testEfiProvider) GetBootCurrent() (id uint16, err error) {
+	return provider.current, nil
+}
+
+func (provider *testEfiProvider) GetBootNext() (id uint16, err error) {
+	return 0, nil
+}
+
+func (provider *testEfiProvider) SetBootNext(id uint16) (err error) {
+	return nil
+}
+
+func (provider *testEfiProvider) DeleteBootNext() (err error) {
+	return nil
+}
+
+func (provider *testEfiProvider) GetBootOrder() (ids []uint16, err error) {
+	return provider.bootOrder, nil
+}
+
+func (provider *testEfiProvider) SetBootOrder(ids []uint16) (err error) {
+	provider.bootOrder = ids
+
+	return nil
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
-func createCmdLine(bootDeviceIndex, rootDeviceIndex int, bootIndex int, version uint64) (err error) {
+func (provider *testEfiProvider) setCurrentBoot(index int) {
+	boot, ok := provider.items[disk.Partitions[index].PartUUID]
+	if !ok {
+		log.Fatal("Can't set current boot")
+	}
+
+	provider.current = boot
+}
+
+func (provider *testEfiProvider) getBootID(index int) (id uint16) {
+	ok := false
+
+	if id, ok = provider.items[disk.Partitions[index].PartUUID]; !ok {
+		log.Fatal("Can't get boot ID")
+	}
+
+	return id
+}
+
+func createCmdLine(rootDeviceIndex int, bootIndex int, version uint64) (err error) {
 	if err = ioutil.WriteFile(path.Join(tmpDir, "cmdline"),
-		[]byte(fmt.Sprintf("root=%s NUANCE.bootDevice=(hd0,gpt%s)/EFI/BOOT NUANCE.bootIndex=%d NUANCE.version=%d",
+		[]byte(fmt.Sprintf("root=%s NUANCE.bootIndex=%d NUANCE.version=%d",
 			disk.Partitions[rootDeviceIndex].Device,
-			regexp.MustCompile("[[:digit:]]*$").FindString(disk.Partitions[bootDeviceIndex].Device),
 			bootIndex,
 			version)), 0644); err != nil {
 		return err

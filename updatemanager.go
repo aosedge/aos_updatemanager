@@ -33,6 +33,7 @@ import (
 	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
+	"aos_updatemanager/utils/efi"
 )
 
 /*******************************************************************************
@@ -121,7 +122,13 @@ func main() {
 		log.Fatalf("Can't create module manager: %s", err)
 	}
 
-	stateController, err := statecontroller.New(cfg.StateController, moduleManager)
+	efiProvider, err := efi.New()
+	if err != nil {
+		log.Fatalf("Can't create EFI provider: %s", err)
+	}
+	defer efiProvider.Close()
+
+	stateController, err := statecontroller.New(cfg.StateController, moduleManager, efiProvider)
 	if err != nil {
 		log.Fatalf("Can't create state controller: %s", err)
 	}
