@@ -287,6 +287,10 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 
 	log.WithField("version", version).Info("Upgrade")
 
+	if version <= handler.currentVersion {
+		return fmt.Errorf("wrong update version: %d", version)
+	}
+
 	if handler.state != revertedState && handler.state != upgradedState {
 		return errors.New("wrong state")
 	}
