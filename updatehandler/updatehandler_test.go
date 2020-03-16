@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -73,9 +74,11 @@ type testStateController struct {
  * Vars
  ******************************************************************************/
 
+var tmpDir string
+
 var updater *updatehandler.Handler
 
-var cfg = config.Config{UpgradeDir: "tmp"}
+var cfg config.Config
 
 var moduleProvider = testModuleProvider{
 	modules: map[string]interface{}{
@@ -111,9 +114,12 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if err = os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Can't crate tmp dir: %s", err)
+	tmpDir, err = ioutil.TempDir("", "um_")
+	if err != nil {
+		log.Fatalf("Error create temporary dir: %s", err)
 	}
+
+	cfg = config.Config{UpgradeDir: tmpDir}
 
 	if updater, err = updatehandler.New(&cfg, &moduleProvider, &stateController, &storage); err != nil {
 		log.Fatalf("Can't create updater: %s", err)
@@ -123,7 +129,7 @@ func TestMain(m *testing.M) {
 
 	updater.Close()
 
-	if err = os.RemoveAll("tmp"); err != nil {
+	if err := os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error removing tmp dir: %s", err)
 	}
 
@@ -147,7 +153,7 @@ func TestUpgradeRevert(t *testing.T) {
 
 	version++
 
-	imageInfo, err := createImage("tmp/testimage.bin")
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
 
 	if err != nil {
 		t.Fatalf("Can't test image: %s", err)
@@ -224,7 +230,7 @@ func TestUpgradeRevert(t *testing.T) {
 func TestUpgradeFailed(t *testing.T) {
 	version := updater.GetCurrentVersion()
 
-	imageInfo, err := createImage("tmp/testimage.bin")
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
 
 	if err != nil {
 		t.Fatalf("Can't test image: %s", err)
@@ -273,6 +279,56 @@ func TestUpgradeFailed(t *testing.T) {
 	}
 }
 
+func TestUpgradeBadVersion(t *testing.T) {
+	version := updater.GetCurrentVersion() + 1
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	if err := updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	select {
+	case <-time.After(5 * time.Second):
+		t.Error("Wait operation timeout")
+
+	case status := <-updater.StatusChannel():
+		if status != umprotocol.SuccessStatus {
+			t.Fatalf("Upgrade failed: %s", updater.GetLastError())
+		}
+	}
+
+	if updater.GetCurrentVersion() != version {
+		t.Error("Wrong current version")
+	}
+
+	initialVersion := updater.GetCurrentVersion()
+
+	version--
+
+	// When a new bundle version less than current
+	if err := updater.Upgrade(version, imageInfo); err == nil {
+		t.Fatal("Error expected, but a new version less than a current")
+	}
+
+	if updater.GetCurrentVersion() != initialVersion {
+		t.Error("Wrong current version")
+	}
+
+	// When a new bundle version equals than current
+	version = initialVersion
+	if err := updater.Upgrade(version, imageInfo); err == nil {
+		t.Fatal("Error expected, but a new version equals than a current")
+	}
+
+	if updater.GetCurrentVersion() != initialVersion {
+		t.Error("Wrong current version")
+	}
+}
+
 func TestUpgradeReboot(t *testing.T) {
 	stateController.useFinishChannel = true
 	defer func() { stateController.useFinishChannel = false }()
@@ -280,7 +336,7 @@ func TestUpgradeReboot(t *testing.T) {
 
 	version := updater.GetCurrentVersion()
 
-	imageInfo, err := createImage("tmp/testimage.bin")
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
 	if err != nil {
 		t.Fatalf("Can't test image: %s", err)
 	}
@@ -363,15 +419,15 @@ func createImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
     ]
 }`
 
-	if err = os.MkdirAll("tmp/image", 0755); err != nil {
+	if err = os.MkdirAll(path.Join(tmpDir, "image"), 0755); err != nil {
 		return imageInfo, err
 	}
 
-	if err := ioutil.WriteFile("tmp/image/metadata.json", []byte(metadataJSON), 0644); err != nil {
+	if err := ioutil.WriteFile(path.Join(tmpDir, "image", "metadata.json"), []byte(metadataJSON), 0644); err != nil {
 		return imageInfo, err
 	}
 
-	if err := exec.Command("tar", "-C", "tmp/image", "-czf", imagePath, "./").Run(); err != nil {
+	if err := exec.Command("tar", "-C", path.Join(tmpDir, "image"), "-czf", imagePath, "./").Run(); err != nil {
 		return imageInfo, err
 	}
 
