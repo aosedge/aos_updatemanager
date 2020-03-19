@@ -44,13 +44,7 @@ import (
  ******************************************************************************/
 
 type testStorage struct {
-	state            int
-	operationStage   int
-	imagePath        string
-	operationVersion uint64
-	currentVersion   uint64
-	lastError        error
-
+	operationState []byte
 	moduleStatuses map[string]error
 }
 
@@ -80,7 +74,9 @@ var modules = []updatehandler.UpdateModule{
 	&testModule{id: "id3"},
 }
 
-var storage = testStorage{moduleStatuses: make(map[string]error)}
+var storage = testStorage{
+	operationState: []byte("{}"),
+	moduleStatuses: make(map[string]error)}
 
 var platform = testPlatformController{}
 
@@ -366,58 +362,13 @@ func createImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
 	return imageInfo, nil
 }
 
-func (storage *testStorage) SetState(state int) (err error) {
-	storage.state = state
+func (storage *testStorage) SetOperationState(state []byte) (err error) {
+	storage.operationState = state
 	return nil
 }
 
-func (storage *testStorage) GetState() (state int, err error) {
-	return storage.state, nil
-}
-
-func (storage *testStorage) SetOperationStage(stage int) (err error) {
-	storage.operationStage = stage
-	return nil
-}
-
-func (storage *testStorage) GetOperationStage() (stage int, err error) {
-	return storage.operationStage, nil
-}
-
-func (storage *testStorage) SetImagePath(path string) (err error) {
-	storage.imagePath = path
-	return nil
-}
-
-func (storage *testStorage) GetImagePath() (path string, err error) {
-	return storage.imagePath, nil
-}
-
-func (storage *testStorage) SetCurrentVersion(version uint64) (err error) {
-	storage.currentVersion = version
-	return nil
-}
-
-func (storage *testStorage) GetCurrentVersion() (version uint64, err error) {
-	return storage.currentVersion, nil
-}
-
-func (storage *testStorage) SetOperationVersion(version uint64) (err error) {
-	storage.operationVersion = version
-	return nil
-}
-
-func (storage *testStorage) GetOperationVersion() (version uint64, err error) {
-	return storage.operationVersion, nil
-}
-
-func (storage *testStorage) SetLastError(lastError error) (err error) {
-	storage.lastError = lastError
-	return nil
-}
-
-func (storage *testStorage) GetLastError() (lastError error, err error) {
-	return storage.lastError, nil
+func (storage *testStorage) GetOperationState() (state []byte, err error) {
+	return storage.operationState, nil
 }
 
 func (storage *testStorage) AddModuleStatus(id string, status error) (err error) {

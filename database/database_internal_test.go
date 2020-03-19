@@ -102,112 +102,20 @@ func TestNewErrors(t *testing.T) {
 	}
 }
 
-func TestState(t *testing.T) {
-	setState := 34
-	if err := db.SetState(setState); err != nil {
+func TestOperationState(t *testing.T) {
+	setState := []byte("{This is test}")
+
+	if err := db.SetOperationState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
 
-	getState, err := db.GetState()
+	getState, err := db.GetOperationState()
 	if err != nil {
 		t.Fatalf("Can't get state: %s", err)
 	}
 
-	if setState != getState {
+	if !reflect.DeepEqual(setState, getState) {
 		t.Fatalf("Wrong state value: %v", getState)
-	}
-}
-
-func TestOperationStage(t *testing.T) {
-	setStage := 59
-	if err := db.SetOperationStage(setStage); err != nil {
-		t.Fatalf("Can't set operation stage: %s", err)
-	}
-
-	getStage, err := db.GetOperationStage()
-	if err != nil {
-		t.Fatalf("Can't get operation stage: %s", err)
-	}
-
-	if setStage != getStage {
-		t.Fatalf("Wrong operation stage value: %v", getStage)
-	}
-}
-func TestCurrentVersion(t *testing.T) {
-	setVersion := uint64(16)
-	if err := db.SetCurrentVersion(setVersion); err != nil {
-		t.Fatalf("Can't set current version: %s", err)
-	}
-
-	getVersion, err := db.GetCurrentVersion()
-	if err != nil {
-		t.Fatalf("Can't get current version: %s", err)
-	}
-
-	if setVersion != getVersion {
-		t.Fatalf("Wrong current version value: %v", getVersion)
-	}
-}
-
-func TestOperationVersion(t *testing.T) {
-	setVersion := uint64(5)
-	if err := db.SetOperationVersion(setVersion); err != nil {
-		t.Fatalf("Can't set operation version: %s", err)
-	}
-
-	getVersion, err := db.GetOperationVersion()
-	if err != nil {
-		t.Fatalf("Can't get operation version: %s", err)
-	}
-
-	if setVersion != getVersion {
-		t.Fatalf("Wrong operation version value: %v", getVersion)
-	}
-}
-
-func TestLastError(t *testing.T) {
-	setError := errors.New("last error")
-	if err := db.SetLastError(setError); err != nil {
-		t.Fatalf("Can't set last error: %s", err)
-	}
-
-	getError, err := db.GetLastError()
-	if err != nil {
-		t.Fatalf("Can't get last error: %s", err)
-	}
-
-	if setError.Error() != getError.Error() {
-		t.Fatalf("Wrong last error value: %v", getError)
-	}
-
-	setError = nil
-	if err := db.SetLastError(setError); err != nil {
-		t.Fatalf("Can't set last error: %s", err)
-	}
-
-	getError, err = db.GetLastError()
-	if err != nil {
-		t.Fatalf("Can't get last error: %s", err)
-	}
-
-	if setError != getError {
-		t.Fatalf("Wrong last error value: %v", getError)
-	}
-}
-
-func TestImagePath(t *testing.T) {
-	setImagePath := "/path/to/image"
-	if err := db.SetImagePath(setImagePath); err != nil {
-		t.Fatalf("Can't set image path: %s", err)
-	}
-
-	getImagePath, err := db.GetImagePath()
-	if err != nil {
-		t.Fatalf("Can't get image path: %s", err)
-	}
-
-	if setImagePath != getImagePath {
-		t.Fatalf("Wrong image path value: %v", getImagePath)
 	}
 }
 

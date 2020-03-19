@@ -32,7 +32,7 @@ import (
  ******************************************************************************/
 
 const (
-	dbVersion = 2
+	dbVersion = 3
 )
 
 /*******************************************************************************
@@ -107,9 +107,9 @@ func New(name string) (db *Database, err error) {
 	return db, nil
 }
 
-// SetState stores state
-func (db *Database) SetState(state int) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET state = ?", state)
+// SetOperationState stores operation state
+func (db *Database) SetOperationState(state []byte) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET operationState = ?", state)
 	if err != nil {
 		return err
 	}
@@ -126,215 +126,16 @@ func (db *Database) SetState(state int) (err error) {
 	return nil
 }
 
-// GetState returns state
-func (db *Database) GetState() (state int, err error) {
-	stmt, err := db.sql.Prepare("SELECT state FROM config")
-	if err != nil {
-		return state, err
-	}
-	defer stmt.Close()
-
-	err = stmt.QueryRow().Scan(&state)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return state, ErrNotExist
-		}
-
-		return state, err
-	}
-
-	return state, nil
-}
-
-// SetOperationStage stores operation stage
-func (db *Database) SetOperationStage(stage int) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET stage = ?", stage)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetOperationStage returns operation stage
-func (db *Database) GetOperationStage() (stage int, err error) {
-	stmt, err := db.sql.Prepare("SELECT stage FROM config")
-	if err != nil {
-		return stage, err
-	}
-	defer stmt.Close()
-
-	err = stmt.QueryRow().Scan(&stage)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return stage, ErrNotExist
-		}
-
-		return stage, err
-	}
-
-	return stage, nil
-}
-
-// SetOperationVersion stores operation version
-func (db *Database) SetOperationVersion(version uint64) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET operationVersion = ?", version)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetOperationVersion returns upgrade version
-func (db *Database) GetOperationVersion() (version uint64, err error) {
-	stmt, err := db.sql.Prepare("SELECT operationVersion FROM config")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	if err = stmt.QueryRow().Scan(&version); err != nil {
-		if err == sql.ErrNoRows {
-			return 0, ErrNotExist
-		}
-
-		return 0, err
-	}
-
-	return version, nil
-}
-
-// SetCurrentVersion stores current image version
-func (db *Database) SetCurrentVersion(version uint64) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET currentVersion = ?", version)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetCurrentVersion returns current image version
-func (db *Database) GetCurrentVersion() (version uint64, err error) {
-	stmt, err := db.sql.Prepare("SELECT currentVersion FROM config")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	if err = stmt.QueryRow().Scan(&version); err != nil {
-		if err == sql.ErrNoRows {
-			return 0, ErrNotExist
-		}
-
-		return 0, err
-	}
-
-	return version, nil
-}
-
-// SetImagePath stores image path
-func (db *Database) SetImagePath(path string) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET imagePath = ?", path)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetImagePath returns image path
-func (db *Database) GetImagePath() (path string, err error) {
-	stmt, err := db.sql.Prepare("SELECT imagePath FROM config")
-	if err != nil {
-		return "", err
-	}
-	defer stmt.Close()
-
-	if err = stmt.QueryRow().Scan(&path); err != nil {
-		if err == sql.ErrNoRows {
-			return "", ErrNotExist
-		}
-
-		return "", err
-	}
-
-	return path, nil
-}
-
-// SetLastError stores last error
-func (db *Database) SetLastError(lastError error) (err error) {
-	errorStr := ""
-
-	if lastError != nil {
-		errorStr = lastError.Error()
-	}
-
-	result, err := db.sql.Exec("UPDATE config SET lastError = ?", errorStr)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetLastError returns last error
-func (db *Database) GetLastError() (lastError error, err error) {
-	stmt, err := db.sql.Prepare("SELECT lastError FROM config")
+// GetOperationState returns operation state
+func (db *Database) GetOperationState() (state []byte, err error) {
+	stmt, err := db.sql.Prepare("SELECT operationState FROM config")
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	errorStr := ""
-
-	if err = stmt.QueryRow().Scan(&errorStr); err != nil {
+	err = stmt.QueryRow().Scan(&state)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrNotExist
 		}
@@ -342,11 +143,7 @@ func (db *Database) GetLastError() (lastError error, err error) {
 		return nil, err
 	}
 
-	if errorStr == "" {
-		return nil, nil
-	}
-
-	return errors.New(errorStr), nil
+	return state, nil
 }
 
 // AddModuleStatus adds module status to DB
@@ -482,24 +279,14 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE config (
 			version INTEGER,
-			state INTEGER,
-			stage INTEGER,
-			currentVersion INTEGER,
-			operationVersion INTEGER,
-			imagePath TEXT,
-			lastError TEXT)`); err != nil {
+			operationState TEXT)`); err != nil {
 		return err
 	}
 
 	if _, err = db.sql.Exec(
 		`INSERT INTO config (
 			version,
-			state,
-			stage,
-			currentVersion,
-			operationVersion,
-			imagePath,
-			lastError) values(?, ?, ?, ?, ?, ?, ?)`, dbVersion, 0, 0, 0, 0, "", ""); err != nil {
+			operationState) values(?, ?)`, dbVersion, ""); err != nil {
 		return err
 	}
 
