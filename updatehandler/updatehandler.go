@@ -99,6 +99,8 @@ type Handler struct {
 	state          handlerState
 	currentVersion uint64
 
+	wg sync.WaitGroup
+
 	statusChannel chan string
 }
 
@@ -202,15 +204,8 @@ func New(cfg *config.Config, modules []UpdateModule,
 		handler.modules[module.GetID()] = module
 	}
 
-	if handler.state.OperationState != idleState {
-		if handler.state.OperationType == upgradeOperation {
-			go handler.upgrade()
-		}
-
-		if handler.state.OperationType == revertOperation {
-			go handler.revert()
-		}
-	}
+	handler.wg.Add(1)
+	go handler.init()
 
 	return handler, nil
 }
@@ -278,6 +273,8 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 	handler.Lock()
 	defer handler.Unlock()
 
+	handler.wg.Wait()
+
 	log.WithField("version", version).Info("Upgrade")
 
 	if version <= handler.currentVersion {
@@ -325,6 +322,8 @@ func (handler *Handler) Revert(version uint64) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
+	handler.wg.Wait()
+
 	log.WithField("version", version).Info("Revert")
 
 	if !(handler.state.OperationType == upgradeOperation && handler.state.LastError == nil) {
@@ -352,6 +351,8 @@ func (handler *Handler) StatusChannel() (statusChannel <-chan string) {
 
 // Close closes update handler
 func (handler *Handler) Close() {
+	log.Debug("Close update handler")
+
 	close(handler.statusChannel)
 }
 
@@ -405,6 +406,28 @@ func (handler *Handler) setState() (err error) {
 	}
 
 	return nil
+}
+
+func (handler *Handler) init() {
+	defer handler.wg.Done()
+
+	for id, module := range handler.modules {
+		log.Debugf("Initializing module %s", id)
+
+		if err := module.Init(); err != nil {
+			log.Errorf("Can't initialize module %s: %s", id, err)
+		}
+	}
+
+	if handler.state.OperationState != idleState {
+		switch {
+		case handler.state.OperationType == upgradeOperation:
+			go handler.upgrade()
+
+		case handler.state.OperationType == revertOperation:
+			go handler.revert()
+		}
+	}
 }
 
 func (handler *Handler) finishOperation(operationError error) {
