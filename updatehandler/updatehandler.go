@@ -37,28 +37,45 @@ import (
  * Consts
  ******************************************************************************/
 
-// States
+// Operations type
 const (
-	upgradedState = iota
-	upgradingState
-	revertedState
-	revertingState
+	upgradeOperation = iota
+	revertOperation
 )
 
-// Upgrade stages
-const (
-	upgradeInitStage = iota
-	upgradeUnpackStage
-	upgradeModulesStage
-	upgradeRevertModulesStage
-	upgradeFinishStage
-)
+//
+// Upgrade state machine:
+//
+// idleState          -> upgrade request                     -> initState
+// initState          -> unpack image                        -> upgradeState
+// upgradeState       -> upgrade modules                     -> finishState
+// finishState        -> send status                         -> idleState
+//
+// If some error happens during upgrade modules:
+//
+// upgradeState       -> upgrade modules fails               -> cancelState
+// cancelUpgradeState -> cancel upgrade modules, send status -> idleState
+//
+// Revert state machine:
+//
+// idleState          -> revert request                      -> initState
+// initState          ->                                     -> revertState
+// revertState        -> revert modules                      -> finishState
+// finishState        -> send status                         -> idleState
+//
+// If some error happens during revert modules:
+//
+// revertState        -> revert modules fails                -> cancelState
+// cancelRevertState  -> cancel revert modules, send status  -> idleState
+//
 
-// Revert stages
 const (
-	revertInitStage = iota
-	revertModulesStage
-	revertFinishStage
+	idleState = iota
+	initState
+	upgradeState
+	revertState
+	cancelState
+	finishState
 )
 
 const bundleDir = "bundleDir"
@@ -125,8 +142,8 @@ type PlatformController interface {
 }
 
 type handlerState struct {
+	OperationType    operationType  `json:"operationType"`
 	OperationState   operationState `json:"operationState"`
-	OperationStage   int            `json:"operationStage"`
 	OperationVersion uint64         `json:"operationVersion"`
 	ImagePath        string         `json:"imagePath"`
 	LastError        error          `json:"-"`
@@ -145,9 +162,8 @@ type imageMetadata struct {
 	UpdateItems       []itemMetadata `json:"updateItems"`
 }
 
+type operationType int
 type operationState int
-type upgradeStage int
-type revertStage int
 
 /*******************************************************************************
  * Public
@@ -180,28 +196,20 @@ func New(cfg *config.Config, modules []UpdateModule,
 		return nil, err
 	}
 
-	if handler.currentVersion, err = handler.platform.GetVersion(); err != nil {
-		return nil, err
-	}
-
-	log.WithField("imageVersion", handler.currentVersion).Debug("Create update handler")
-
-	if err = handler.getState(); err != nil {
-		return nil, err
-	}
-
 	handler.modules = make(map[string]UpdateModule)
 
 	for _, module := range modules {
 		handler.modules[module.GetID()] = module
 	}
 
-	if handler.state.OperationState == upgradingState {
-		go handler.upgrade(upgradeStage(handler.state.OperationStage))
-	}
+	if handler.state.OperationState != idleState {
+		if handler.state.OperationType == upgradeOperation {
+			go handler.upgrade()
+		}
 
-	if handler.state.OperationState == revertingState {
-		go handler.revert(revertStage(handler.state.OperationStage))
+		if handler.state.OperationType == revertOperation {
+			go handler.revert()
+		}
 	}
 
 	return handler, nil
@@ -230,7 +238,7 @@ func (handler *Handler) GetStatus() (status string) {
 
 	status = umprotocol.SuccessStatus
 
-	if handler.state.OperationState == revertingState || handler.state.OperationState == upgradingState {
+	if handler.state.OperationState != idleState {
 		status = umprotocol.InProgressStatus
 	}
 
@@ -246,11 +254,11 @@ func (handler *Handler) GetLastOperation() (operation string) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	if handler.state.OperationState == revertingState || handler.state.OperationState == revertedState {
+	if handler.state.OperationType == revertOperation {
 		operation = umprotocol.RevertOperation
 	}
 
-	if handler.state.OperationState == upgradingState || handler.state.OperationState == upgradedState {
+	if handler.state.OperationType == upgradeOperation {
 		operation = umprotocol.UpgradeOperation
 	}
 
@@ -273,14 +281,14 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 	log.WithField("version", version).Info("Upgrade")
 
 	if version <= handler.currentVersion {
-		return fmt.Errorf("wrong update version: %d", version)
+		return fmt.Errorf("wrong upgrade version: %d", version)
 	}
 
-	if handler.state.OperationState != revertedState && handler.state.OperationState != upgradedState {
+	if handler.state.OperationState != idleState {
 		return errors.New("wrong state")
 	}
 
-	if handler.state.OperationState == revertedState && handler.state.LastError != nil {
+	if handler.state.OperationType == revertOperation && handler.state.LastError != nil {
 		return errors.New("can't upgrade after failed revert")
 	}
 
@@ -297,9 +305,9 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
+	handler.state.OperationState = initState
 	handler.state.OperationVersion = version
-	handler.state.OperationState = upgradingState
-	handler.state.OperationStage = upgradeInitStage
+	handler.state.OperationType = upgradeOperation
 	handler.state.LastError = nil
 	handler.state.ImagePath = imagePath
 
@@ -307,7 +315,7 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
-	go handler.upgrade(upgradeStage(handler.state.OperationStage))
+	go handler.upgrade()
 
 	return nil
 }
@@ -319,20 +327,20 @@ func (handler *Handler) Revert(version uint64) (err error) {
 
 	log.WithField("version", version).Info("Revert")
 
-	if !(handler.state.OperationState == upgradedState && handler.state.LastError == nil) {
+	if !(handler.state.OperationType == upgradeOperation && handler.state.LastError == nil) {
 		return errors.New("wrong state")
 	}
 
+	handler.state.OperationState = initState
 	handler.state.OperationVersion = version
-	handler.state.OperationState = revertingState
-	handler.state.OperationStage = revertInitStage
+	handler.state.OperationType = revertOperation
 	handler.state.LastError = nil
 
 	if err = handler.setState(); err != nil {
 		return err
 	}
 
-	go handler.revert(revertStage(handler.state.OperationStage))
+	go handler.revert()
 
 	return nil
 }
@@ -351,20 +359,14 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (stage upgradeStage) String() string {
+func (opType operationType) String() string {
 	return [...]string{
-		"Init", "Unpack", "UpgradeModules",
-		"RevertModules", "Finish"}[stage]
-}
-
-func (stage revertStage) String() string {
-	return [...]string{
-		"Init", "RevertModules", "Finish"}[stage]
+		"upgrade", "revert"}[opType]
 }
 
 func (state operationState) String() string {
 	return [...]string{
-		"Upgraded", "Upgrading", "Reverted", "Reverting"}[state]
+		"idle", "init", "upgrade", "revert", "cancel", "finish"}[state]
 }
 
 func (handler *Handler) getState() (err error) {
@@ -405,22 +407,24 @@ func (handler *Handler) setState() (err error) {
 	return nil
 }
 
-func (handler *Handler) operationFinished(newState operationState, operationError error) {
+func (handler *Handler) finishOperation(operationError error) {
 	handler.Lock()
 	defer handler.Unlock()
 
 	if operationError != nil {
-		log.Errorf("Operation failed: %s", operationError)
+		log.Errorf("Operation %s failed: %s", handler.state.OperationType, operationError)
 	} else {
-		log.WithFields(log.Fields{"newState": newState}).Info("Operation finished")
+		log.Infof("Operation %s successfully finished", handler.state.OperationType)
+
 		handler.currentVersion = handler.state.OperationVersion
 	}
-
-	handler.state.OperationState = newState
 
 	if err := handler.platform.SetVersion(handler.currentVersion); err != nil {
 		log.Errorf("Can't set current version: %s", err)
 	}
+
+	handler.state.OperationState = idleState
+	handler.state.LastError = operationError
 
 	if err := handler.setState(); err != nil {
 		log.Errorf("Can't save update handler state: %s", err)
@@ -428,93 +432,124 @@ func (handler *Handler) operationFinished(newState operationState, operationErro
 
 	status := umprotocol.SuccessStatus
 
-	if operationError != nil {
+	if handler.state.LastError != nil {
 		status = umprotocol.FailedStatus
 	}
 
 	handler.statusChannel <- status
 }
 
-func (handler *Handler) upgrade(stage upgradeStage) {
+func (handler *Handler) upgrade() {
 	for {
-		log.WithField("stage", stage).Debug("Upgrade stage changed")
-
-		switch stage {
-		case upgradeInitStage:
-			if handler.state.LastError = os.RemoveAll(handler.bundleDir); handler.state.LastError != nil {
-				stage = upgradeFinishStage
+		switch handler.state.OperationState {
+		case initState:
+			if err := handler.unpackImage(); err != nil {
+				handler.switchState(finishState, err)
 				break
 			}
 
-			stage = upgradeUnpackStage
+			handler.switchState(upgradeState, nil)
 
-		case upgradeUnpackStage:
-			if handler.state.LastError = os.MkdirAll(handler.bundleDir, 0755); handler.state.LastError != nil {
-				stage = upgradeFinishStage
+		case upgradeState:
+			if err := handler.upgradeModules(); err != nil {
+				handler.switchState(cancelState, err)
 				break
 			}
 
-			if handler.state.LastError = image.UntarGZArchive(
-				handler.state.ImagePath, handler.bundleDir); handler.state.LastError != nil {
-				stage = upgradeFinishStage
-				break
+			handler.switchState(finishState, nil)
+
+		case cancelState:
+			if err := handler.cancelUpgradeModules(); err != nil {
+				log.Errorf("Error canceling upgrade modules: %s", err)
 			}
 
-			stage = upgradeModulesStage
+			handler.finishOperation(handler.state.LastError)
 
-		case upgradeModulesStage:
-			if handler.state.LastError = handler.updateModules(handler.state.OperationVersion); handler.state.LastError != nil {
-				stage = upgradeRevertModulesStage
-				break
-			}
-
-			stage = upgradeFinishStage
-
-		case upgradeRevertModulesStage:
-			if err := handler.revertModules(handler.currentVersion); err != nil {
-				log.Errorf("Error reverting modules: %s", err)
-			}
-
-			stage = upgradeFinishStage
-
-		case upgradeFinishStage:
-			handler.operationFinished(upgradedState, handler.state.LastError)
 			return
-		}
 
-		if err := handler.setState(); err != nil {
-			handler.operationFinished(upgradedState, err)
+		case finishState:
+			var err error
+
+			if err = handler.finishUpgradeModules(); err != nil {
+				log.Errorf("Error finishing upgrade modules: %s", err)
+			}
+
+			handler.finishOperation(err)
+
 			return
 		}
 	}
 }
 
-func (handler *Handler) revert(stage revertStage) {
+func (handler *Handler) revert() {
 	for {
-		log.WithField("stage", stage).Debug("Revert stage changed")
+		switch handler.state.OperationState {
+		case initState:
+			handler.switchState(revertState, nil)
 
-		switch stage {
-		case revertInitStage:
-			stage = revertModulesStage
-
-		case revertModulesStage:
-			if handler.state.LastError = handler.revertModules(handler.state.OperationVersion); handler.state.LastError != nil {
-				stage = revertFinishStage
+		case revertState:
+			if err := handler.revertModules(); err != nil {
+				handler.switchState(cancelState, err)
 				break
 			}
 
-			stage = revertFinishStage
+			handler.switchState(finishState, nil)
 
-		case revertFinishStage:
-			handler.operationFinished(revertedState, handler.state.LastError)
+		case cancelState:
+			if err := handler.cancelRevertModules(); err != nil {
+				log.Errorf("Error canceling revert modules: %s", err)
+			}
+
+			handler.finishOperation(handler.state.LastError)
+
 			return
-		}
 
-		if err := handler.setState(); err != nil {
-			handler.operationFinished(upgradedState, err)
+		case finishState:
+			var err error
+
+			if err = handler.finishRevertModules(); err != nil {
+				log.Errorf("Error finishing revert modules: %s", err)
+			}
+
+			handler.finishOperation(err)
+
 			return
 		}
 	}
+}
+
+func (handler *Handler) switchState(state operationState, lastError error) {
+	handler.Lock()
+	defer handler.Unlock()
+
+	handler.state.OperationState = state
+	handler.state.LastError = lastError
+
+	log.WithFields(log.Fields{"state": handler.state.OperationState, "operation": handler.state.OperationType}).Debugf("State changed")
+
+	if err := handler.setState(); err != nil {
+		if handler.state.LastError != nil {
+			handler.state.LastError = err
+		}
+
+		handler.finishOperation(handler.state.LastError)
+	}
+}
+
+func (handler *Handler) unpackImage() (err error) {
+	if err = os.RemoveAll(handler.bundleDir); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(handler.bundleDir, 0755); err != nil {
+		return err
+	}
+
+	if err = image.UntarGZArchive(handler.state.ImagePath, handler.bundleDir); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
@@ -530,23 +565,23 @@ func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
 	return metadata, err
 }
 
-func (handler *Handler) updateModule(version uint64, id, path string) (err error) {
-	log.WithField("id", id).Info("Update module")
+func (handler *Handler) upgradeModule(id, path string) (err error) {
+	log.WithField("id", id).Info("Upgrade module")
 
 	module, ok := handler.modules[id]
 	if !ok {
 		return errors.New("module not found")
 	}
 
-	if _, err = module.Upgrade(version, path); err != nil {
-		log.WithField("id", id).Errorf("Update module failed: %s", err)
+	if _, err = module.Upgrade(handler.state.OperationVersion, path); err != nil {
+		log.WithField("id", id).Errorf("Upgrade module failed: %s", err)
 		return err
 	}
 
 	return nil
 }
 
-func (handler *Handler) updateModules(version uint64) (err error) {
+func (handler *Handler) upgradeModules() (err error) {
 	metadata, err := handler.getImageMetadata()
 	if err != nil {
 		return err
@@ -576,7 +611,7 @@ func (handler *Handler) updateModules(version uint64) (err error) {
 			return status
 		}
 
-		status = handler.updateModule(version, item.Type, path.Join(handler.bundleDir, item.Path))
+		status = handler.upgradeModule(item.Type, path.Join(handler.bundleDir, item.Path))
 
 		err = handler.storage.AddModuleStatus(item.Type, status)
 
@@ -592,14 +627,22 @@ func (handler *Handler) updateModules(version uint64) (err error) {
 	return nil
 }
 
-func (handler *Handler) revertModule(version uint64, id string) (err error) {
+func (handler *Handler) cancelUpgradeModules() (err error) {
+	return nil
+}
+
+func (handler *Handler) finishUpgradeModules() (err error) {
+	return nil
+}
+
+func (handler *Handler) revertModule(id string) (err error) {
 	log.WithField("id", id).Info("Revert module")
 
 	module, ok := handler.modules[id]
 	if !ok {
 		return errors.New("module not found")
 	}
-	if _, err = module.Revert(version); err != nil {
+	if _, err = module.Revert(handler.state.OperationVersion); err != nil {
 		log.WithField("id", id).Errorf("Revert module failed: %s", err)
 		return err
 	}
@@ -607,7 +650,7 @@ func (handler *Handler) revertModule(version uint64, id string) (err error) {
 	return nil
 }
 
-func (handler *Handler) revertModules(version uint64) (err error) {
+func (handler *Handler) revertModules() (err error) {
 	moduleStatuses, err := handler.storage.GetModuleStatuses()
 	if err != nil {
 		return err
@@ -618,7 +661,7 @@ func (handler *Handler) revertModules(version uint64) (err error) {
 			continue
 		}
 
-		status = handler.revertModule(version, id)
+		status = handler.revertModule(id)
 
 		if err == nil {
 			err = status
@@ -630,4 +673,12 @@ func (handler *Handler) revertModules(version uint64) (err error) {
 	}
 
 	return err
+}
+
+func (handler *Handler) cancelRevertModules() (err error) {
+	return nil
+}
+
+func (handler *Handler) finishRevertModules() (err error) {
+	return nil
 }
