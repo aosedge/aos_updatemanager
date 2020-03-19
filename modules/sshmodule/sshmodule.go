@@ -77,6 +77,11 @@ func (module *SSHModule) Close() (err error) {
 	return nil
 }
 
+// Init initializes module
+func (module *SSHModule) Init() (err error) {
+	return nil
+}
+
 // GetID returns module ID
 func (module *SSHModule) GetID() (id string) {
 	module.Lock()
@@ -85,8 +90,8 @@ func (module *SSHModule) GetID() (id string) {
 	return module.id
 }
 
-// Upgrade upgrade module
-func (module *SSHModule) Upgrade(fileName string) (err error) {
+// Upgrade upgrades module
+func (module *SSHModule) Upgrade(version uint64, fileName string) (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
 
@@ -102,13 +107,13 @@ func (module *SSHModule) Upgrade(fileName string) (err error) {
 
 	client, err := ssh.Dial("tcp", module.config.Host, config)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer session.Close()
 
@@ -116,23 +121,43 @@ func (module *SSHModule) Upgrade(fileName string) (err error) {
 
 	// Copy file to the remote DestDir
 	if err = scp.CopyPath(fileName, module.config.DestPath, session); err != nil {
-		return err
+		return false, err
 	}
 
 	if err = module.runCommands(client); err != nil {
-		return err
+		return false, err
 	}
 
+	return false, nil
+}
+
+// CancelUpgrade cancels upgrade
+func (module *SSHModule) CancelUpgrade(version uint64) (rebootRequired bool, err error) {
+	return false, nil
+}
+
+// FinishUpgrade finishes upgrade
+func (module *SSHModule) FinishUpgrade(version uint64) (err error) {
 	return nil
 }
 
 // Revert revert module
-func (module *SSHModule) Revert() (err error) {
+func (module *SSHModule) Revert(version uint64) (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
 
 	log.WithField("id", module.id).Info("Revert")
 
+	return false, nil
+}
+
+// CancelRevert cancels revert
+func (module *SSHModule) CancelRevert(version uint64) (rebootRequired bool, err error) {
+	return false, nil
+}
+
+// FinishRevert finishes revert
+func (module *SSHModule) FinishRevert(version uint64) (err error) {
 	return nil
 }
 

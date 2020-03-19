@@ -54,20 +54,14 @@ type testStorage struct {
 	moduleStatuses map[string]error
 }
 
-type testModuleProvider struct {
-	modules map[string]interface{}
-}
-
 type testModule struct {
+	id     string
 	status error
 }
 
-type testStateController struct {
-	version          uint64
-	status           error
-	postpone         bool
-	useFinishChannel bool
-	finishChannel    chan bool
+type testPlatformController struct {
+	version    uint64
+	platformID string
 }
 
 /*******************************************************************************
@@ -80,19 +74,15 @@ var updater *updatehandler.Handler
 
 var cfg config.Config
 
-var moduleProvider = testModuleProvider{
-	modules: map[string]interface{}{
-		"id1": &testModule{},
-		"id2": &testModule{},
-		"id3": &testModule{},
-	},
+var modules = []updatehandler.UpdateModule{
+	&testModule{id: "id1"},
+	&testModule{id: "id2"},
+	&testModule{id: "id3"},
 }
 
 var storage = testStorage{moduleStatuses: make(map[string]error)}
 
-var stateController = testStateController{
-	finishChannel: make(chan bool, 1),
-}
+var platform = testPlatformController{}
 
 /*******************************************************************************
  * Init
@@ -121,7 +111,7 @@ func TestMain(m *testing.M) {
 
 	cfg = config.Config{UpgradeDir: tmpDir}
 
-	if updater, err = updatehandler.New(&cfg, &moduleProvider, &stateController, &storage); err != nil {
+	if updater, err = updatehandler.New(&cfg, modules, &platform, &storage); err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -236,11 +226,7 @@ func TestUpgradeFailed(t *testing.T) {
 		t.Fatalf("Can't test image: %s", err)
 	}
 
-	module, err := getTestModule("id2")
-	if err != nil {
-		t.Fatalf("Can't get test module: %s", err)
-	}
-
+	module, _ := modules[1].(*testModule)
 	module.status = errors.New("upgrade error")
 	defer func() { module.status = nil }()
 
@@ -326,70 +312,6 @@ func TestUpgradeBadVersion(t *testing.T) {
 
 	if updater.GetCurrentVersion() != initialVersion {
 		t.Error("Wrong current version")
-	}
-}
-
-func TestUpgradeReboot(t *testing.T) {
-	stateController.useFinishChannel = true
-	defer func() { stateController.useFinishChannel = false }()
-	stateController.finishChannel = make(chan bool, 1)
-
-	version := updater.GetCurrentVersion()
-
-	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
-	if err != nil {
-		t.Fatalf("Can't test image: %s", err)
-	}
-
-	stateController.postpone = true
-
-	if err := updater.Upgrade(version+1, imageInfo); err != nil {
-		t.Fatalf("Upgrading error: %s", err)
-	}
-
-	select {
-	case <-time.After(5 * time.Second):
-		t.Fatal("wait operation timeout")
-
-	case <-stateController.finishChannel:
-	}
-
-	updater.Close()
-
-	if updater, err = updatehandler.New(&cfg, &moduleProvider, &stateController, &storage); err != nil {
-		t.Fatalf("Can't create updater: %s", err)
-	}
-
-	select {
-	case <-time.After(5 * time.Second):
-		t.Error("wait operation timeout")
-
-	case status := <-updater.StatusChannel():
-		if status != umprotocol.SuccessStatus {
-			t.Fatalf("Upgrade failed: %s", updater.GetLastError())
-		}
-	}
-
-	version++
-
-	if updater.GetCurrentVersion() != version {
-		t.Error("Wrong current version")
-	}
-
-	if updater.GetOperationVersion() != version {
-		t.Error("Wrong operation version")
-	}
-
-	if updater.GetLastOperation() != umprotocol.UpgradeOperation {
-		t.Error("Wrong operation")
-	}
-
-	if updater.GetStatus() != umprotocol.SuccessStatus {
-		t.Error("Wrong status")
-	}
-
-	if err := updater.GetLastError(); err != nil {
-		t.Errorf("Upgrade error: %s", err)
 	}
 }
 
@@ -521,91 +443,51 @@ func (storage *testStorage) ClearModuleStatuses() (err error) {
 }
 
 func (module *testModule) GetID() (id string) {
-	return ""
+	return module.id
 }
 
-func (module *testModule) Upgrade(path string) (err error) {
-	return module.status
+func (module *testModule) Init() (err error) {
+	return nil
 }
 
-func (module *testModule) Revert() (err error) {
-	return module.status
+func (module *testModule) Upgrade(version uint64, path string) (rebootRequired bool, err error) {
+	return false, module.status
 }
 
-func (provider *testModuleProvider) GetModuleByID(id string) (module interface{}, err error) {
-	testModule, ok := provider.modules[id]
-	if !ok {
-		return nil, errors.New("module not found")
-	}
-
-	return testModule, nil
+func (module *testModule) CancelUpgrade(version uint64) (rebootRequired bool, err error) {
+	return false, nil
 }
 
-func (controller *testStateController) GetVersion() (version uint64, err error) {
-	return controller.version, nil
+func (module *testModule) FinishUpgrade(version uint64) (err error) {
+	return nil
 }
 
-func (controller *testStateController) GetPlatformID() (id string, err error) {
+func (module *testModule) Revert(version uint64) (rebootRequired bool, err error) {
+	return false, module.status
+}
+
+func (module *testModule) CancelRevert(version uint64) (rebootRequired bool, err error) {
+	return false, nil
+}
+
+func (module *testModule) FinishRevert(version uint64) (err error) {
+	return nil
+}
+
+func (module *testModule) Close() (err error) {
+	return nil
+}
+
+func (platform *testPlatformController) GetVersion() (version uint64, err error) {
+	return platform.version, nil
+}
+
+func (platform *testPlatformController) SetVersion(version uint64) (err error) {
+	platform.version = version
+
+	return nil
+}
+
+func (platform *testPlatformController) GetPlatformID() (id string, err error) {
 	return "SomePlatform", nil
-}
-
-func (controller *testStateController) Upgrade(version uint64, modules map[string]string) (err error) {
-	return controller.status
-}
-
-func (controller *testStateController) Revert(version uint64, moduleIds []string) (err error) {
-	return controller.status
-}
-
-func (controller *testStateController) UpgradeFinished(version uint64, status error,
-	moduleStatus map[string]error) (postpone bool, err error) {
-	if status == nil {
-		controller.version = version
-	}
-
-	postpone = controller.postpone
-
-	if postpone {
-		controller.postpone = false
-	}
-
-	if stateController.useFinishChannel {
-		stateController.finishChannel <- true
-	}
-
-	return postpone, status
-}
-
-func (controller *testStateController) RevertFinished(version uint64, status error,
-	moduleStatus map[string]error) (postpone bool, err error) {
-	if status == nil {
-		controller.version = version
-	}
-
-	postpone = controller.postpone
-
-	if postpone {
-		controller.postpone = false
-	}
-
-	if stateController.useFinishChannel {
-		stateController.finishChannel <- true
-	}
-
-	return postpone, status
-}
-
-func getTestModule(id string) (module *testModule, err error) {
-	m, err := moduleProvider.GetModuleByID(id)
-	if err != nil {
-		return nil, err
-	}
-
-	var ok bool
-
-	if module, ok = m.(*testModule); !ok {
-		return nil, errors.New("wrong module type")
-	}
-
-	return module, nil
 }

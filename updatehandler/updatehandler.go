@@ -49,19 +49,15 @@ const (
 const (
 	upgradeInitStage = iota
 	upgradeUnpackStage
-	upgradeStartStateControllerStage
 	upgradeModulesStage
 	upgradeRevertModulesStage
-	upgradeFinishStateControllerStage
 	upgradeFinishStage
 )
 
 // Revert stages
 const (
 	revertInitStage = iota
-	revertStartStateControllerStage
 	revertModulesStage
-	revertFinishStateControllerStage
 	revertFinishStage
 )
 
@@ -77,9 +73,9 @@ const statusChannelSize = 1
 // Handler update handler
 type Handler struct {
 	sync.Mutex
-	stateController StateController
-	storage         Storage
-	moduleProvider  ModuleProvider
+	platform PlatformController
+	storage  StateStorage
+	modules  map[string]UpdateModule
 
 	upgradeDir       string
 	bundleDir        string
@@ -95,20 +91,26 @@ type Handler struct {
 type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
-	// Upgrade upgrade module
-	Upgrade(path string) (err error)
-	// Revert revert module
-	Revert() (err error)
+	// Init initializes module
+	Init() (err error)
+	// Upgrade upgrades module
+	Upgrade(version uint64, imagePath string) (rebootRequired bool, err error)
+	// CancelUpgrade cancels upgrade
+	CancelUpgrade(version uint64) (rebootRequired bool, err error)
+	// FinishUpgrade finished upgrade
+	FinishUpgrade(version uint64) (err error)
+	// Revert reverts module
+	Revert(version uint64) (rebootRequired bool, err error)
+	// CancelRevert cancels revert module
+	CancelRevert(version uint64) (rebootRequired bool, err error)
+	// FinishRevert finished revert
+	FinishRevert(version uint64) (err error)
+	// Close closes update module
+	Close() (err error)
 }
 
-// ModuleProvider module provider interface
-type ModuleProvider interface {
-	// GetModuleByID returns module by id
-	GetModuleByID(id string) (module interface{}, err error)
-}
-
-// Storage provides API to store/retreive persistent data
-type Storage interface {
+// StateStorage provides API to store/retreive persistent data
+type StateStorage interface {
 	SetState(state int) (err error)
 	GetState() (state int, err error)
 	SetImagePath(path string) (err error)
@@ -127,14 +129,11 @@ type Storage interface {
 	ClearModuleStatuses() (err error)
 }
 
-// StateController state controller interface
-type StateController interface {
+// PlatformController platform controller
+type PlatformController interface {
 	GetVersion() (version uint64, err error)
+	SetVersion(version uint64) (err error)
 	GetPlatformID() (id string, err error)
-	Upgrade(version uint64, modules map[string]string) (err error)
-	Revert(version uint64, moduleIds []string) (err error)
-	UpgradeFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
-	RevertFinished(version uint64, status error, moduleStatus map[string]error) (postpone bool, err error)
 }
 
 type itemMetadata struct {
@@ -158,14 +157,14 @@ type revertStage int
  ******************************************************************************/
 
 // New returns pointer to new Handler
-func New(cfg *config.Config, moduleProvider ModuleProvider, stateController StateController, storage Storage) (handler *Handler, err error) {
+func New(cfg *config.Config, modules []UpdateModule,
+	platform PlatformController, storage StateStorage) (handler *Handler, err error) {
 	handler = &Handler{
-		stateController: stateController,
-		storage:         storage,
-		moduleProvider:  moduleProvider,
-		upgradeDir:      cfg.UpgradeDir,
-		bundleDir:       path.Join(cfg.UpgradeDir, bundleDir),
-		statusChannel:   make(chan string, statusChannelSize),
+		platform:      platform,
+		storage:       storage,
+		upgradeDir:    cfg.UpgradeDir,
+		bundleDir:     path.Join(cfg.UpgradeDir, bundleDir),
+		statusChannel: make(chan string, statusChannelSize),
 	}
 
 	if _, err := os.Stat(handler.bundleDir); os.IsNotExist(err) {
@@ -174,14 +173,8 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 		}
 	}
 
-	if handler.stateController != nil {
-		if handler.currentVersion, err = handler.stateController.GetVersion(); err != nil {
-			return nil, err
-		}
-	} else {
-		if handler.currentVersion, err = storage.GetCurrentVersion(); err != nil {
-			return nil, err
-		}
+	if handler.currentVersion, err = handler.platform.GetVersion(); err != nil {
+		return nil, err
 	}
 
 	log.WithField("imageVersion", handler.currentVersion).Debug("Create update handler")
@@ -209,6 +202,12 @@ func New(cfg *config.Config, moduleProvider ModuleProvider, stateController Stat
 	stage, err := handler.storage.GetOperationStage()
 	if err != nil {
 		return nil, err
+	}
+
+	handler.modules = make(map[string]UpdateModule)
+
+	for _, module := range modules {
+		handler.modules[module.GetID()] = module
 	}
 
 	if handler.state == upgradingState {
@@ -397,13 +396,13 @@ func (handler *Handler) Close() {
 
 func (stage upgradeStage) String() string {
 	return [...]string{
-		"Init", "Unpack", "StartStateController", "UpgradeModules",
-		"RevertModules", "FinishStateController", "Finish"}[stage]
+		"Init", "Unpack", "UpgradeModules",
+		"RevertModules", "Finish"}[stage]
 }
 
 func (stage revertStage) String() string {
 	return [...]string{
-		"Init", "StartStateController", "RevertModules", "FinishStateController", "Finish"}[stage]
+		"Init", "RevertModules", "Finish"}[stage]
 }
 
 func (state handlerState) String() string {
@@ -419,6 +418,7 @@ func (handler *Handler) operationFinished(newState handlerState, operationError 
 		log.Errorf("Operation failed: %s", operationError)
 	} else {
 		log.WithFields(log.Fields{"newState": newState}).Info("Operation finished")
+		handler.currentVersion = handler.operationVersion
 	}
 
 	handler.state = newState
@@ -427,17 +427,7 @@ func (handler *Handler) operationFinished(newState handlerState, operationError 
 		log.Errorf("Can't set state: %s", err)
 	}
 
-	if handler.stateController != nil {
-		var err error
-
-		if handler.currentVersion, err = handler.stateController.GetVersion(); err != nil {
-			log.Errorf("Can't get current version: %s", err)
-		}
-	} else if operationError == nil {
-		handler.currentVersion = handler.operationVersion
-	}
-
-	if err := handler.storage.SetCurrentVersion(handler.currentVersion); err != nil {
+	if err := handler.platform.SetVersion(handler.currentVersion); err != nil {
 		log.Errorf("Can't set current version: %s", err)
 	}
 
@@ -474,32 +464,10 @@ func (handler *Handler) upgrade(path string, stage upgradeStage) {
 				break
 			}
 
-			stage = upgradeStartStateControllerStage
-
-		case upgradeStartStateControllerStage:
-			if handler.stateController != nil {
-				if handler.lastError = handler.upgradeStateController(); handler.lastError != nil {
-					stage = upgradeFinishStage
-					break
-				}
-			}
-
 			stage = upgradeModulesStage
 
 		case upgradeModulesStage:
-			handler.lastError = handler.updateModules()
-			stage = upgradeFinishStateControllerStage
-
-		case upgradeFinishStateControllerStage:
-			if handler.stateController != nil {
-				postpone := false
-
-				if postpone, handler.lastError = handler.upgradeFinishStateController(); postpone {
-					return
-				}
-			}
-
-			if handler.lastError != nil {
+			if handler.lastError = handler.updateModules(handler.operationVersion); handler.lastError != nil {
 				stage = upgradeRevertModulesStage
 				break
 			}
@@ -507,7 +475,7 @@ func (handler *Handler) upgrade(path string, stage upgradeStage) {
 			stage = upgradeFinishStage
 
 		case upgradeRevertModulesStage:
-			if err := handler.revertModules(); err != nil {
+			if err := handler.revertModules(handler.currentVersion); err != nil {
 				log.Errorf("Error reverting modules: %s", err)
 			}
 
@@ -538,33 +506,12 @@ func (handler *Handler) revert(stage int) {
 
 		switch stage {
 		case revertInitStage:
-			stage = revertStartStateControllerStage
-
-		case revertStartStateControllerStage:
-			if handler.stateController != nil {
-				if handler.lastError = handler.revertStateController(); handler.lastError != nil {
-					stage = upgradeFinishStage
-					break
-				}
-			}
-
 			stage = revertModulesStage
 
 		case revertModulesStage:
-			if handler.lastError = handler.revertModules(); handler.lastError != nil {
-				stage = upgradeFinishStage
+			if handler.lastError = handler.revertModules(handler.operationVersion); handler.lastError != nil {
+				stage = revertFinishStage
 				break
-			}
-
-			stage = revertFinishStateControllerStage
-
-		case revertFinishStateControllerStage:
-			if handler.stateController != nil {
-				postpone := false
-
-				if postpone, handler.lastError = handler.revertFinishStateController(); postpone {
-					return
-				}
 			}
 
 			stage = revertFinishStage
@@ -601,78 +548,15 @@ func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
 	return metadata, err
 }
 
-func (handler *Handler) upgradeStateController() (err error) {
-	metadata, err := handler.getImageMetadata()
-	if err != nil {
-		return err
-	}
-
-	modules := make(map[string]string)
-
-	for _, item := range metadata.UpdateItems {
-		modules[item.Type] = path.Join(handler.bundleDir, item.Path)
-	}
-
-	if err = handler.stateController.Upgrade(handler.operationVersion, modules); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (handler *Handler) upgradeFinishStateController() (postpone bool, err error) {
-	var moduleStatuses map[string]error
-
-	if moduleStatuses, err = handler.storage.GetModuleStatuses(); err != nil {
-		return false, err
-	}
-
-	return handler.stateController.UpgradeFinished(handler.operationVersion, handler.lastError, moduleStatuses)
-}
-
-func (handler *Handler) revertStateController() (err error) {
-	moduleStatuses, err := handler.storage.GetModuleStatuses()
-	if err != nil {
-		return err
-	}
-
-	moduleIds := make([]string, 0, len(moduleStatuses))
-
-	for id := range moduleStatuses {
-		moduleIds = append(moduleIds, id)
-	}
-
-	if err = handler.stateController.Revert(handler.operationVersion, moduleIds); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (handler *Handler) revertFinishStateController() (postpone bool, err error) {
-	var moduleStatuses map[string]error
-
-	if moduleStatuses, err = handler.storage.GetModuleStatuses(); handler.lastError != nil {
-		return false, err
-	}
-
-	return handler.stateController.RevertFinished(handler.operationVersion, handler.lastError, moduleStatuses)
-}
-
-func (handler *Handler) updateModule(id, path string) (err error) {
+func (handler *Handler) updateModule(version uint64, id, path string) (err error) {
 	log.WithField("id", id).Info("Update module")
 
-	module, err := handler.moduleProvider.GetModuleByID(id)
-	if err != nil {
-		return err
-	}
-
-	updateModule, ok := module.(UpdateModule)
+	module, ok := handler.modules[id]
 	if !ok {
-		return fmt.Errorf("module %s doesn't implement update interface", id)
+		return errors.New("module not found")
 	}
 
-	if err = updateModule.Upgrade(path); err != nil {
+	if _, err = module.Upgrade(version, path); err != nil {
 		log.WithField("id", id).Errorf("Update module failed: %s", err)
 		return err
 	}
@@ -680,21 +564,19 @@ func (handler *Handler) updateModule(id, path string) (err error) {
 	return nil
 }
 
-func (handler *Handler) updateModules() (err error) {
+func (handler *Handler) updateModules(version uint64) (err error) {
 	metadata, err := handler.getImageMetadata()
 	if err != nil {
 		return err
 	}
 
-	if handler.stateController != nil {
-		platformID, err := handler.stateController.GetPlatformID()
-		if err != nil {
-			return err
-		}
+	platformID, err := handler.platform.GetPlatformID()
+	if err != nil {
+		return err
+	}
 
-		if metadata.PlatformID != platformID {
-			return errors.New("wrong platform ID")
-		}
+	if metadata.PlatformID != platformID {
+		return errors.New("wrong platform ID")
 	}
 
 	moduleStatuses, err := handler.storage.GetModuleStatuses()
@@ -712,7 +594,7 @@ func (handler *Handler) updateModules() (err error) {
 			return status
 		}
 
-		status = handler.updateModule(item.Type, path.Join(handler.bundleDir, item.Path))
+		status = handler.updateModule(version, item.Type, path.Join(handler.bundleDir, item.Path))
 
 		err = handler.storage.AddModuleStatus(item.Type, status)
 
@@ -728,20 +610,14 @@ func (handler *Handler) updateModules() (err error) {
 	return nil
 }
 
-func (handler *Handler) revertModule(id string) (err error) {
+func (handler *Handler) revertModule(version uint64, id string) (err error) {
 	log.WithField("id", id).Info("Revert module")
 
-	module, err := handler.moduleProvider.GetModuleByID(id)
-	if err != nil {
-		return err
-	}
-
-	updateModule, ok := module.(UpdateModule)
+	module, ok := handler.modules[id]
 	if !ok {
-		return fmt.Errorf("module %s doesn't implement update interface", id)
+		return errors.New("module not found")
 	}
-
-	if err = updateModule.Revert(); err != nil {
+	if _, err = module.Revert(version); err != nil {
 		log.WithField("id", id).Errorf("Revert module failed: %s", err)
 		return err
 	}
@@ -749,7 +625,7 @@ func (handler *Handler) revertModule(id string) (err error) {
 	return nil
 }
 
-func (handler *Handler) revertModules() (err error) {
+func (handler *Handler) revertModules(version uint64) (err error) {
 	moduleStatuses, err := handler.storage.GetModuleStatuses()
 	if err != nil {
 		return err
@@ -760,7 +636,7 @@ func (handler *Handler) revertModules() (err error) {
 			continue
 		}
 
-		status = handler.revertModule(id)
+		status = handler.revertModule(version, id)
 
 		if err == nil {
 			err = status

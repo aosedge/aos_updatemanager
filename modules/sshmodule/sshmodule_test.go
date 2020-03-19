@@ -24,7 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/modulemanager/sshmodule"
+	"aos_updatemanager/modules/sshmodule"
 )
 
 /*******************************************************************************
@@ -101,7 +101,7 @@ func TestUpgrade(t *testing.T) {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if err := module.Upgrade("tmp/testfile"); err != nil {
+	if _, err := module.Upgrade(1, "tmp/testfile"); err != nil {
 		t.Errorf("Upgrade failed: %s", err)
 	}
 }
@@ -143,7 +143,7 @@ func TestUpgradeErrors(t *testing.T) {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if err := module.Upgrade("tmp/testfile"); err == nil {
+	if _, err := module.Upgrade(1, "tmp/testfile"); err == nil {
 		t.Errorf("Error expected because of wrong adress")
 	}
 }
@@ -173,13 +173,13 @@ func TestUpgradeWrongCommands(t *testing.T) {
 	}
 
 	//NOTE: amoi - leaving this test to be failed right now. runCommands should handle error.
-	if err := module.Upgrade("tmp/testfile"); err == nil {
+	if _, err := module.Upgrade(1, "tmp/testfile"); err == nil {
 		t.Errorf("Error expected because set of commands is wrong")
 	}
 }
 
 func TestModuleRevert(t *testing.T) {
-	if err := module.Revert(); err != nil {
+	if _, err := module.Revert(0); err != nil {
 		t.Errorf("Revert failed %s", err)
 	}
 }
