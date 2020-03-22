@@ -1,8 +1,10 @@
 package partition_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"testing"
 
@@ -41,7 +43,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if tmpDir, err = ioutil.TempDir("", "aos_test_"); err != nil {
+	if tmpDir, err = ioutil.TempDir("", "um_"); err != nil {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
 
@@ -124,4 +126,156 @@ func TestGetPartitionInfo(t *testing.T) {
 			t.Errorf("Wrong partition UUID: %s", info.PartUUID)
 		}
 	}
+}
+
+func TestCopyPartition(t *testing.T) {
+	var err error
+
+	filePartition := path.Join(tmpDir, "testPart")
+
+	if err = testtools.CreateFilePartition(filePartition, "ext4", 32, generatePartitionContent, false); err != nil {
+		t.Fatalf("Can't create file partition: %s", err)
+	}
+
+	var copied int64
+
+	if copied, err = partition.Copy(disk.Partitions[1].Device, filePartition); err != nil {
+		t.Fatalf("Can't copy partition: %s", err)
+	}
+
+	stat, err := os.Stat(filePartition)
+
+	if copied != stat.Size() {
+		t.Errorf("Wrong copied size: %d", copied)
+	}
+
+	if err = testtools.ComparePartitions(disk.Partitions[1].Device, filePartition); err != nil {
+		t.Errorf("Compare error: %s", err)
+	}
+}
+
+func TestCopyPartitionLess(t *testing.T) {
+	var err error
+
+	filePartition := path.Join(tmpDir, "testPart")
+
+	if err = testtools.CreateFilePartition(filePartition, "ext4", 30, generatePartitionContent, false); err != nil {
+		t.Fatalf("Can't create file partition: %s", err)
+	}
+
+	var copied int64
+
+	if copied, err = partition.Copy(disk.Partitions[1].Device, filePartition); err != nil {
+		t.Fatalf("Can't copy partition: %s", err)
+	}
+
+	stat, err := os.Stat(filePartition)
+
+	if copied != stat.Size() {
+		t.Errorf("Wrong copied size: %d", copied)
+	}
+
+	if err = testtools.ComparePartitions(disk.Partitions[1].Device, filePartition); err != nil {
+		t.Errorf("Compare error: %s", err)
+	}
+}
+
+func TestCopyPartitionMore(t *testing.T) {
+	var err error
+
+	filePartition := path.Join(tmpDir, "testPart")
+
+	if err = testtools.CreateFilePartition(filePartition, "ext4", 40, generatePartitionContent, false); err != nil {
+		t.Fatalf("Can't create file partition: %s", err)
+	}
+
+	if _, err = partition.Copy(disk.Partitions[1].Device, filePartition); err == nil {
+		t.Error("Error expected")
+	}
+}
+
+func TestCopyPartitionFromArchive(t *testing.T) {
+	var err error
+
+	filePartition := path.Join(tmpDir, "testPart")
+
+	if err = testtools.CreateFilePartition(filePartition, "ext4", 32, generatePartitionContent, true); err != nil {
+		t.Fatalf("Can't create file partition: %s", err)
+	}
+
+	var copied int64
+
+	if copied, err = partition.CopyFromArchive(disk.Partitions[1].Device, filePartition+".gz"); err != nil {
+		t.Fatalf("Can't copy partition: %s", err)
+	}
+
+	stat, err := os.Stat(filePartition)
+	if err != nil {
+		t.Fatalf("Can't stat file: %s", err)
+	}
+
+	if copied != stat.Size() {
+		t.Errorf("Wrong copied size: %d", copied)
+	}
+
+	if err = testtools.ComparePartitions(disk.Partitions[1].Device, filePartition); err != nil {
+		t.Errorf("Compare error: %s", err)
+	}
+}
+
+func TestCopyPartitionFromArchiveLess(t *testing.T) {
+	var err error
+
+	filePartition := path.Join(tmpDir, "testPart")
+
+	if err = testtools.CreateFilePartition(filePartition, "ext4", 20, generatePartitionContent, true); err != nil {
+		t.Fatalf("Can't create file partition: %s", err)
+	}
+
+	var copied int64
+
+	if copied, err = partition.CopyFromArchive(disk.Partitions[1].Device, filePartition+".gz"); err != nil {
+		t.Fatalf("Can't copy partition: %s", err)
+	}
+
+	stat, err := os.Stat(filePartition)
+	if err != nil {
+		t.Fatalf("Can't stat file: %s", err)
+	}
+
+	if copied != stat.Size() {
+		t.Errorf("Wrong copied size: %d", copied)
+	}
+
+	if err = testtools.ComparePartitions(disk.Partitions[1].Device, filePartition); err != nil {
+		t.Errorf("Compare error: %s", err)
+	}
+}
+
+func TestCopyPartitionFromArchiveMore(t *testing.T) {
+	var err error
+
+	filePartition := path.Join(tmpDir, "testPart")
+
+	if err = testtools.CreateFilePartition(filePartition, "ext4", 40, generatePartitionContent, true); err != nil {
+		t.Fatalf("Can't create file partition: %s", err)
+	}
+
+	if _, err = partition.CopyFromArchive(disk.Partitions[1].Device, filePartition+".gz"); err == nil {
+		t.Error("Error expected")
+	}
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func generatePartitionContent(mountPoint string) (err error) {
+	if output, err := exec.Command("dd",
+		"if=/dev/urandom", "of="+mountPoint+"/test.dat", "bs=1M",
+		"count=17").CombinedOutput(); err != nil {
+		return fmt.Errorf("%s (%s)", err, (string(output)))
+	}
+
+	return nil
 }

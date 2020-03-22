@@ -1,18 +1,29 @@
 package testtools
 
 import (
+	"crypto/md5"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 // This package contains different tools which are used in unit tests by
 // different modules
+
+/*******************************************************************************
+ * Consts
+ ******************************************************************************/
+
+const ioBufferSize = 1024 * 1024
 
 /*******************************************************************************
  * Types
@@ -129,6 +140,102 @@ func (disk *TestDisk) Close() (err error) {
 
 	if err = os.RemoveAll(disk.path); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// CreateFilePartition creates partition in file
+func CreateFilePartition(path string, fsType string, size uint64,
+	contentCreator func(mountPoint string) (err error), archivate bool) (err error) {
+	var output []byte
+
+	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M",
+		"count="+strconv.FormatUint(size, 10)).CombinedOutput(); err != nil {
+		return fmt.Errorf("%s (%s)", err, (string(output)))
+	}
+
+	if output, err = exec.Command("mkfs."+fsType, path).CombinedOutput(); err != nil {
+		return fmt.Errorf("%s (%s)", err, (string(output)))
+	}
+
+	if archivate {
+		defer func() {
+			if output, err = exec.Command("gzip", "-k", "-f", path).CombinedOutput(); err != nil {
+				err = fmt.Errorf("%s (%s)", err, (string(output)))
+			}
+		}()
+	}
+
+	if contentCreator != nil {
+		var mountPoint string
+
+		if mountPoint, err = ioutil.TempDir("", "um_mount"); err != nil {
+			return err
+		}
+
+		defer func() {
+			if output, err := exec.Command("sync").CombinedOutput(); err != nil {
+				log.Errorf("Sync error: %s", fmt.Errorf("%s (%s)", err, (string(output))))
+			}
+
+			if output, err := exec.Command("umount", mountPoint).CombinedOutput(); err != nil {
+				log.Errorf("Umount error: %s", fmt.Errorf("%s (%s)", err, (string(output))))
+			}
+
+			if err := os.RemoveAll(mountPoint); err != nil {
+				log.Errorf("Remove error: %s", err)
+			}
+		}()
+
+		if output, err = exec.Command("mount", path, mountPoint).CombinedOutput(); err != nil {
+			return fmt.Errorf("%s (%s)", err, (string(output)))
+		}
+
+		if err = contentCreator(mountPoint); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ComparePartitions compares partitions
+func ComparePartitions(dst, src string) (err error) {
+	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	srcMd5 := md5.New()
+	dstMd5 := md5.New()
+
+	size, err := srcFile.Seek(0, 2)
+	if err != nil {
+		return err
+	}
+
+	if _, err = srcFile.Seek(0, 0); err != nil {
+		return err
+	}
+
+	if _, err := io.CopyN(srcMd5, srcFile, size); err != nil && err != io.EOF {
+		return err
+	}
+
+	if _, err := io.CopyN(dstMd5, dstFile, size); err != nil && err != io.EOF {
+		return err
+	}
+
+	if !reflect.DeepEqual(srcMd5.Sum(nil), dstMd5.Sum(nil)) {
+		return errors.New("data mismatch")
 	}
 
 	return nil

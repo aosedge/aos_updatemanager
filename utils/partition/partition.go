@@ -5,10 +5,12 @@ package partition
 import "C"
 
 import (
+	"compress/gzip"
 	"errors"
 	"io"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -25,6 +27,8 @@ const (
 	tagTypeFSType   = "TYPE"
 	tagTypePartUUID = "PARTUUID"
 )
+
+const ioBufferSize = 1024 * 1024
 
 /*******************************************************************************
  * Types
@@ -98,32 +102,79 @@ func Umount(mountPoint string) (err error) {
 }
 
 // Copy copies one partition to another
-func Copy(src string, dst string) (written int64, err error) {
-	if _, err = os.Stat(src); err != nil {
-		return 0, err
-	}
+func Copy(dst, src string) (copied int64, err error) {
+	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Copy partition")
 
-	if _, err = os.Stat(dst); err != nil {
-		return 0, err
-	}
+	start := time.Now()
 
-	source, err := os.Open(src)
+	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
 		return 0, err
 	}
-	defer source.Close()
+	defer srcFile.Close()
 
-	destination, err := os.Create(dst)
+	dstFile, err := os.OpenFile(dst, os.O_RDWR, 0)
 	if err != nil {
 		return 0, err
 	}
-	defer destination.Close()
+	defer dstFile.Close()
 
-	if written, err = io.Copy(destination, source); err != nil {
+	if copied, err = io.Copy(dstFile, srcFile); err != nil {
 		return 0, err
 	}
 
-	return written, nil
+	log.WithFields(log.Fields{"copied": copied, "duration": time.Since(start)}).Debug("Copy partition")
+
+	return copied, nil
+}
+
+// CopyFromArchive copies partition from archived file
+func CopyFromArchive(dst, src string) (copied int64, err error) {
+	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Copy partition from archive")
+
+	start := time.Now()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_RDWR, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer dstFile.Close()
+
+	gz, err := gzip.NewReader(srcFile)
+	if err != nil {
+		return 0, err
+	}
+	defer gz.Close()
+
+	buf := make([]byte, ioBufferSize)
+
+	for err != io.EOF {
+		var readCount int
+
+		if readCount, err = gz.Read(buf); err != nil && err != io.EOF {
+			return copied, err
+		}
+
+		if readCount > 0 {
+			var writeCount int
+
+			if writeCount, err = dstFile.Write(buf[:readCount]); err != nil {
+				return copied, err
+			}
+
+			copied = copied + int64(writeCount)
+		}
+	}
+
+	log.WithFields(log.Fields{"copied": copied, "duration": time.Since(start)}).Debug("Copy partition from archive")
+
+	return copied, nil
 }
 
 // GetInfo returns partition info
