@@ -37,6 +37,13 @@ const (
 
 type testStateController struct {
 	bootCurrent int
+	bootNext    int
+	bootOrder   []int
+	bootActive  []bool
+}
+
+type testStateStorage struct {
+	state []byte
 }
 
 type fsContent struct {
@@ -62,6 +69,17 @@ type actionUpgrade struct {
 	state          testStateController
 }
 
+type actionCancel struct {
+	version        uint64
+	rebootRequired bool
+	state          testStateController
+}
+
+type actionFinish struct {
+	version uint64
+	state   testStateController
+}
+
 /*******************************************************************************
  * Var
  ******************************************************************************/
@@ -75,7 +93,8 @@ var configJSON = `
 
 var disk *testtools.TestDisk
 
-var stateController testStateController
+var stateController = testStateController{}
+var stateStorage = testStateStorage{state: []byte("")}
 
 /*******************************************************************************
  * Init
@@ -137,7 +156,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	module, err := fsmodule.New("testfs", &stateController, []byte(configJSON))
+	module, err := fsmodule.New("testfs", &stateController, &stateStorage, []byte(configJSON))
 	if err != nil {
 		t.Fatalf("Can't create testfs module: %s", err)
 	}
@@ -192,7 +211,7 @@ func TestParamsValidation(t *testing.T) {
 }`,
 	}
 
-	module, _ := doAction(t, nil, actionNew{}, false)
+	module, _ := doAction(t, nil, actionNew{testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, false)
 	defer doAction(t, module, actionClose{}, false)
 
 	for _, metadata := range testMetadataData {
@@ -278,13 +297,46 @@ func TestUpgrade(t *testing.T) {
 
 		// Create module
 
-		module, _ := doAction(t, nil, actionNew{}, false)
+		stateController = testStateController{0, -1, []int{0, 1}, []bool{true, true}}
+
+		module, _ := doAction(t, nil, actionNew{state: stateController}, false)
 
 		// First upgrade
 
-		doAction(t, module, actionUpgrade{version: 1, imagePath: tmpDir}, false)
+		doAction(t, module, actionUpgrade{
+			version:        1,
+			imagePath:      tmpDir,
+			rebootRequired: true,
+			state:          testStateController{0, 1, []int{0, 1}, []bool{true, false}}}, false)
 
-		// Check content
+		// Reboot
+
+		stateController.bootCurrent = 1
+		stateController.bootNext = -1
+
+		module, _ = doAction(t, module, actionReboot{state: stateController}, false)
+
+		// Second upgrade
+
+		doAction(t, module, actionUpgrade{
+			version:        1,
+			imagePath:      tmpDir,
+			rebootRequired: false,
+			state:          testStateController{1, -1, []int{0, 1}, []bool{true, false}}}, false)
+
+		// Finish
+
+		doAction(t, module, actionFinish{
+			version: 1,
+			state:   testStateController{1, -1, []int{0, 1}, []bool{true, false}}}, false)
+
+		// Wait for upgrading second partition by calling cancel upgrade
+
+		doAction(t, module, actionCancel{
+			version: 1,
+			state:   testStateController{1, -1, []int{0, 1}, []bool{true, false}}}, false)
+
+		// Check content of upgraded partition
 
 		partitionContent, err := getPartitionContent(disk.Partitions[partRoot1].Device)
 		if err != nil {
@@ -318,7 +370,7 @@ func TestBadUpgrade(t *testing.T) {
 
 	// Create module
 
-	module, _ := doAction(t, nil, actionNew{}, false)
+	module, _ := doAction(t, nil, actionNew{testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, false)
 	defer doAction(t, module, actionClose{}, false)
 
 	// First upgrade
@@ -334,8 +386,64 @@ func TestBadUpgrade(t *testing.T) {
 
 // State controller
 
+func (controller *testStateController) WaitForReady() (err error) {
+	return nil
+}
+
 func (controller *testStateController) GetCurrentBoot() (index int, err error) {
 	return controller.bootCurrent, nil
+}
+
+func (controller *testStateController) SetBootNext(index int) (err error) {
+	controller.bootNext = index
+
+	return nil
+}
+
+func (controller *testStateController) ClearBootNext() (err error) {
+	controller.bootNext = -1
+
+	return nil
+}
+
+func (controller *testStateController) SetBootActive(index int, active bool) (err error) {
+	if index < 0 || index >= len(controller.bootActive) {
+		return errors.New("invalid index")
+	}
+
+	controller.bootActive[index] = active
+
+	return nil
+}
+
+func (controller *testStateController) GetBootActive(index int) (active bool, err error) {
+	if index < 0 || index >= len(controller.bootActive) {
+		return false, errors.New("invalid index")
+	}
+
+	return controller.bootActive[index], nil
+}
+
+func (controller *testStateController) GetBootOrder() (bootOrder []int, err error) {
+	return controller.bootOrder, nil
+}
+
+func (controller *testStateController) SetBootOrder(bootOrder []int) (err error) {
+	controller.bootOrder = bootOrder
+
+	return nil
+}
+
+// State storage
+
+func (storage *testStateStorage) GetModuleState(id string) (state []byte, err error) {
+	return storage.state, nil
+}
+
+func (storage *testStateStorage) SetModuleState(id string, state []byte) (err error) {
+	storage.state = state
+
+	return nil
 }
 
 /*******************************************************************************
@@ -351,8 +459,12 @@ func doAction(t *testing.T, module *fsmodule.FSModule, action interface{}, error
 	case actionNew:
 		stateController = data.state
 
-		if newModule, err = fsmodule.New("testfs", &stateController, []byte(configJSON)); err != nil && !errorExpected {
+		if newModule, err = fsmodule.New("testfs", &stateController, &stateStorage, []byte(configJSON)); err != nil && !errorExpected {
 			t.Fatalf("Can't create testfs module: %s", err)
+		}
+
+		if err = newModule.Init(); err != nil && !errorExpected {
+			t.Errorf("Can't initialize testfs module: %s", err)
 		}
 
 	case actionReboot:
@@ -362,8 +474,12 @@ func doAction(t *testing.T, module *fsmodule.FSModule, action interface{}, error
 
 		stateController = data.state
 
-		if newModule, err = fsmodule.New("testfs", &stateController, []byte(configJSON)); err != nil && !errorExpected {
+		if newModule, err = fsmodule.New("testfs", &stateController, &stateStorage, []byte(configJSON)); err != nil && !errorExpected {
 			t.Fatalf("Can't create testfs module: %s", err)
+		}
+
+		if err = newModule.Init(); err != nil && !errorExpected {
+			t.Errorf("Can't initialize testfs module: %s", err)
 		}
 
 	case actionClose:
@@ -381,9 +497,57 @@ func doAction(t *testing.T, module *fsmodule.FSModule, action interface{}, error
 		if rebootRequired != data.rebootRequired && !errorExpected {
 			t.Errorf("Wrong reboot required value: %v", rebootRequired)
 		}
+
+		if err = stateController.compareState(data.state); err != nil && !errorExpected {
+			t.Errorf("Compare state error: %v", stateController)
+		}
+
+	case actionCancel:
+		rebootRequired := false
+
+		if rebootRequired, err = module.CancelUpgrade(data.version); err != nil && !errorExpected {
+			t.Errorf("Cancel upgrade error: %s", err)
+		}
+
+		if rebootRequired != data.rebootRequired && !errorExpected {
+			t.Errorf("Wrong reboot required value: %v", rebootRequired)
+		}
+
+		if err = stateController.compareState(data.state); err != nil && !errorExpected {
+			t.Errorf("Compare state error: %v", stateController)
+		}
+
+	case actionFinish:
+		if err = module.FinishUpgrade(data.version); err != nil && !errorExpected {
+			t.Errorf("Finish upgrade error: %s", err)
+		}
+
+		if err = stateController.compareState(data.state); err != nil && !errorExpected {
+			t.Errorf("Compare state error: %v", stateController)
+		}
 	}
 
 	return newModule, err
+}
+
+func (controller *testStateController) compareState(state testStateController) (err error) {
+	if controller.bootCurrent != state.bootCurrent {
+		return errors.New("wrong current boot value")
+	}
+
+	if controller.bootNext != state.bootNext {
+		return errors.New("wrong next boot value")
+	}
+
+	if !reflect.DeepEqual(controller.bootOrder, state.bootOrder) {
+		return errors.New("wrong boot order value")
+	}
+
+	if !reflect.DeepEqual(controller.bootActive, state.bootActive) {
+		return errors.New("wrong boot order value")
+	}
+
+	return nil
 }
 
 func createMetadata(path string, metadata fsmodule.Metadata) (err error) {
