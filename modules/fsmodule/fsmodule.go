@@ -285,7 +285,7 @@ func (module *FSModule) Upgrade(version uint64, imagePath string) (rebootRequire
 		return true, nil
 
 	case waitForSecondUpgrade:
-		return false, nil
+		return module.secondUpgrade()
 
 	case waitForFinish:
 		return true, nil
@@ -454,6 +454,80 @@ func (module *FSModule) startUpgrade(version uint64, imagePath string) (rebootRe
 	}
 
 	return true, nil
+}
+
+func (module *FSModule) secondUpgrade() (rebootRequired bool, err error) {
+	defer func() {
+		if err != nil {
+			if rebootRequired, module.systemError = module.restoreInitialState(idleState); module.systemError != nil {
+				log.Errorf("Can't restore initial state: %s", module.systemError)
+			}
+		}
+	}()
+
+	if module.currentPartition != module.state.UpgradePartition {
+		return false, errors.New("upgraded partition boot failed")
+	}
+
+	secondPartition := (module.currentPartition + 1) % len(module.partInfo)
+
+	if err = module.controller.SetBootActive(module.currentPartition, true); err != nil {
+		return false, err
+	}
+
+	if err = module.controller.SetBootOrder([]int{module.currentPartition, secondPartition}); err != nil {
+		return false, err
+	}
+
+	// Make old as inactive to do not allow to boot from it till upgrade is finished
+	if err = module.controller.SetBootActive(secondPartition, false); err != nil {
+		return false, err
+	}
+
+	if err = module.setState(waitForFinish); err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
+func (module *FSModule) restoreInitialState(rebootState upgradeState) (rebootRequired bool, err error) {
+	log.WithField("upgradePartition", module.state.UpgradePartition).Debugf("%s: restoring initial state", module.id)
+
+	state := upgradeState(idleState)
+
+	// Start restoring upgrade partition if we boot from initial one
+	if module.currentPartition != module.state.UpgradePartition {
+		module.wg.Add(1)
+		go module.restorePartition(module.state.UpgradePartition)
+	} else {
+		rebootRequired = true
+		state = rebootState
+	}
+
+	partIndex := (module.state.UpgradePartition + 1) % len(module.partInfo)
+
+	if err = module.controller.ClearBootNext(); err != nil {
+		return false, err
+	}
+
+	if err = module.controller.SetBootActive(partIndex, true); err != nil {
+		return false, err
+	}
+
+	if err = module.controller.SetBootOrder([]int{partIndex, module.state.UpgradePartition}); err != nil {
+		return false, err
+	}
+
+	if err = module.controller.SetBootActive(module.state.UpgradePartition, false); err != nil {
+		return false, err
+	}
+
+	if err = module.setState(state); err != nil {
+		return false, err
+	}
+
+	return rebootRequired, nil
 }
 
 func (module *FSModule) handleUpgradeReboot() (err error) {

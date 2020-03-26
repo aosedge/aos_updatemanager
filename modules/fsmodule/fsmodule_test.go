@@ -322,19 +322,19 @@ func TestUpgrade(t *testing.T) {
 			version:        1,
 			imagePath:      tmpDir,
 			rebootRequired: false,
-			state:          testStateController{1, -1, []int{0, 1}, []bool{true, false}}}, false)
+			state:          testStateController{1, -1, []int{1, 0}, []bool{false, true}}}, false)
 
 		// Finish
 
 		doAction(t, module, actionFinish{
 			version: 1,
-			state:   testStateController{1, -1, []int{0, 1}, []bool{true, false}}}, false)
+			state:   testStateController{1, -1, []int{1, 0}, []bool{false, true}}}, false)
 
 		// Wait for upgrading second partition by calling cancel upgrade
 
 		doAction(t, module, actionCancel{
 			version: 1,
-			state:   testStateController{1, -1, []int{0, 1}, []bool{true, false}}}, false)
+			state:   testStateController{1, -1, []int{1, 0}, []bool{false, true}}}, false)
 
 		// Check content of upgraded partition
 
