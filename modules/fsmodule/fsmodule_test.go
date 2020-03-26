@@ -399,6 +399,31 @@ func TestBadUpgrade(t *testing.T) {
 		disk.Partitions[partRoot1].Device); err != nil {
 		t.Errorf("Comapre partition error: %s", err)
 	}
+
+	// Check restore partition after reboot
+
+	// First upgrade
+
+	if _, err := doAction(t, module, actionUpgrade{version: 1, imagePath: tmpDir}, true); err == nil {
+		t.Error("Upgrade should failed due to size limitation")
+	}
+
+	// Reboot
+
+	module, _ = doAction(t, module, actionReboot{testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, false)
+
+	// Wait for restore partition finished by calling cancel upgrade
+
+	doAction(t, module, actionCancel{
+		version: 1,
+		state:   testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, true)
+
+	// Compare both partitions
+
+	if err := testtools.ComparePartitions(disk.Partitions[partRoot0].Device,
+		disk.Partitions[partRoot1].Device); err != nil {
+		t.Errorf("Comapre partition error: %s", err)
+	}
 }
 
 func TestCancelUpgrade(t *testing.T) {
