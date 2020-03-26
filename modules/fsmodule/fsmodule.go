@@ -105,6 +105,7 @@ type FSModule struct {
 	partInfo         []partition.Info
 	currentPartition int
 	state            moduleState
+	wg               sync.WaitGroup
 	// indicated some serious system error occurs and further upgrade is impossible
 	systemError error
 }
@@ -244,6 +245,17 @@ func (module *FSModule) Init() (err error) {
 		return nil
 	}
 
+	// If second partition is inactive, restore it
+	active, err := module.controller.GetBootActive((module.currentPartition + 1) % len(module.partInfo))
+	if err != nil {
+		return err
+	}
+
+	if !active {
+		module.wg.Add(1)
+		go module.restorePartition((module.currentPartition + 1) % len(module.partInfo))
+	}
+
 	// TODO: something wrong with default partition. Implement checking and recovery mechanism
 	if module.currentPartition != bootOrder[0] {
 		log.Warnf("%s: boot from fallback partition", module.id)
@@ -256,6 +268,8 @@ func (module *FSModule) Init() (err error) {
 func (module *FSModule) Upgrade(version uint64, imagePath string) (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
+
+	module.wg.Wait()
 
 	log.WithFields(log.Fields{"version": version, "path": imagePath}).Infof("Upgrade %s module", module.id)
 
@@ -286,6 +300,8 @@ func (module *FSModule) CancelUpgrade(version uint64) (rebootRequired bool, err 
 	module.Lock()
 	defer module.Unlock()
 
+	module.wg.Wait()
+
 	log.WithFields(log.Fields{"version": version}).Infof("Cancel upgrade %s module", module.id)
 
 	if module.systemError != nil {
@@ -307,6 +323,8 @@ func (module *FSModule) CancelUpgrade(version uint64) (rebootRequired bool, err 
 func (module *FSModule) FinishUpgrade(version uint64) (err error) {
 	module.Lock()
 	defer module.Unlock()
+
+	module.wg.Wait()
 
 	log.WithFields(log.Fields{"version": version}).Infof("Finish upgrade %s module", module.id)
 
@@ -414,6 +432,14 @@ func (module *FSModule) startUpgrade(version uint64, imagePath string) (rebootRe
 	module.state.UpgradePartition = (module.currentPartition + 1) % len(module.partInfo)
 
 	if err = module.upgradePartition(module.state.UpgradePartition); err != nil {
+		log.Errorf("%s: can't upgrade partition %s: %s", module.id, module.partInfo[module.state.UpgradePartition].Device, err)
+
+		active, activeErr := module.controller.GetBootActive(module.state.UpgradePartition)
+		if activeErr != nil || !active {
+			module.wg.Add(1)
+			go module.restorePartition(module.state.UpgradePartition)
+		}
+
 		return false, err
 	}
 
@@ -473,6 +499,29 @@ func (module *FSModule) upgradePartition(partIndex int) (err error) {
 	return nil
 }
 
+func (module *FSModule) restorePartition(partIndex int) {
+	var err error
+
+	defer func() {
+		if err != nil {
+			log.Errorf("%s: can't restore partition %s: %s", module.id, module.partInfo[partIndex].Device, err)
+			module.systemError = err
+		}
+
+		module.wg.Done()
+	}()
+
+	log.Debugf("%s: restoring partition %s", module.id, module.partInfo[partIndex].Device)
+
+	if _, err = partition.Copy(module.partInfo[partIndex].Device,
+		module.partInfo[(partIndex+1)%len(module.partInfo)].Device); err != nil {
+		return
+	}
+
+	if err = module.controller.SetBootActive(partIndex, true); err != nil {
+		return
+	}
+}
 func (module *FSModule) updatePartInfo(partitions []string) (err error) {
 	module.partInfo = make([]partition.Info, 0, len(partitions))
 
