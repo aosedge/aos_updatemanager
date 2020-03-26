@@ -401,6 +401,108 @@ func TestBadUpgrade(t *testing.T) {
 	}
 }
 
+func TestCancelUpgrade(t *testing.T) {
+	imagePath := path.Join(tmpDir, "image.dat")
+
+	if err := createMetadata(path.Join(tmpDir, "metadata.json"),
+		fsmodule.Metadata{
+			ComponentType: "testfs",
+			Type:          "full",
+			Resources:     "image.dat",
+		}); err != nil {
+		t.Fatalf("Can't create test metadata: %s", err)
+	}
+
+	if _, _, err := generateFullUpgradeImage(imagePath); err != nil {
+		t.Fatalf("Can't create test image: %s", err)
+	}
+
+	testData := [][]interface{}{
+		// Cancel on waitForUpgradeReboot
+		{
+			actionUpgrade{version: 1, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+			actionCancel{version: 1, rebootRequired: false,
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+		},
+		// Cancel on waitForSecondUpgrade
+		{
+			actionUpgrade{version: 1, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionCancel{version: 1, rebootRequired: true,
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+			actionCancel{version: 1, rebootRequired: false,
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+		},
+		// Cancel on waitForFinish
+		{
+			actionUpgrade{version: 1, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionUpgrade{version: 1, imagePath: tmpDir, rebootRequired: false,
+				state: testStateController{1, -1, []int{1, 0}, []bool{false, true}}},
+			actionCancel{version: 1, rebootRequired: true,
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+			actionCancel{version: 1, rebootRequired: false,
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+		},
+		// Cancel by new upgrade on waitForUpgradeReboot
+		{
+			actionUpgrade{version: 1, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+			actionUpgrade{version: 2, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+		},
+		// Cancel by new upgrade on waitForSecondUpgrade
+		{
+			actionReboot{
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionUpgrade{version: 3, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+			actionUpgrade{version: 3, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionUpgrade{version: 3, imagePath: tmpDir, rebootRequired: false,
+				state: testStateController{1, -1, []int{1, 0}, []bool{false, true}}},
+		},
+		// Cancel by new upgrade on waitForFinish
+		{
+			actionUpgrade{version: 4, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{1, -1, []int{0, 1}, []bool{true, false}}},
+			actionReboot{
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+			actionUpgrade{version: 4, imagePath: tmpDir, rebootRequired: true,
+				state: testStateController{0, 1, []int{0, 1}, []bool{true, false}}},
+		},
+		// Cancel
+		{
+			actionCancel{version: 4,
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, false}}},
+			actionCancel{version: 4,
+				state: testStateController{0, -1, []int{0, 1}, []bool{true, true}}},
+		},
+	}
+
+	module, _ := doAction(t, nil, actionNew{testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, false)
+	defer doAction(t, module, actionClose{}, false)
+
+	for _, testRow := range testData {
+		for _, item := range testRow {
+			module, _ = doAction(t, module, item, false)
+		}
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/

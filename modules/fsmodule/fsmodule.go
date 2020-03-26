@@ -277,6 +277,22 @@ func (module *FSModule) Upgrade(version uint64, imagePath string) (rebootRequire
 		return false, module.systemError
 	}
 
+	if module.state.State != idleState && module.state.UpgradeVersion != version {
+		// Trying to cancel current upgrade
+		log.WithFields(log.Fields{"version": version}).Errorf("%s: another upgrade is in progress. Canceling", module.id)
+
+		if rebootRequired, err = module.cancelUpgrade(); err != nil {
+			return rebootRequired, err
+		}
+
+		if rebootRequired {
+			return true, nil
+		}
+
+		// wait for partition restoring and start new upgrade
+		module.wg.Wait()
+	}
+
 	switch module.state.State {
 	case idleState:
 		return module.startUpgrade(version, imagePath)
@@ -308,15 +324,11 @@ func (module *FSModule) CancelUpgrade(version uint64) (rebootRequired bool, err 
 		return false, module.systemError
 	}
 
-	if err = module.setState(idleState); err != nil {
-		log.Errorf("Can't set state: %s", err)
-
-		module.systemError = err
-
-		return false, err
+	if module.state.UpgradeVersion != version {
+		return false, errors.New("invalid version")
 	}
 
-	return false, nil
+	return module.cancelUpgrade()
 }
 
 // FinishUpgrade finishes upgrade
@@ -514,6 +526,34 @@ func (module *FSModule) checkForFinish() (rebootRequired bool, err error) {
 	}
 
 	return rebootRequired, nil
+}
+
+func (module *FSModule) cancelUpgrade() (rebootRequired bool, err error) {
+	switch module.state.State {
+	case idleState:
+		return false, nil
+
+	case waitForUpgradeReboot:
+		fallthrough
+	case waitForSecondUpgrade:
+		fallthrough
+	case waitForFinish:
+		return module.restoreInitialState(waitForCancelReboot)
+
+	case waitForCancelReboot:
+		return true, nil
+
+	case waitForSecondCancel:
+		if module.currentPartition == module.state.UpgradePartition {
+			module.systemError = errors.New("initial partition boot failed")
+			return false, module.systemError
+		}
+
+		return module.restoreInitialState(idleState)
+
+	default:
+		return false, errors.New("wrong state")
+	}
 }
 
 func (module *FSModule) restoreInitialState(rebootState upgradeState) (rebootRequired bool, err error) {
