@@ -334,12 +334,22 @@ func TestUpgrade(t *testing.T) {
 
 		doAction(t, module, actionCancel{
 			version: 1,
-			state:   testStateController{1, -1, []int{1, 0}, []bool{false, true}}}, false)
+			state:   testStateController{1, -1, []int{1, 0}, []bool{true, true}}}, false)
 
 		// Check content of upgraded partition
 
 		partitionContent, err := getPartitionContent(disk.Partitions[partRoot1].Device)
 		if err != nil {
+			t.Fatalf("Can't get partition content: %s", err)
+		}
+
+		if err = compareContent(imageContent, partitionContent); err != nil {
+			t.Errorf("Compare content error: %s", err)
+		}
+
+		// Check content of initial partition
+
+		if partitionContent, err = getPartitionContent(disk.Partitions[partRoot0].Device); err != nil {
 			t.Fatalf("Can't get partition content: %s", err)
 		}
 

@@ -288,7 +288,7 @@ func (module *FSModule) Upgrade(version uint64, imagePath string) (rebootRequire
 		return module.secondUpgrade()
 
 	case waitForFinish:
-		return true, nil
+		return module.checkForFinish()
 
 	default:
 		return false, errors.New("invalid state")
@@ -332,6 +332,18 @@ func (module *FSModule) FinishUpgrade(version uint64) (err error) {
 		return module.systemError
 	}
 
+	if module.state.State != waitForFinish {
+		return errors.New("invalid state")
+	}
+
+	if module.state.UpgradeVersion != version {
+		return errors.New("invalid version")
+	}
+
+	if _, err = module.checkForFinish(); err != nil {
+		return err
+	}
+
 	if err = module.setState(idleState); err != nil {
 		log.Errorf("Can't set state: %s", err)
 
@@ -339,6 +351,9 @@ func (module *FSModule) FinishUpgrade(version uint64) (err error) {
 
 		return err
 	}
+
+	module.wg.Add(1)
+	go module.upgradeSecondPartition()
 
 	return nil
 }
@@ -491,6 +506,16 @@ func (module *FSModule) secondUpgrade() (rebootRequired bool, err error) {
 	return false, nil
 }
 
+func (module *FSModule) checkForFinish() (rebootRequired bool, err error) {
+	if module.currentPartition != module.state.UpgradePartition {
+		if rebootRequired, module.systemError = module.restoreInitialState(waitForUpgradeReboot); module.systemError != nil {
+			log.Errorf("Can't restore initial state: %s", module.systemError)
+		}
+	}
+
+	return rebootRequired, nil
+}
+
 func (module *FSModule) restoreInitialState(rebootState upgradeState) (rebootRequired bool, err error) {
 	log.WithField("upgradePartition", module.state.UpgradePartition).Debugf("%s: restoring initial state", module.id)
 
@@ -596,6 +621,27 @@ func (module *FSModule) restorePartition(partIndex int) {
 		return
 	}
 }
+
+func (module *FSModule) upgradeSecondPartition() {
+	partIndex := (module.state.UpgradePartition + 1) % len(module.partInfo)
+
+	log.Debugf("%s: upgrading second partition %s", module.id, module.partInfo[partIndex].Device)
+
+	if err := module.upgradePartition(partIndex); err != nil {
+		log.Errorf("%s: second partition upgrade error: %s. Copying from current", module.id, err)
+
+		module.restorePartition(partIndex)
+
+		return
+	}
+
+	if module.systemError = module.controller.SetBootActive(partIndex, true); module.systemError != nil {
+		log.Errorf("%s: can't restore partition %s: %s", module.id, module.partInfo[partIndex].Device, module.systemError)
+	}
+
+	module.wg.Done()
+}
+
 func (module *FSModule) updatePartInfo(partitions []string) (err error) {
 	module.partInfo = make([]partition.Info, 0, len(partitions))
 
