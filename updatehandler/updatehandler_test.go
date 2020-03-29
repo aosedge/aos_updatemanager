@@ -371,28 +371,6 @@ func (storage *testStorage) GetOperationState() (state []byte, err error) {
 	return storage.operationState, nil
 }
 
-func (storage *testStorage) AddModuleStatus(id string, status error) (err error) {
-	storage.moduleStatuses[id] = status
-
-	return nil
-}
-
-func (storage *testStorage) RemoveModuleStatus(id string) (err error) {
-	delete(storage.moduleStatuses, id)
-
-	return nil
-}
-
-func (storage *testStorage) GetModuleStatuses() (moduleStatuses map[string]error, err error) {
-	return storage.moduleStatuses, nil
-}
-
-func (storage *testStorage) ClearModuleStatuses() (err error) {
-	storage.moduleStatuses = make(map[string]error)
-
-	return nil
-}
-
 func (module *testModule) GetID() (id string) {
 	return module.id
 }

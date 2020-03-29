@@ -18,7 +18,6 @@
 package database
 
 import (
-	"errors"
 	"os"
 	"reflect"
 	"testing"
@@ -116,62 +115,5 @@ func TestOperationState(t *testing.T) {
 
 	if !reflect.DeepEqual(setState, getState) {
 		t.Fatalf("Wrong state value: %v", getState)
-	}
-}
-
-func TestModuleStatuses(t *testing.T) {
-	// Check AddModuleStatus
-
-	setModuleStatuses := map[string]error{
-		"id1": nil,
-		"id2": nil,
-		"id3": errors.New("Some critical error"),
-		"id4": nil,
-		"id5": errors.New("Even more critical error")}
-
-	for id, status := range setModuleStatuses {
-		if err := db.AddModuleStatus(id, status); err != nil {
-			t.Fatalf("Can't add module status: %s", err)
-		}
-	}
-
-	getModuleStatuses, err := db.GetModuleStatuses()
-	if err != nil {
-		t.Fatalf("Can't get module statuses: %s", err)
-	}
-
-	if !reflect.DeepEqual(setModuleStatuses, getModuleStatuses) {
-		t.Fatalf("Wrong module statuses: %v", getModuleStatuses)
-	}
-
-	// Check RemoveModuleStatus
-
-	delete(setModuleStatuses, "id3")
-
-	if err = db.RemoveModuleStatus("id3"); err != nil {
-		t.Fatalf("Can't remove module status: %s", err)
-	}
-
-	if getModuleStatuses, err = db.GetModuleStatuses(); err != nil {
-		t.Fatalf("Can't get module statuses: %s", err)
-	}
-
-	if !reflect.DeepEqual(setModuleStatuses, getModuleStatuses) {
-		t.Fatalf("Wrong module statuses: %v", getModuleStatuses)
-	}
-
-	// Check ClearModuleStatuses
-
-	if err := db.ClearModuleStatuses(); err != nil {
-		t.Fatalf("Can't clear module statuses: %s", err)
-	}
-
-	getModuleStatuses, err = db.GetModuleStatuses()
-	if err != nil {
-		t.Fatalf("Can't get module statuses: %s", err)
-	}
-
-	if len(getModuleStatuses) != 0 {
-		t.Fatalf("Wrong module statuses: %v", getModuleStatuses)
 	}
 }
