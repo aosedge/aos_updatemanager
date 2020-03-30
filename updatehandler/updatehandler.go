@@ -295,10 +295,6 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return errors.New("wrong state")
 	}
 
-	if handler.state.OperationType == revertOperation && handler.state.LastError != nil {
-		return errors.New("can't upgrade after failed revert")
-	}
-
 	imagePath := path.Join(handler.upgradeDir, imageInfo.Path)
 
 	if err = image.CheckFileInfo(imagePath, image.FileInfo{
@@ -333,8 +329,8 @@ func (handler *Handler) Revert(version uint64) (err error) {
 
 	log.WithField("version", version).Info("Revert")
 
-	if !(handler.state.OperationType == upgradeOperation && handler.state.LastError == nil) {
-		return errors.New("wrong state")
+	if version >= handler.currentVersion {
+		return fmt.Errorf("wrong revert version: %d", version)
 	}
 
 	handler.state.OperationState = initState
