@@ -148,6 +148,7 @@ type PlatformController interface {
 	GetVersion() (version uint64, err error)
 	SetVersion(version uint64) (err error)
 	GetPlatformID() (id string, err error)
+	SystemReboot() (err error)
 }
 
 type handlerState struct {
@@ -474,10 +475,15 @@ func (handler *Handler) finishOperation(operationError error) {
 }
 
 func (handler *Handler) upgrade() {
+	var (
+		rebootRequired bool
+		err            error
+	)
+
 	for {
 		switch handler.state.OperationState {
 		case initState:
-			if err := handler.unpackImage(); err != nil {
+			if err = handler.unpackImage(); err != nil {
 				handler.switchState(finishState, err)
 				break
 			}
@@ -485,16 +491,26 @@ func (handler *Handler) upgrade() {
 			handler.switchState(upgradeState, nil)
 
 		case upgradeState:
-			if err := handler.upgradeModules(); err != nil {
+			rebootRequired, err = handler.upgradeModules()
+			if err != nil {
 				handler.switchState(cancelState, err)
+				break
+			}
+
+			if rebootRequired {
 				break
 			}
 
 			handler.switchState(finishState, nil)
 
 		case cancelState:
-			if err := handler.cancelUpgradeModules(); err != nil {
+			rebootRequired, err = handler.cancelUpgradeModules()
+			if err != nil {
 				log.Errorf("Error canceling upgrade modules: %s", err)
+			}
+
+			if rebootRequired {
+				break
 			}
 
 			handler.finishOperation(handler.state.LastError)
@@ -502,8 +518,6 @@ func (handler *Handler) upgrade() {
 			return
 
 		case finishState:
-			var err error
-
 			if err = handler.finishUpgradeModules(); err != nil {
 				log.Errorf("Error finishing upgrade modules: %s", err)
 			}
@@ -512,26 +526,51 @@ func (handler *Handler) upgrade() {
 
 			return
 		}
+
+		if rebootRequired {
+			log.Debug("System reboot is required")
+
+			if err = handler.platform.SystemReboot(); err != nil {
+				log.Errorf("Can't perform system reboot: %s", err)
+			}
+
+			return
+		}
 	}
 }
 
 func (handler *Handler) revert() {
+	var (
+		rebootRequired bool
+		err            error
+	)
+
 	for {
 		switch handler.state.OperationState {
 		case initState:
 			handler.switchState(revertState, nil)
 
 		case revertState:
-			if err := handler.revertModules(); err != nil {
+			rebootRequired, err = handler.revertModules()
+			if err != nil {
 				handler.switchState(cancelState, err)
+				break
+			}
+
+			if rebootRequired {
 				break
 			}
 
 			handler.switchState(finishState, nil)
 
 		case cancelState:
-			if err := handler.cancelRevertModules(); err != nil {
+			rebootRequired, err = handler.cancelRevertModules()
+			if err != nil {
 				log.Errorf("Error canceling revert modules: %s", err)
+			}
+
+			if rebootRequired {
+				break
 			}
 
 			handler.finishOperation(handler.state.LastError)
@@ -546,6 +585,16 @@ func (handler *Handler) revert() {
 			}
 
 			handler.finishOperation(err)
+
+			return
+		}
+
+		if rebootRequired {
+			log.Debug("System reboot is required")
+
+			if err = handler.platform.SystemReboot(); err != nil {
+				log.Errorf("Can't perform system reboot: %s", err)
+			}
 
 			return
 		}
@@ -599,25 +648,25 @@ func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
 	return metadata, err
 }
 
-func (handler *Handler) upgradeModules() (err error) {
+func (handler *Handler) upgradeModules() (rebootRequired bool, err error) {
 	metadata, err := handler.getImageMetadata()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	platformID, err := handler.platform.GetPlatformID()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if metadata.PlatformID != platformID {
-		return errors.New("wrong platform ID")
+		return false, errors.New("wrong platform ID")
 	}
 
 	// Check that all modules were found
 	for _, item := range metadata.UpdateItems {
 		if _, ok := handler.modules[item.Type]; !ok {
-			return fmt.Errorf("module %s not found", item.Type)
+			return false, fmt.Errorf("module %s not found", item.Type)
 		}
 	}
 
@@ -628,24 +677,34 @@ func (handler *Handler) upgradeModules() (err error) {
 		}
 
 		if err = handler.setModuleState(item.Type, upgradingState); err != nil {
-			return err
+			return false, err
 		}
 
-		if _, err = handler.modules[item.Type].Upgrade(handler.state.OperationVersion,
-			path.Join(handler.bundleDir, item.Path)); err != nil {
+		moduleRebootRequired, err := handler.modules[item.Type].Upgrade(handler.state.OperationVersion,
+			path.Join(handler.bundleDir, item.Path))
+		if err != nil {
 			log.WithField("id", item.Type).Errorf("Upgrade module failed: %s", err)
-			return err
+
+			return false, err
+		}
+
+		if moduleRebootRequired {
+			log.WithField("id", item.Type).Debug("Module reboot required")
+
+			rebootRequired = true
+
+			continue
 		}
 
 		if err = handler.setModuleState(item.Type, upgradedState); err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	return nil
+	return rebootRequired, nil
 }
 
-func (handler *Handler) cancelUpgradeModules() (cancelErr error) {
+func (handler *Handler) cancelUpgradeModules() (rebootRequired bool, cancelErr error) {
 	for id, state := range handler.state.ModuleStates {
 		// Skip already canceled modules
 		if state == canceledState {
@@ -670,12 +729,21 @@ func (handler *Handler) cancelUpgradeModules() (cancelErr error) {
 				cancelErr = err
 			}
 		} else {
-			if _, err := module.CancelUpgrade(handler.state.OperationVersion); err != nil {
+			moduleRebootRequired, err := module.CancelUpgrade(handler.state.OperationVersion)
+			if err != nil {
 				log.Errorf("Error canceling upgrade module: %s", err)
 
 				if cancelErr == nil {
 					cancelErr = err
 				}
+			}
+
+			if moduleRebootRequired {
+				log.WithField("id", id).Debug("Module reboot required")
+
+				rebootRequired = true
+
+				continue
 			}
 		}
 
@@ -688,7 +756,7 @@ func (handler *Handler) cancelUpgradeModules() (cancelErr error) {
 		}
 	}
 
-	return cancelErr
+	return rebootRequired, cancelErr
 }
 
 func (handler *Handler) finishUpgradeModules() (finishErr error) {
@@ -716,7 +784,7 @@ func (handler *Handler) finishUpgradeModules() (finishErr error) {
 	return finishErr
 }
 
-func (handler *Handler) revertModules() (err error) {
+func (handler *Handler) revertModules() (rebootRequired bool, err error) {
 	for id, state := range handler.state.ModuleStates {
 		// Skip already reverted modules
 		if state == revertedState {
@@ -725,27 +793,36 @@ func (handler *Handler) revertModules() (err error) {
 
 		module, ok := handler.modules[id]
 		if !ok {
-			return fmt.Errorf("module %s not found", id)
+			return false, fmt.Errorf("module %s not found", id)
 		}
 
 		if err = handler.setModuleState(id, revertingState); err != nil {
-			return err
+			return false, err
 		}
 
-		if _, err = module.Revert(handler.state.OperationVersion); err != nil {
+		moduleRebootRequired, err := module.Revert(handler.state.OperationVersion)
+		if err != nil {
 			log.WithField("id", id).Errorf("Revert module failed: %s", err)
-			return err
+			return false, err
+		}
+
+		if moduleRebootRequired {
+			log.WithField("id", id).Debug("Module reboot required")
+
+			rebootRequired = true
+
+			continue
 		}
 
 		if err = handler.setModuleState(id, revertedState); err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	return nil
+	return rebootRequired, nil
 }
 
-func (handler *Handler) cancelRevertModules() (cancelErr error) {
+func (handler *Handler) cancelRevertModules() (rebootRequired bool, cancelErr error) {
 	for id, state := range handler.state.ModuleStates {
 		// Skip already canceled modules
 		if state == upgradedState || state == canceledState {
@@ -770,12 +847,21 @@ func (handler *Handler) cancelRevertModules() (cancelErr error) {
 				cancelErr = err
 			}
 		} else {
-			if _, err := module.CancelRevert(handler.state.OperationVersion); err != nil {
+			moduleRebootRequired, err := module.CancelRevert(handler.state.OperationVersion)
+
+			if err != nil {
 				log.Errorf("Error canceling revert module: %s", err)
 
 				if cancelErr == nil {
 					cancelErr = err
 				}
+			}
+
+			if moduleRebootRequired {
+				log.WithField("id", id).Debug("Module reboot required")
+
+				rebootRequired = true
+				continue
 			}
 		}
 
@@ -788,7 +874,7 @@ func (handler *Handler) cancelRevertModules() (cancelErr error) {
 		}
 	}
 
-	return cancelErr
+	return rebootRequired, cancelErr
 }
 
 func (handler *Handler) finishRevertModules() (finishErr error) {
