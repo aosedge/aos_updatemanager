@@ -112,7 +112,7 @@ type Handler struct {
 
 	wg sync.WaitGroup
 
-	statusChannel chan string
+	statusChannel chan umprotocol.StatusRsp
 }
 
 // UpdateModule interface for module plugin
@@ -189,7 +189,7 @@ func New(cfg *config.Config, modules []UpdateModule,
 		storage:       storage,
 		upgradeDir:    cfg.UpgradeDir,
 		bundleDir:     path.Join(cfg.UpgradeDir, bundleDir),
-		statusChannel: make(chan string, statusChannelSize),
+		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
 	}
 
 	if _, err := os.Stat(handler.bundleDir); os.IsNotExist(err) {
@@ -220,62 +220,12 @@ func New(cfg *config.Config, modules []UpdateModule,
 	return handler, nil
 }
 
-// GetCurrentVersion returns current system version
-func (handler *Handler) GetCurrentVersion() (version uint64) {
-	handler.Lock()
-	defer handler.Unlock()
-
-	return handler.currentVersion
-}
-
-// GetOperationVersion returns upgrade/revert version
-func (handler *Handler) GetOperationVersion() (version uint64) {
-	handler.Lock()
-	defer handler.Unlock()
-
-	return handler.state.OperationVersion
-}
-
 // GetStatus returns update status
-func (handler *Handler) GetStatus() (status string) {
+func (handler *Handler) GetStatus() (status umprotocol.StatusRsp) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	status = umprotocol.SuccessStatus
-
-	if handler.state.OperationState != idleState {
-		status = umprotocol.InProgressStatus
-	}
-
-	if handler.state.LastError != nil {
-		status = umprotocol.FailedStatus
-	}
-
-	return status
-}
-
-// GetLastOperation returns last operation
-func (handler *Handler) GetLastOperation() (operation string) {
-	handler.Lock()
-	defer handler.Unlock()
-
-	if handler.state.OperationType == revertOperation {
-		operation = umprotocol.RevertOperation
-	}
-
-	if handler.state.OperationType == upgradeOperation {
-		operation = umprotocol.UpgradeOperation
-	}
-
-	return operation
-}
-
-// GetLastError returns last upgrade error
-func (handler *Handler) GetLastError() (err error) {
-	handler.Lock()
-	defer handler.Unlock()
-
-	return handler.state.LastError
+	return handler.getStatus()
 }
 
 // Upgrade performs upgrade operation
@@ -348,7 +298,7 @@ func (handler *Handler) Revert(version uint64) (err error) {
 }
 
 // StatusChannel this channel is used to notify when upgrade/revert is finished
-func (handler *Handler) StatusChannel() (statusChannel <-chan string) {
+func (handler *Handler) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
 	return handler.statusChannel
 }
 
@@ -461,13 +411,7 @@ func (handler *Handler) finishOperation(operationError error) {
 		log.Errorf("Can't save update handler state: %s", err)
 	}
 
-	status := umprotocol.SuccessStatus
-
-	if handler.state.LastError != nil {
-		status = umprotocol.FailedStatus
-	}
-
-	handler.statusChannel <- status
+	handler.statusChannel <- handler.getStatus()
 }
 
 func (handler *Handler) upgrade() {
@@ -911,4 +855,30 @@ func (handler *Handler) setModuleState(id string, state moduleState) (err error)
 	}
 
 	return nil
+}
+
+func (handler *Handler) getStatus() (status umprotocol.StatusRsp) {
+	status.Status = umprotocol.SuccessStatus
+
+	if handler.state.OperationState != idleState {
+		status.Status = umprotocol.InProgressStatus
+	}
+
+	if handler.state.LastError != nil {
+		status.Status = umprotocol.FailedStatus
+	}
+
+	if handler.state.OperationType == revertOperation {
+		status.Operation = umprotocol.RevertOperation
+	}
+
+	if handler.state.OperationType == upgradeOperation {
+		status.Operation = umprotocol.UpgradeOperation
+	}
+
+	status.CurrentVersion = handler.currentVersion
+	status.RequestedVersion = handler.state.OperationVersion
+	status.Error = handler.state.ErrorMsg
+
+	return status
 }

@@ -45,14 +45,10 @@ type Server struct {
 
 // Updater interface
 type Updater interface {
-	GetCurrentVersion() (version uint64)
-	GetOperationVersion() (version uint64)
-	GetLastOperation() (operation string)
-	GetStatus() (status string)
-	GetLastError() (err error)
+	GetStatus() (status umprotocol.StatusRsp)
 	Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error)
 	Revert(version uint64) (err error)
-	StatusChannel() (statusChannel <-chan string)
+	StatusChannel() (statusChannel <-chan umprotocol.StatusRsp)
 }
 
 /*******************************************************************************
@@ -120,21 +116,7 @@ func (server *Server) processMessage(messageType int, messageJSON []byte) (respo
 	}
 }
 
-func (server *Server) sendStatus(status string) {
-	errStr := ""
-
-	if err := server.updater.GetLastError(); err != nil {
-		errStr = err.Error()
-	}
-
-	statusMessage := umprotocol.StatusRsp{
-		Operation:        server.updater.GetLastOperation(),
-		Status:           status,
-		Error:            errStr,
-		RequestedVersion: server.updater.GetOperationVersion(),
-		CurrentVersion:   server.updater.GetCurrentVersion(),
-	}
-
+func (server *Server) sendStatus(statusMessage umprotocol.StatusRsp) {
 	log.Debug("Send operation status")
 
 	statusJSON, err := marshalResponse(umprotocol.StatusResponseType, &statusMessage)
@@ -150,19 +132,7 @@ func (server *Server) sendStatus(status string) {
 }
 
 func (server *Server) processGetStatus() (response []byte, err error) {
-	errStr := ""
-
-	if err = server.updater.GetLastError(); err != nil {
-		errStr = err.Error()
-	}
-
-	statusMessage := umprotocol.StatusRsp{
-		Operation:        server.updater.GetLastOperation(),
-		Status:           server.updater.GetStatus(),
-		Error:            errStr,
-		RequestedVersion: server.updater.GetOperationVersion(),
-		CurrentVersion:   server.updater.GetCurrentVersion(),
-	}
+	statusMessage := server.updater.GetStatus()
 
 	log.Debug("Process get status request")
 
@@ -181,13 +151,7 @@ func (server *Server) processSystemUpgrade(request []byte) (response []byte, err
 	if err := server.updater.Upgrade(upgradeReq.ImageVersion, upgradeReq.ImageInfo); err != nil {
 		log.Errorf("Upgrade failed: %s", err)
 
-		statusMessage := umprotocol.StatusRsp{
-			Status:           umprotocol.FailedStatus,
-			Operation:        umprotocol.UpgradeOperation,
-			RequestedVersion: upgradeReq.ImageVersion,
-			CurrentVersion:   server.updater.GetCurrentVersion(),
-			Error:            err.Error(),
-		}
+		statusMessage := server.updater.GetStatus()
 
 		return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
 	}
@@ -207,13 +171,7 @@ func (server *Server) processSystemRevert(request []byte) (response []byte, err 
 	if err := server.updater.Revert(revertReq.ImageVersion); err != nil {
 		log.Errorf("Revert failed: %s", err)
 
-		statusMessage := umprotocol.StatusRsp{
-			Status:           umprotocol.FailedStatus,
-			Operation:        umprotocol.RevertOperation,
-			RequestedVersion: revertReq.ImageVersion,
-			CurrentVersion:   server.updater.GetCurrentVersion(),
-			Error:            err.Error(),
-		}
+		statusMessage := server.updater.GetStatus()
 
 		return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
 	}

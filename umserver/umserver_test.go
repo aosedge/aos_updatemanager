@@ -56,17 +56,13 @@ type testClient struct {
 }
 
 type testUpdater struct {
-	version       uint64
-	operation     string
-	status        string
-	statusChannel chan string
+	status        umprotocol.StatusRsp
+	statusChannel chan umprotocol.StatusRsp
 }
 
 type testFailUpdater struct {
-	version       uint64
-	operation     string
-	status        string
-	statusChannel chan string
+	status        umprotocol.StatusRsp
+	statusChannel chan umprotocol.StatusRsp
 }
 
 /*******************************************************************************
@@ -315,9 +311,13 @@ func newTestServer(url string, serverType int) (server *umserver.Server) {
 	var updater umserver.Updater
 
 	if serverType == serverTypeSuccess {
-		updater = &testUpdater{status: "success", statusChannel: make(chan string)}
+		updater = &testUpdater{
+			status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
+			statusChannel: make(chan umprotocol.StatusRsp)}
 	} else {
-		updater = &testFailUpdater{status: "success", statusChannel: make(chan string)}
+		updater = &testFailUpdater{
+			status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
+			statusChannel: make(chan umprotocol.StatusRsp)}
 	}
 
 	server, err := umserver.New(&cfg, updater)
@@ -399,43 +399,31 @@ func (client *testClient) sendRawRequest(message, response interface{}, timeout 
 	return nil
 }
 
-func (updater *testUpdater) GetCurrentVersion() (version uint64) {
-	return updater.version
-}
-
-func (updater *testUpdater) GetOperationVersion() (version uint64) {
-	return updater.version
-}
-
-func (updater *testUpdater) GetLastOperation() (operation string) {
-	return updater.operation
-}
-
-func (updater *testUpdater) GetStatus() (status string) {
+func (updater *testUpdater) GetStatus() (status umprotocol.StatusRsp) {
 	return updater.status
 }
 
-func (updater *testUpdater) GetLastError() (err error) {
-	return nil
-}
-
 func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
-	updater.version = version
-	updater.operation = umprotocol.UpgradeOperation
-	updater.statusChannel <- umprotocol.SuccessStatus
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.UpgradeOperation
+	updater.status.Status = umprotocol.SuccessStatus
+
+	updater.statusChannel <- updater.status
 
 	return nil
 }
 
 func (updater *testUpdater) Revert(version uint64) (err error) {
-	updater.version = version
-	updater.operation = umprotocol.RevertOperation
-	updater.statusChannel <- umprotocol.SuccessStatus
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.RevertOperation
+	updater.status.Status = umprotocol.SuccessStatus
+
+	updater.statusChannel <- updater.status
 
 	return nil
 }
 
-func (updater *testUpdater) StatusChannel() (statusChannel <-chan string) {
+func (updater *testUpdater) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
 	return updater.statusChannel
 }
 
@@ -443,34 +431,28 @@ func (updater *testUpdater) StatusChannel() (statusChannel <-chan string) {
  * testFailUpdater implementation
  ******************************************************************************/
 
-func (updater *testFailUpdater) GetCurrentVersion() (version uint64) {
-	return updater.version
-}
-
-func (updater *testFailUpdater) GetOperationVersion() (version uint64) {
-	return updater.version
-}
-
-func (updater *testFailUpdater) GetLastOperation() (operation string) {
-	return updater.operation
-}
-
-func (updater *testFailUpdater) GetStatus() (status string) {
+func (updater *testFailUpdater) GetStatus() (status umprotocol.StatusRsp) {
 	return updater.status
 }
 
-func (updater *testFailUpdater) GetLastError() (err error) {
-	return nil
-}
-
 func (updater *testFailUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
-	return errors.New("UnitTest: failed update")
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.UpgradeOperation
+	updater.status.Status = umprotocol.FailedStatus
+	updater.status.Error = "UnitTest: failed update"
+
+	return errors.New(updater.status.Error)
 }
 
 func (updater *testFailUpdater) Revert(version uint64) (err error) {
-	return errors.New("UnitTest: failed revert")
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.RevertOperation
+	updater.status.Status = umprotocol.FailedStatus
+	updater.status.Error = "UnitTest: failed revert"
+
+	return errors.New(updater.status.Error)
 }
 
-func (updater *testFailUpdater) StatusChannel() (statusChannel <-chan string) {
+func (updater *testFailUpdater) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
 	return updater.statusChannel
 }
