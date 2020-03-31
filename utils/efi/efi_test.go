@@ -57,6 +57,40 @@ func TestGetByPartUUID(t *testing.T) {
 	if id != bootID {
 		t.Errorf("Wrong boot ID: %04X", id)
 	}
+
+	// Check get/set active
+
+	curActive, err := efiVars.GetBootActive(id)
+	if err != nil {
+		t.Errorf("Can't get boot active: %s", err)
+	}
+
+	if err = efiVars.SetBootActive(id, !curActive); err != nil {
+		t.Errorf("Can't set boot active: %s", err)
+	}
+
+	active, err := efiVars.GetBootActive(id)
+	if err != nil {
+		t.Errorf("Can't get boot active: %s", err)
+	}
+
+	if curActive == active {
+		t.Errorf("Wrong boot active value: %v", active)
+	}
+
+	// Restore initial active state
+
+	if err = efiVars.SetBootActive(id, curActive); err != nil {
+		t.Fatalf("Can't set boot active: %s", err)
+	}
+
+	if active, err = efiVars.GetBootActive(id); err != nil {
+		t.Errorf("Can't get boot active: %s", err)
+	}
+
+	if curActive != active {
+		t.Errorf("Wrong boot active value: %v", active)
+	}
 }
 
 func TestBootOrder(t *testing.T) {

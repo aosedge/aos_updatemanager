@@ -57,6 +57,8 @@ const (
 
 const loadOptionActive = 0x00000001
 
+const writeAttribute = 0644
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
@@ -76,9 +78,9 @@ type Instance struct {
 type bootItem struct {
 	id          uint16
 	name        string
+	attributes  uint32
 	description string
-	isActive    bool
-	data        []interface{}
+	data        []byte
 }
 
 type hdData struct {
@@ -116,8 +118,17 @@ func (instance *Instance) GetBootByPartUUID(partUUID uuid.UUID) (id uint16, err 
 			continue
 		}
 
-		for _, data := range item.data {
-			hd, ok := data.(hdData)
+		efiLoadOption := (*C.efi_load_option)(C.CBytes(item.data))
+		pathLen := C.efi_loadopt_pathlen(efiLoadOption, C.ssize_t(len(item.data)))
+		dpData := C.efi_loadopt_path(efiLoadOption, C.ssize_t(len(item.data)))
+
+		dps, err := parseDP(C.GoBytes(unsafe.Pointer(dpData), C.int(pathLen)))
+		if err != nil {
+			return 0, err
+		}
+
+		for _, dp := range dps {
+			hd, ok := dp.(hdData)
 			if !ok {
 				continue
 			}
@@ -190,7 +201,7 @@ func (instance *Instance) SetBootNext(id uint16) (err error) {
 	log.Debugf("Set EFI boot next: %04X", id)
 
 	return writeU16(efiGlobalGUID, efiBootNextName, []uint16{id},
-		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, 0644)
+		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute)
 
 }
 
@@ -217,7 +228,7 @@ func (instance *Instance) SetBootOrder(ids []uint16) (err error) {
 	log.Debugf("Set EFI boot order: %s", bootOrderToString(ids))
 
 	return writeU16(efiGlobalGUID, efiBootOrderName, ids,
-		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, 0644)
+		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute)
 }
 
 // DeleteBootOrder deletes boot order
@@ -225,6 +236,57 @@ func (instance *Instance) DeleteBootOrder() (err error) {
 	log.Debug("Delete EFI boot order")
 
 	return deleteVar(efiGlobalGUID, efiBootOrderName)
+}
+
+// SetBootActive make boot item active
+func (instance *Instance) SetBootActive(id uint16, active bool) (err error) {
+	log.Debugf("Set EFI %04X boot active: %v", id, active)
+
+	for i, item := range instance.bootItems {
+		if item.id == id {
+			cData := C.CBytes(item.data)
+			efiLoadOption := (*C.efi_load_option)(cData)
+			curActive := C.efi_loadopt_attrs(efiLoadOption)&loadOptionActive != 0
+
+			if active == curActive {
+				return nil
+			}
+
+			if active {
+				C.efi_loadopt_attr_set(efiLoadOption, loadOptionActive)
+			} else {
+				C.efi_loadopt_attr_clear(efiLoadOption, loadOptionActive)
+			}
+
+			item.data = C.GoBytes(cData, C.int(len(item.data)))
+
+			if err = writeVar(efiGlobalGUID, item.name, item.data, item.attributes, writeAttribute); err != nil {
+				return err
+			}
+
+			instance.bootItems[i].data = item.data
+
+			return nil
+		}
+	}
+
+	return ErrNotFound
+}
+
+// GetBootActive returns boot item active state
+func (instance *Instance) GetBootActive(id uint16) (active bool, err error) {
+	for _, item := range instance.bootItems {
+		if item.id == id {
+			efiLoadOption := (*C.efi_load_option)(C.CBytes(item.data))
+			active := C.efi_loadopt_attrs(efiLoadOption)&loadOptionActive != 0
+
+			log.Debugf("Get EFI %04X boot active: %v", id, active)
+
+			return active, nil
+		}
+	}
+
+	return false, ErrNotFound
 }
 
 // Close closes EFI instance
@@ -403,7 +465,6 @@ func (instance *Instance) readBootItems() (err error) {
 
 func readBootItem(name string) (item bootItem, err error) {
 	item.name = name
-	item.data = make([]interface{}, 0)
 
 	id, err := strconv.ParseUint(regexp.MustCompile(bootItemIDPattern).FindString(name), 16, 16)
 	if err != nil {
@@ -412,28 +473,19 @@ func readBootItem(name string) (item bootItem, err error) {
 
 	item.id = uint16(id)
 
-	data, _, err := readVar(efiGlobalGUID, name)
-	if err != nil {
+	if item.data, item.attributes, err = readVar(efiGlobalGUID, name); err != nil {
 		return bootItem{}, err
 	}
 
-	efiLoadOption := (*C.efi_load_option)(C.CBytes(data))
-
-	item.description = C.GoString((*C.char)(unsafe.Pointer(C.efi_loadopt_desc(efiLoadOption, C.ssize_t(len(data))))))
-	item.isActive = C.efi_loadopt_attrs(efiLoadOption)&loadOptionActive != 0
-
-	pathLen := C.efi_loadopt_pathlen(efiLoadOption, C.ssize_t(len(data)))
-	dp := C.efi_loadopt_path(efiLoadOption, C.ssize_t(len(data)))
-
-	if err = parseDP(C.GoBytes(unsafe.Pointer(dp), C.int(pathLen)), &item); err != nil {
-		return bootItem{}, err
-	}
+	efiLoadOption := (*C.efi_load_option)(C.CBytes(item.data))
+	item.description = C.GoString((*C.char)(unsafe.Pointer(C.efi_loadopt_desc(efiLoadOption, C.ssize_t(len(item.data))))))
 
 	return item, nil
 }
 
-func parseDP(dp []byte, item *bootItem) (err error) {
-	buffer := bytes.NewBuffer(dp)
+func parseDP(dpData []byte) (dps []interface{}, err error) {
+	dps = make([]interface{}, 0)
+	buffer := bytes.NewBuffer(dpData)
 
 	for {
 		var (
@@ -443,53 +495,56 @@ func parseDP(dp []byte, item *bootItem) (err error) {
 		)
 
 		if err = binary.Read(buffer, binary.LittleEndian, &dpType); err != nil {
-			return err
+			return nil, err
 		}
 
 		if err = binary.Read(buffer, binary.LittleEndian, &dpSubType); err != nil {
-			return err
+			return nil, err
 		}
 
 		if err = binary.Read(buffer, binary.LittleEndian, &dpLen); err != nil {
-			return err
+			return nil, err
 		}
 
 		if dpLen < 4 {
-			return errors.New("invalid dp size")
+			return nil, errors.New("invalid dp size")
 		}
 
 		data := make([]byte, dpLen-4)
 
 		if _, err = io.ReadFull(buffer, data); err != nil {
-			return err
+			return nil, err
 		}
 
 		switch dpType {
 		case C.EFIDP_MEDIA_TYPE:
-			if err = parseMediaType(dpSubType, data, item); err != nil {
-				return err
+			dp, err := parseMediaType(dpSubType, data)
+			if err != nil {
+				return nil, err
 			}
+
+			dps = append(dps, dp)
 
 		case C.EFIDP_END_TYPE:
 			if dpSubType == C.EFIDP_END_ENTIRE {
-				return nil
+				return dps, nil
 			}
 		}
 	}
 }
 
-func parseMediaType(subType uint8, data []byte, item *bootItem) (err error) {
+func parseMediaType(subType uint8, data []byte) (dp interface{}, err error) {
 	switch subType {
 	case C.EFIDP_MEDIA_HD:
 		hd, err := parseHD(data)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		item.data = append(item.data, hd)
+		return hd, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func parseHD(data []byte) (hd hdData, err error) {
