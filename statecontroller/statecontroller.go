@@ -33,6 +33,11 @@ type Storage interface {
  * Vars
  ******************************************************************************/
 
+var (
+	errOutOfRange = errors.New("index out of range")
+	errNotFound   = errors.New("index not found")
+)
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
@@ -48,7 +53,7 @@ func New(bootParts, rootParts []string, storage Storage,
 		return nil, errors.New("num of boot partitions should be more than 1")
 	}
 
-	if controller.efi, err = newEfiController(efiProvider); err != nil {
+	if controller.efi, err = newEfiController(bootParts, efiProvider); err != nil {
 		return nil, err
 	}
 
