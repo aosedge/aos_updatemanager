@@ -76,7 +76,7 @@ func Umount(mountPoint string) (err error) {
 
 	defer func() {
 		if removeErr := os.RemoveAll(mountPoint); removeErr != nil {
-			log.Errorf("Can't remove")
+			log.Errorf("Can't remove mount point: %s", removeErr)
 			if err == nil {
 				err = removeErr
 			}
