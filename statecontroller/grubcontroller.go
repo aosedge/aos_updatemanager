@@ -57,6 +57,9 @@ type GrubController struct {
 	currentRootIndex int
 
 	bootNext int
+
+	ready bool
+	wg    *sync.WaitGroup
 }
 
 type bootInfoProvider interface {
@@ -100,6 +103,8 @@ func (controller *GrubController) WaitForReady() (err error) {
 		return errors.New("GRUB config version mismatch")
 	}
 
+	controller.ready = true
+
 	return nil
 }
 
@@ -108,6 +113,10 @@ func (controller *GrubController) GetCurrentBoot() (index int, err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return 0, errNotReady
+	}
+
 	return controller.currentRootIndex, nil
 }
 
@@ -115,6 +124,10 @@ func (controller *GrubController) GetCurrentBoot() (index int, err error) {
 func (controller *GrubController) SetBootActive(index int, active bool) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
+
+	if !controller.ready {
+		return errNotReady
+	}
 
 	if index < 0 || index >= controller.partCount {
 		return errOutOfRange
@@ -147,6 +160,10 @@ func (controller *GrubController) GetBootActive(index int) (active bool, err err
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return false, errNotReady
+	}
+
 	if index < 0 || index >= controller.partCount {
 		return false, errOutOfRange
 	}
@@ -177,6 +194,10 @@ func (controller *GrubController) GetBootActive(index int) (active bool, err err
 func (controller *GrubController) GetBootOrder() (indexes []int, err error) {
 	controller.Lock()
 	defer controller.Unlock()
+
+	if !controller.ready {
+		return nil, errNotReady
+	}
 
 	envVar, err := controller.mountGrubEnv(controller.currentBootInfo)
 	if err != nil {
@@ -213,6 +234,10 @@ func (controller *GrubController) SetBootOrder(indexes []int) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return errNotReady
+	}
+
 	valueStr := ""
 
 	for _, index := range indexes {
@@ -248,6 +273,10 @@ func (controller *GrubController) SetBootNext(index int) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return errNotReady
+	}
+
 	if index < 0 || index >= controller.partCount {
 		return errOutOfRange
 	}
@@ -261,6 +290,10 @@ func (controller *GrubController) SetBootNext(index int) (err error) {
 func (controller *GrubController) ClearBootNext() (err error) {
 	controller.Lock()
 	defer controller.Unlock()
+
+	if !controller.ready {
+		return errNotReady
+	}
 
 	envVar, err := controller.mountGrubEnv(controller.currentBootInfo)
 	if err != nil {
@@ -284,10 +317,11 @@ func (controller *GrubController) ClearBootNext() (err error) {
  * Private
  ******************************************************************************/
 
-func newGrubController(rootParts []string, cmdLineFile string, boot bootInfoProvider) (controller *GrubController, err error) {
+func newGrubController(rootParts []string, cmdLineFile string,
+	boot bootInfoProvider, wg *sync.WaitGroup) (controller *GrubController, err error) {
 	log.Debug("Create GRUB controller")
 
-	controller = &GrubController{boot: boot, partCount: len(rootParts), bootNext: -1}
+	controller = &GrubController{boot: boot, partCount: len(rootParts), bootNext: -1, wg: wg}
 
 	if controller.currentRootIndex, err = getCurrentPartIndex(cmdLineFile, rootParts); err != nil {
 		return nil, err

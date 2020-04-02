@@ -2,6 +2,7 @@ package statecontroller
 
 import (
 	"errors"
+	"sync"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -21,6 +22,8 @@ type Controller struct {
 	efi  *EfiController
 
 	storage Storage
+
+	wg sync.WaitGroup
 }
 
 // Storage provides interface to get/set system version
@@ -34,6 +37,7 @@ type Storage interface {
  ******************************************************************************/
 
 var (
+	errNotReady   = errors.New("controller not ready")
 	errOutOfRange = errors.New("index out of range")
 	errNotFound   = errors.New("index not found")
 )
@@ -53,7 +57,7 @@ func New(bootParts, rootParts []string, storage Storage,
 		return nil, errors.New("num of boot partitions should be more than 1")
 	}
 
-	if controller.efi, err = newEfiController(bootParts, efiProvider); err != nil {
+	if controller.efi, err = newEfiController(bootParts, efiProvider, &controller.wg); err != nil {
 		return nil, err
 	}
 
@@ -61,9 +65,12 @@ func New(bootParts, rootParts []string, storage Storage,
 		return nil, errors.New("num of root partitions should be more than 1")
 	}
 
-	if controller.grub, err = newGrubController(rootParts, cmdLineFile, controller.efi); err != nil {
+	if controller.grub, err = newGrubController(rootParts, cmdLineFile, controller.efi, &controller.wg); err != nil {
 		return nil, err
 	}
+
+	controller.wg.Add(1)
+	go controller.waitForSuccessBoot()
 
 	return controller, nil
 }
@@ -131,4 +138,16 @@ func (controller *Controller) SystemReboot() (err error) {
 	}
 
 	return nil
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func (controller *Controller) waitForSuccessBoot() {
+	defer func() {
+		controller.wg.Done()
+	}()
+
+	// Determine success boot and notify controllers
 }

@@ -817,6 +817,10 @@ func TestGRUBSetClearBootNext(t *testing.T) {
 		}
 
 		if item.efiBootNext >= 0 {
+			if err = controller.GetEfiController().WaitForReady(); err != nil {
+				t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+			}
+
 			if err = controller.GetEfiController().SetBootNext(item.efiBootNext); err != nil {
 				t.Fatalf("Item: %d, can't set efi boot next: %s", i, err)
 			}

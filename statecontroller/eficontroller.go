@@ -40,6 +40,9 @@ type EfiController struct {
 	bootCurrent int
 	bootIds     []uint16
 	partInfo    []partition.Info
+
+	ready bool
+	wg    *sync.WaitGroup
 }
 
 /*******************************************************************************
@@ -53,6 +56,10 @@ func (controller *EfiController) WaitForReady() (err error) {
 
 	log.Debug("EFI controller: wait for ready")
 
+	controller.wg.Wait()
+
+	controller.ready = true
+
 	return nil
 }
 
@@ -61,6 +68,10 @@ func (controller *EfiController) GetCurrentBoot() (index int, err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return 0, errNotReady
+	}
+
 	return controller.bootCurrent, nil
 }
 
@@ -68,6 +79,10 @@ func (controller *EfiController) GetCurrentBoot() (index int, err error) {
 func (controller *EfiController) SetBootActive(index int, active bool) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
+
+	if !controller.ready {
+		return errNotReady
+	}
 
 	if index < 0 || index >= len(controller.bootIds) {
 		return errOutOfRange
@@ -81,6 +96,10 @@ func (controller *EfiController) GetBootActive(index int) (active bool, err erro
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return false, errNotReady
+	}
+
 	if index < 0 || index >= len(controller.bootIds) {
 		return false, errOutOfRange
 	}
@@ -92,6 +111,10 @@ func (controller *EfiController) GetBootActive(index int) (active bool, err erro
 func (controller *EfiController) GetBootOrder() (indexes []int, err error) {
 	controller.Lock()
 	defer controller.Unlock()
+
+	if !controller.ready {
+		return nil, errNotReady
+	}
 
 	indexes = make([]int, 0, len(controller.bootIds))
 
@@ -121,6 +144,10 @@ func (controller *EfiController) GetBootOrder() (indexes []int, err error) {
 func (controller *EfiController) SetBootOrder(indexes []int) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
+
+	if !controller.ready {
+		return errNotReady
+	}
 
 	bootOrder, err := controller.efiProvider.GetBootOrder()
 	if err != nil {
@@ -173,6 +200,10 @@ func (controller *EfiController) SetBootNext(index int) (err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return errNotReady
+	}
+
 	if index < 0 || index >= len(controller.bootIds) {
 		return errOutOfRange
 	}
@@ -185,6 +216,10 @@ func (controller *EfiController) ClearBootNext() (err error) {
 	controller.Lock()
 	defer controller.Unlock()
 
+	if !controller.ready {
+		return errNotReady
+	}
+
 	return controller.efiProvider.DeleteBootNext()
 }
 
@@ -192,10 +227,10 @@ func (controller *EfiController) ClearBootNext() (err error) {
  * Private
  ******************************************************************************/
 
-func newEfiController(bootParts []string, efiProvider EfiProvider) (controller *EfiController, err error) {
+func newEfiController(bootParts []string, efiProvider EfiProvider, wg *sync.WaitGroup) (controller *EfiController, err error) {
 	log.Debug("Create EFI controller")
 
-	controller = &EfiController{efiProvider: efiProvider}
+	controller = &EfiController{efiProvider: efiProvider, wg: wg}
 
 	if err = controller.init(bootParts); err != nil {
 		return nil, err
