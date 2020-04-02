@@ -18,7 +18,9 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -28,8 +30,7 @@ import (
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
-	"aos_updatemanager/modulemanager"
-	"aos_updatemanager/modulemanager/fsmodule"
+	"aos_updatemanager/modules/fsmodule"
 	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
@@ -41,6 +42,13 @@ import (
  ******************************************************************************/
 
 const dbFileName = "updatemanager.db"
+
+const (
+	rootfsModuleID     = "rootfs"
+	bootloaderModuleID = "bootloader"
+)
+
+const kernelCmdLine = "/proc/cmdline"
 
 /*******************************************************************************
  * Vars
@@ -115,26 +123,19 @@ func main() {
 		}
 	}
 
-	registerModules()
-
-	moduleManager, err := modulemanager.New(cfg)
+	stateController, modules, err := createUpdateModules(cfg, db)
 	if err != nil {
-		log.Fatalf("Can't create module manager: %s", err)
+		log.Fatalf("Can't create update modules: %s", err)
 	}
+	defer func() {
+		for _, module := range modules {
+			module.Close()
+		}
 
-	efiProvider, err := efi.New()
-	if err != nil {
-		log.Fatalf("Can't create EFI provider: %s", err)
-	}
-	defer efiProvider.Close()
+		stateController.Close()
+	}()
 
-	stateController, err := statecontroller.New(cfg.StateController, moduleManager, efiProvider)
-	if err != nil {
-		log.Fatalf("Can't create state controller: %s", err)
-	}
-	defer stateController.Close()
-
-	updater, err := updatehandler.New(cfg, moduleManager, stateController, db)
+	updater, err := updatehandler.New(cfg, modules, stateController, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
@@ -153,8 +154,70 @@ func main() {
 	<-terminateChannel
 }
 
-func registerModules() {
-	modulemanager.Register("fsmodule", func(id string, configJSON []byte) (module interface{}, err error) {
-		return fsmodule.New(id, configJSON)
-	})
+func createUpdateModules(cfg *config.Config, db *database.Database) (stateController *statecontroller.Controller,
+	modules []updatehandler.UpdateModule, err error) {
+
+	// Create EFI provider
+
+	efiProvider, err := efi.New()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Get fs modules config to pass them to SC
+
+	var (
+		bootModuleCfg, rootModuleCfg fsmodule.ModuleConfig
+	)
+
+	for _, moduleCfg := range cfg.Modules {
+		switch moduleCfg.ID {
+		case rootfsModuleID:
+			if err := json.Unmarshal(moduleCfg.Params, &rootModuleCfg); err != nil {
+				return nil, nil, err
+			}
+
+		case bootloaderModuleID:
+			if err := json.Unmarshal(moduleCfg.Params, &bootModuleCfg); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	// Create SC
+
+	if stateController, err = statecontroller.New(
+		bootModuleCfg.Partitions, rootModuleCfg.Partitions, db, kernelCmdLine,
+		efiProvider); err != nil {
+		return nil, nil, err
+	}
+
+	// Create modules
+
+	modules = make([]updatehandler.UpdateModule, 0)
+
+	for _, moduleCfg := range cfg.Modules {
+		var module updatehandler.UpdateModule
+
+		switch moduleCfg.ID {
+		case rootfsModuleID:
+			if module, err = fsmodule.New(rootfsModuleID, stateController.GetGrubController(),
+				db, moduleCfg.Params); err != nil {
+				return nil, nil, err
+			}
+
+		case bootloaderModuleID:
+			if module, err = fsmodule.New(bootloaderModuleID, stateController.GetEfiController(),
+				db, moduleCfg.Params); err != nil {
+				return nil, nil, err
+			}
+
+		default:
+			return nil, nil, fmt.Errorf("unknown module ID: %s", moduleCfg.ID)
+		}
+
+		modules = append(modules, module)
+	}
+
+	return stateController, modules, nil
 }
