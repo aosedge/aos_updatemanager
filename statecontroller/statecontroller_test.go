@@ -526,15 +526,33 @@ func TestGRUBGetCurrentBoot(t *testing.T) {
 
 		index, err := grubController.GetCurrentBoot()
 
+		controller.Close()
+
 		switch {
 		case err != nil:
 			t.Errorf("Item: %d, can't get current boot: %s", i, err)
 
 		case index != item.bootCurrentIndex:
 			t.Errorf("Item: %d, wrong current boot index: %d", i, index)
-		}
 
-		controller.Close()
+		default:
+			envVars, err := getEnvVariables(partBoot0)
+			if err != nil {
+				t.Fatalf("Item: %d, can't read env variables: %s", i, err)
+			}
+
+			varName := envGrubBootOKPrefix + strconv.Itoa(item.bootCurrentIndex)
+
+			valueStr, ok := envVars[varName]
+			if !ok {
+				t.Errorf("Item: %d, env variable %s not found", i, varName)
+				break
+			}
+
+			if valueStr != "1" {
+				t.Errorf("Item: %d, wrong boot OK value: %s", i, valueStr)
+			}
+		}
 	}
 }
 

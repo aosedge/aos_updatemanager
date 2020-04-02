@@ -103,6 +103,16 @@ func (controller *GrubController) WaitForReady() (err error) {
 		return errors.New("GRUB config version mismatch")
 	}
 
+	// Confirm that boot is OK
+
+	if err = envVar.SetVariable(envGrubBootOKPrefix+strconv.Itoa(controller.currentRootIndex), "1"); err != nil {
+		return err
+	}
+
+	if err = envVar.Store(); err != nil {
+		return err
+	}
+
 	controller.ready = true
 
 	return nil
