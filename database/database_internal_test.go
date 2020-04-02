@@ -18,7 +18,9 @@
 package database
 
 import (
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
@@ -29,7 +31,7 @@ import (
  * Variables
  ******************************************************************************/
 
-var db *Database
+var dbPath string
 
 /*******************************************************************************
  * Main
@@ -38,22 +40,18 @@ var db *Database
 func TestMain(m *testing.M) {
 	var err error
 
-	if err = os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Error creating tmp dir %s", err)
+	tmpDir, err := ioutil.TempDir("", "um_")
+	if err != nil {
+		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
-	db, err = New("tmp/test.db")
-	if err != nil {
-		log.Fatalf("Can't create database: %s", err)
-	}
+	dbPath = path.Join(tmpDir, "test.db")
 
 	ret := m.Run()
 
-	if err = os.RemoveAll("tmp"); err != nil {
+	if err = os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error deleting tmp dir: %s", err)
 	}
-
-	db.Close()
 
 	os.Exit(ret)
 }
@@ -63,22 +61,26 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestDBVersion(t *testing.T) {
-	db, err := New("tmp/version.db")
+	db, err := New(dbPath)
 	if err != nil {
-		log.Fatalf("Can't create database: %s", err)
+		t.Fatalf("Can't create database: %s", err)
 	}
 
 	if err = db.setVersion(dbVersion - 1); err != nil {
-		log.Errorf("Can't set database version: %s", err)
+		t.Errorf("Can't set database version: %s", err)
 	}
 
 	db.Close()
 
-	db, err = New("tmp/version.db")
+	db, err = New(dbPath)
 	if err == nil {
-		log.Error("Expect version mismatch error")
+		t.Error("Expect version mismatch error")
 	} else if err != ErrVersionMismatch {
-		log.Errorf("Can't create database: %s", err)
+		t.Errorf("Can't create database: %s", err)
+	}
+
+	if err := os.RemoveAll(dbPath); err != nil {
+		t.Fatalf("Can't remove database: %s", err)
 	}
 
 	db.Close()
@@ -102,6 +104,12 @@ func TestNewErrors(t *testing.T) {
 }
 
 func TestOperationState(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
 	setState := []byte("{This is test}")
 
 	if err := db.SetOperationState(setState); err != nil {
@@ -115,5 +123,67 @@ func TestOperationState(t *testing.T) {
 
 	if !reflect.DeepEqual(setState, getState) {
 		t.Fatalf("Wrong state value: %v", getState)
+	}
+}
+
+func TestSystemVersion(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	var setVersion uint64 = 32
+
+	if err := db.SetSystemVersion(setVersion); err != nil {
+		t.Fatalf("Can't set system version: %s", err)
+	}
+
+	getVersion, err := db.GetSystemVersion()
+	if err != nil {
+		t.Fatalf("Can't get system version: %s", err)
+	}
+
+	if setVersion != getVersion {
+		t.Fatalf("Wrong system version value: %d", getVersion)
+	}
+}
+
+func TestModuleState(t *testing.T) {
+	type testItem struct {
+		id    string
+		state string
+	}
+
+	testData := []testItem{
+		{"id0", "state00"},
+		{"id1", "state01"},
+		{"id2", "state02"},
+		{"id3", "state03"},
+		{"id0", "state10"},
+		{"id1", "state11"},
+		{"id2", "state12"},
+		{"id3", "state13"},
+	}
+
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	for i, item := range testData {
+		if err = db.SetModuleState(item.id, []byte(item.state)); err != nil {
+			t.Errorf("Index: %d, can't set module state: %s", i, err)
+		}
+
+		state, err := db.GetModuleState(item.id)
+		if err != nil {
+			t.Errorf("Index: %d, can't get module state: %s", i, err)
+		}
+
+		if string(state) != item.state {
+			t.Errorf("Index: %d, wrong module state: %s", i, string(state))
+		}
 	}
 }

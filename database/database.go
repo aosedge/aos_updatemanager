@@ -32,7 +32,7 @@ import (
  ******************************************************************************/
 
 const (
-	dbVersion = 3
+	dbVersion = 4
 )
 
 /*******************************************************************************
@@ -91,6 +91,10 @@ func New(name string) (db *Database, err error) {
 		return db, err
 	}
 
+	if err := db.createModuleTable(); err != nil {
+		return db, err
+	}
+
 	version, err := db.getVersion()
 	if err != nil {
 		return db, err
@@ -140,6 +144,83 @@ func (db *Database) GetOperationState() (state []byte, err error) {
 	}
 
 	return state, nil
+}
+
+// GetSystemVersion returns system version
+func (db *Database) GetSystemVersion() (version uint64, err error) {
+	stmt, err := db.sql.Prepare("SELECT systemVersion FROM config")
+	if err != nil {
+		return version, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow().Scan(&version)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return version, ErrNotExist
+		}
+
+		return version, err
+	}
+
+	return version, nil
+}
+
+// SetSystemVersion sets system version
+func (db *Database) SetSystemVersion(version uint64) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET systemVersion = ?", version)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
+}
+
+// GetModuleState returns module state
+func (db *Database) GetModuleState(id string) (state []byte, err error) {
+	rows, err := db.sql.Query("SELECT state FROM modules WHERE id = ?", id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if err = rows.Scan(&state); err != nil {
+			return nil, err
+		}
+
+		return state, nil
+	}
+
+	return nil, ErrNotExist
+}
+
+// SetModuleState sets module state
+func (db *Database) SetModuleState(id string, state []byte) (err error) {
+	result, err := db.sql.Exec("REPLACE INTO modules (id, state) VALUES(?, ?)", id, state)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
 }
 
 // Close closes database
@@ -215,6 +296,7 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE config (
 			version INTEGER,
+			systemVersion INTEGER,
 			operationState TEXT)`); err != nil {
 		return err
 	}
@@ -222,7 +304,18 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`INSERT INTO config (
 			version,
-			operationState) values(?, ?)`, dbVersion, ""); err != nil {
+			systemVersion,
+			operationState) values(?, ?, ?)`, dbVersion, 0, "{}"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) createModuleTable() (err error) {
+	log.Info("Create module table")
+
+	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
 		return err
 	}
 
