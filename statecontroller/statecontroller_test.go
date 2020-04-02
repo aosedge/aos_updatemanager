@@ -1,14 +1,22 @@
 package statecontroller_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"aos_updatemanager/statecontroller"
 	"aos_updatemanager/utils/efi"
@@ -29,6 +37,14 @@ const (
 const (
 	bootID0 = 0x0012
 	bootID1 = 0x0014
+)
+
+const (
+	envGrubConfigVersion = "NUANCE_GRUB_CFG_VERSION"
+	envGrubBootOrder     = "NUANCE_BOOT_ORDER"
+	envGrubActivePrefix  = "NUANCE_ACTIVE_"
+	envGrubBootOKPrefix  = "NUANCE_BOOT_OK_"
+	envGrubBootNext      = "NUANCE_BOOT_NEXT"
 )
 
 /*******************************************************************************
@@ -57,6 +73,9 @@ type testStorage struct {
  ******************************************************************************/
 
 var tmpDir string
+var mountPoint string
+var grubEnvFile string
+
 var efiProvider = testEfiProvider{
 	bootOrder: make([]uint16, 0),
 	bootItems: make([]testBootItem, 0),
@@ -89,6 +108,13 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error creating tmp dir: %s", err)
 	}
 
+	mountPoint = path.Join(tmpDir, "mount")
+	grubEnvFile = path.Join(mountPoint, "EFI/BOOT/NUANCE/grubenv")
+
+	if err = os.MkdirAll(mountPoint, 0755); err != nil {
+		log.Fatalf("Error creating mount dir: %s", err)
+	}
+
 	if disk, err = testtools.NewTestDisk(
 		path.Join(tmpDir, "testdisk.img"),
 		[]testtools.PartDesc{
@@ -104,6 +130,18 @@ func TestMain(m *testing.M) {
 		{bootID0, true, disk.Partitions[partBoot0].PartUUID},
 		{bootID1, true, disk.Partitions[partBoot1].PartUUID},
 		{0x0011, false, uuid.UUID{}},
+	}
+
+	if err = createCmdLine(disk.Partitions[partRoot0].Device, 0); err != nil {
+		log.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	if err = initBootPartition(partBoot0); err != nil {
+		log.Fatalf("Can't init boot partition: %s", err)
+	}
+
+	if err = initBootPartition(partBoot1); err != nil {
+		log.Fatalf("Can't init boot partition: %s", err)
 	}
 
 	ret := m.Run()
@@ -440,6 +478,420 @@ func TestEfiSetClearBootNext(t *testing.T) {
 	}
 }
 
+func TestGRUBGetCurrentBoot(t *testing.T) {
+	efiProvider.bootCurrent = bootID0
+
+	type testItem struct {
+		rootPart         string
+		bootCurrentIndex int
+		errorExpected    bool
+	}
+
+	testData := []testItem{
+		{disk.Partitions[partRoot0].Device, 0, false},
+		{disk.Partitions[partRoot1].Device, 1, false},
+		{disk.Partitions[partRoot0].Device, 1, true},
+		{disk.Partitions[partRoot0].Device, 2, true},
+		{"/dev/unknownPart", 1, true},
+	}
+
+	for i, item := range testData {
+		if err := createCmdLine(item.rootPart, item.bootCurrentIndex); err != nil {
+			t.Fatalf("Can't create cmdline file: %s", err)
+		}
+
+		controller, err := statecontroller.New(
+			[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+			[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+			&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+
+		switch {
+		case item.errorExpected && err != nil:
+			continue
+
+		case item.errorExpected && err == nil:
+			t.Errorf("Item: %d, error expected", i)
+
+			continue
+
+		case err != nil:
+			t.Fatalf("Item: %d, can't create state controller: %s", i, err)
+		}
+
+		grubController := controller.GetGrubController()
+
+		if err := grubController.WaitForReady(); err != nil {
+			t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+		}
+
+		index, err := grubController.GetCurrentBoot()
+
+		switch {
+		case err != nil:
+			t.Errorf("Item: %d, can't get current boot: %s", i, err)
+
+		case index != item.bootCurrentIndex:
+			t.Errorf("Item: %d, wrong current boot index: %d", i, index)
+		}
+
+		controller.Close()
+	}
+}
+
+func TestGRUBGetSetActiveBoot(t *testing.T) {
+	efiProvider.bootCurrent = bootID0
+
+	if err := createCmdLine(disk.Partitions[partRoot0].Device, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	type testItem struct {
+		index         int
+		active        bool
+		errorExpected bool
+	}
+
+	testData := []testItem{
+		{0, true, false},
+		{0, false, false},
+		{1, true, false},
+		{1, false, false},
+		{2, true, true},
+	}
+
+	// Get active state
+
+	for i, item := range testData {
+		value := "0"
+		if item.active {
+			value = "1"
+		}
+
+		if err := setEnvVariables(partBoot0,
+			map[string]string{envGrubActivePrefix + strconv.Itoa(item.index): value}); err != nil {
+			t.Fatalf("Can't set env variables: %s", err)
+		}
+
+		controller, err := statecontroller.New(
+			[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+			[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+			&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+		if err != nil {
+			t.Fatalf("Item: %d, can't create state controller: %s", i, err)
+		}
+
+		grubController := controller.GetGrubController()
+
+		if err := grubController.WaitForReady(); err != nil {
+			t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+		}
+
+		active, err := grubController.GetBootActive(item.index)
+
+		controller.Close()
+
+		switch {
+		case item.errorExpected && err != nil:
+
+		case item.errorExpected && err == nil:
+			t.Errorf("Item: %d, error expected", i)
+
+		case err != nil:
+			t.Errorf("Item: %d, can't get boot active: %s", i, err)
+
+		case item.active != active:
+			t.Errorf("Item: %d, wrong boot active: %v", i, active)
+		}
+	}
+
+	// Set active state
+
+	for i, item := range testData {
+		controller, err := statecontroller.New(
+			[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+			[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+			&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+		if err != nil {
+			t.Fatalf("Item: %d, can't create state controller: %s", i, err)
+		}
+
+		grubController := controller.GetGrubController()
+
+		if err := grubController.WaitForReady(); err != nil {
+			t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+		}
+
+		err = grubController.SetBootActive(item.index, item.active)
+
+		controller.Close()
+
+		switch {
+		case item.errorExpected && err != nil:
+
+		case item.errorExpected && err == nil:
+			t.Errorf("Item: %d, error expected", i)
+
+		case err != nil:
+			t.Errorf("Item: %d, can't set boot active: %s", i, err)
+
+		default:
+			envVars, err := getEnvVariables(partBoot0)
+			if err != nil {
+				t.Fatalf("Item: %d, can't read env variables: %s", i, err)
+			}
+
+			varName := envGrubActivePrefix + strconv.Itoa(item.index)
+
+			valueStr, ok := envVars[varName]
+			if !ok {
+				t.Errorf("Item: %d, env variable %s not found", i, varName)
+				break
+			}
+
+			value, err := strconv.Atoi(valueStr)
+			if err != nil {
+				t.Errorf("Item: %d, can't convert value: %s", i, err)
+				break
+			}
+
+			active := false
+
+			if value != 0 {
+				active = true
+			}
+
+			if item.active != active {
+				t.Errorf("Item: %d, wrong boot active: %v", i, active)
+			}
+		}
+	}
+}
+
+func TestGRUBGetSetBootOrder(t *testing.T) {
+	efiProvider.bootCurrent = bootID0
+
+	if err := createCmdLine(disk.Partitions[partRoot0].Device, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	type testItem struct {
+		setBootOrder  []int
+		envBootOrder  string
+		errorExpected bool
+	}
+
+	testData := []testItem{
+		{[]int{0, 1}, "0 1", false},
+		{[]int{1, 0}, "1 0", false},
+		{[]int{2, 0}, "2 0", true},
+	}
+
+	// Get boot order
+
+	for i, item := range testData {
+		if err := setEnvVariables(partBoot0,
+			map[string]string{envGrubBootOrder: item.envBootOrder}); err != nil {
+			t.Fatalf("Can't set env variables: %s", err)
+		}
+
+		controller, err := statecontroller.New(
+			[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+			[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+			&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+		if err != nil {
+			t.Fatalf("Item: %d, can't create state controller: %s", i, err)
+		}
+
+		grubController := controller.GetGrubController()
+
+		if err := grubController.WaitForReady(); err != nil {
+			t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+		}
+
+		bootOrder, err := grubController.GetBootOrder()
+
+		controller.Close()
+
+		switch {
+		case item.errorExpected && err != nil:
+
+		case item.errorExpected && err == nil:
+			t.Errorf("Item: %d, error expected", i)
+
+		case err != nil:
+			t.Errorf("Item: %d, can't get boot order: %s", i, err)
+
+		case !reflect.DeepEqual(item.setBootOrder, bootOrder):
+			t.Errorf("Item: %d, wrong boot order: %v", i, bootOrder)
+		}
+	}
+
+	// Set boot order
+
+	for i, item := range testData {
+		controller, err := statecontroller.New(
+			[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+			[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+			&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+		if err != nil {
+			t.Fatalf("Item: %d, can't create state controller: %s", i, err)
+		}
+
+		grubController := controller.GetGrubController()
+
+		if err := grubController.WaitForReady(); err != nil {
+			t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+		}
+
+		err = grubController.SetBootOrder(item.setBootOrder)
+
+		controller.Close()
+
+		switch {
+		case item.errorExpected && err != nil:
+
+		case item.errorExpected && err == nil:
+			t.Errorf("Item: %d, error expected", i)
+
+		case err != nil:
+			t.Errorf("Item: %d, can't set boot order: %s", i, err)
+
+		default:
+			envVars, err := getEnvVariables(partBoot0)
+			if err != nil {
+				t.Fatalf("Item: %d, can't read env variables: %s", i, err)
+			}
+
+			valueStr, ok := envVars[envGrubBootOrder]
+			if !ok {
+				t.Errorf("Item: %d, env variable %s not found", i, envGrubBootOrder)
+				break
+			}
+
+			if valueStr != item.envBootOrder {
+				t.Errorf("Item: %d, wrong boot order: %s", i, valueStr)
+			}
+		}
+	}
+}
+
+func TestGRUBSetClearBootNext(t *testing.T) {
+	efiProvider.bootCurrent = bootID0
+	efiProvider.bootNext = 0xFFFF
+
+	if err := createCmdLine(disk.Partitions[partRoot0].Device, 0); err != nil {
+		t.Fatalf("Can't create cmdline file: %s", err)
+	}
+
+	type testItem struct {
+		efiBootNext   int
+		efiBootPart   int
+		grubBootNext  int
+		errorExpected bool
+	}
+
+	testData := []testItem{
+		{-1, partBoot0, 0, false},
+		{-1, partBoot0, 1, false},
+		{-1, partBoot0, 2, true},
+		{1, partBoot1, 0, false},
+		{1, partBoot1, 1, false},
+		{1, partBoot1, 2, true},
+	}
+
+	// Set boot next
+
+	for i, item := range testData {
+		controller, err := statecontroller.New(
+			[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+			[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+			&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+		if err != nil {
+			t.Fatalf("Item: %d, can't create state controller: %s", i, err)
+		}
+
+		grubController := controller.GetGrubController()
+
+		if err := grubController.WaitForReady(); err != nil {
+			t.Fatalf("Item: %d, wait for ready error: %s", i, err)
+		}
+
+		if item.efiBootNext >= 0 {
+			if err = controller.GetEfiController().SetBootNext(item.efiBootNext); err != nil {
+				t.Fatalf("Item: %d, can't set efi boot next: %s", i, err)
+			}
+		}
+
+		err = grubController.SetBootNext(item.grubBootNext)
+
+		controller.Close()
+
+		switch {
+		case item.errorExpected && err != nil:
+
+		case item.errorExpected && err == nil:
+			t.Errorf("Item: %d, error expected", i)
+
+		case err != nil:
+			t.Errorf("Item: %d, can't set boot next: %s", i, err)
+
+		default:
+			envVars, err := getEnvVariables(item.efiBootPart)
+			if err != nil {
+				t.Fatalf("Item: %d, can't read env variables: %s", i, err)
+			}
+
+			valueStr, ok := envVars[envGrubBootNext]
+			if !ok {
+				t.Errorf("Item: %d, env variable %s not found", i, envGrubBootNext)
+				break
+			}
+
+			value, err := strconv.Atoi(valueStr)
+
+			if value != item.grubBootNext {
+				t.Errorf("Item: %d, wrong boot next: %d", i, value)
+			}
+		}
+	}
+
+	// Clear boot next
+	controller, err := statecontroller.New(
+		[]string{disk.Partitions[partBoot0].Device, disk.Partitions[partBoot1].Device},
+		[]string{disk.Partitions[partRoot0].Device, disk.Partitions[partRoot1].Device},
+		&storage, path.Join(tmpDir, "cmdline"), &efiProvider)
+	if err != nil {
+		t.Fatalf("Can't create state controller: %s", err)
+	}
+
+	grubController := controller.GetGrubController()
+
+	if err := grubController.WaitForReady(); err != nil {
+		t.Fatalf("Wait for ready error: %s", err)
+	}
+
+	if err := grubController.SetBootNext(1); err != nil {
+		t.Fatalf("Can't set boot next: %s", err)
+	}
+
+	if err := grubController.ClearBootNext(); err != nil {
+		t.Fatalf("Can't clear boot next: %s", err)
+	}
+
+	if err := controller.Close(); err != nil {
+		t.Fatalf("Can't close GRUB controller: %s", err)
+	}
+
+	envVars, err := getEnvVariables(partBoot0)
+	if err != nil {
+		t.Fatalf("Can't read env variables: %s", err)
+	}
+
+	if _, ok := envVars[envGrubBootNext]; ok {
+		t.Error("Boot next var is not expected")
+	}
+}
+
 /*******************************************************************************
  * Interface
  ******************************************************************************/
@@ -526,4 +978,121 @@ func (provider *testEfiProvider) SetBootActive(id uint16, active bool) (err erro
 
 func (provider *testEfiProvider) Close() (err error) {
 	return nil
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func createCmdLine(rootPart string, bootIndex int) (err error) {
+	if err = ioutil.WriteFile(path.Join(tmpDir, "cmdline"),
+		[]byte(fmt.Sprintf("root=%s NUANCE.bootIndex=%d", rootPart, bootIndex)), 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getEnvVariables(index int) (vars map[string]string, err error) {
+	vars = make(map[string]string)
+
+	if err = syscall.Mount(disk.Partitions[index].Device, mountPoint, disk.Partitions[index].Type, unix.MS_RDONLY, ""); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if umountErr := umount(mountPoint); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
+
+	output, err := exec.Command("grub-editenv", grubEnvFile, "list").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("can't read grubenv: %s, %s", output, err)
+	}
+
+	for _, item := range strings.Split(string(output), "\n") {
+		index := strings.Index(item, "=")
+		if index < 0 {
+			continue
+		}
+
+		vars[item[:index]] = item[index+1:]
+	}
+
+	return vars, nil
+}
+
+func initBootPartition(index int) (err error) {
+	if err = syscall.Mount(disk.Partitions[index].Device, mountPoint, disk.Partitions[index].Type, 0, ""); err != nil {
+		return err
+	}
+	defer func() {
+		if umountErr := umount(mountPoint); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
+
+	if err = os.MkdirAll(filepath.Dir(grubEnvFile), 0755); err != nil {
+		return err
+	}
+
+	if output, err := exec.Command("grub-editenv", grubEnvFile, "create").CombinedOutput(); err != nil {
+		return fmt.Errorf("can't create grubenv: %s, %s", output, err)
+	}
+
+	if output, err := exec.Command("grub-editenv", grubEnvFile, "set",
+		"NUANCE_GRUB_CFG_VERSION=2",
+		"NUANCE_IMAGE_VERSION=0",
+		"NUANCE_DEFAULT_BOOT_INDEX=0",
+		"NUANCE_FALLBACK_BOOT_INDEX=1").CombinedOutput(); err != nil {
+		return fmt.Errorf("can't create grubenv: %s, %s", output, err)
+	}
+
+	syscall.Sync()
+
+	return err
+}
+
+func setEnvVariables(index int, vars map[string]string) (err error) {
+	if err = syscall.Mount(disk.Partitions[index].Device, mountPoint, disk.Partitions[index].Type, 0, ""); err != nil {
+		return err
+	}
+	defer func() {
+		if umountErr := umount(mountPoint); umountErr != nil {
+			if err == nil {
+				err = umountErr
+			}
+		}
+	}()
+
+	for name, value := range vars {
+		output, err := exec.Command("grub-editenv", grubEnvFile, "set", name+"="+value).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("can't set grubenv: %s, %s", output, err)
+		}
+	}
+
+	syscall.Sync()
+
+	return nil
+}
+
+func umount(mountPoint string) (err error) {
+	for i := 0; i < 3; i++ {
+		syscall.Sync()
+
+		if err = syscall.Unmount(mountPoint, 0); err == nil {
+			return
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	log.Errorf("Can't umount %s: %s", mountPoint, err)
+
+	return err
 }

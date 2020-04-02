@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
+	"aos_updatemanager/utils/efi"
 	"aos_updatemanager/utils/partition"
 )
 
@@ -259,4 +260,31 @@ func (controller *EfiController) init(bootParts []string) (err error) {
 	log.Warnf("Can't define current EFI boot item. Use default: %d", controller.bootCurrent)
 
 	return nil
+}
+
+func (controller *EfiController) getCurrentBootPartition() (partInfo partition.Info, err error) {
+	if controller.bootCurrent < 0 || controller.bootCurrent >= len(controller.partInfo) {
+		return partition.Info{}, errOutOfRange
+	}
+
+	return controller.partInfo[controller.bootCurrent], nil
+}
+
+func (controller *EfiController) getNextBootPartition() (partInfo partition.Info, err error) {
+	bootNext, err := controller.efiProvider.GetBootNext()
+	if err != nil && err != efi.ErrNotFound {
+		return partition.Info{}, err
+	}
+
+	if err == efi.ErrNotFound {
+		return controller.getCurrentBootPartition()
+	}
+
+	for i, id := range controller.bootIds {
+		if id == bootNext {
+			return controller.partInfo[i], nil
+		}
+	}
+
+	return partition.Info{}, errNotFound
 }

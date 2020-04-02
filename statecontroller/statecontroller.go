@@ -61,7 +61,7 @@ func New(bootParts, rootParts []string, storage Storage,
 		return nil, errors.New("num of root partitions should be more than 1")
 	}
 
-	if controller.grub, err = newGrubController(cmdLineFile); err != nil {
+	if controller.grub, err = newGrubController(rootParts, cmdLineFile, controller.efi); err != nil {
 		return nil, err
 	}
 
@@ -115,6 +115,14 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 // SystemReboot performs system reboot
 func (controller *Controller) SystemReboot() (err error) {
 	log.Info("System reboot")
+
+	if err = controller.grub.close(); err != nil {
+		log.Errorf("Can't close grub controller: %s", err)
+	}
+
+	if err = controller.efi.close(); err != nil {
+		log.Errorf("Can't close efi controller: %s", err)
+	}
 
 	syscall.Sync()
 
