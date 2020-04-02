@@ -381,13 +381,13 @@ func (module *FSModule) Revert(version uint64) (rebootRequired bool, err error) 
 }
 
 // CancelRevert cancels revert module
-func (module *FSModule) CancelRevert(rebootRequired bool, version uint64) (err error) {
+func (module *FSModule) CancelRevert(version uint64) (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
 
 	log.WithFields(log.Fields{"version": version}).Infof("Cancel revert %s module", module.id)
 
-	return errors.New("revert operation is not supported")
+	return false, errors.New("revert operation is not supported")
 }
 
 // FinishRevert finished revert module
