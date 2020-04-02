@@ -138,7 +138,8 @@ type Storage interface {
 	SetModuleState(id string, state []byte) (err error)
 }
 
-type moduleConfig struct {
+// ModuleConfig fs module config
+type ModuleConfig struct {
 	Partitions []string `json:"partitions"`
 }
 
@@ -161,7 +162,7 @@ func New(id string, controller StateController, storage Storage, configJSON []by
 
 	module = &FSModule{id: id, controller: controller, storage: storage}
 
-	var config moduleConfig
+	var config ModuleConfig
 
 	if err = json.Unmarshal(configJSON, &config); err != nil {
 		return nil, err
