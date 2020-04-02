@@ -29,21 +29,18 @@ import (
 
 // Config instance
 type Config struct {
-	ServerURL       string
-	Cert            string
-	Key             string
-	UpgradeDir      string
-	WorkingDir      string
-	Modules         []ModuleConfig
-	StateController json.RawMessage
+	ServerURL  string
+	Cert       string
+	Key        string
+	UpgradeDir string
+	WorkingDir string
+	Modules    []ModuleConfig
 }
 
 // ModuleConfig module configuration
 type ModuleConfig struct {
-	ID       string
-	Disabled bool
-	Module   string
-	Params   json.RawMessage
+	ID     string
+	Params json.RawMessage
 }
 
 /*******************************************************************************

@@ -63,14 +63,22 @@ func createConfigFile() (err error) {
 	"WorkingDir": "/var/aos/updatemanager",
 	"Modules":[{
 		"ID": "id1",
-		"Disabled": true,
-		"Module": "test1"
+		"Params": {
+			"Param1" :"value1",
+			"Param2" : 2
+		}
 	}, {
 		"ID": "id2",
-		"Module": "test2"
+		"Params": {
+			"Param1" :"value1",
+			"Param2" : 2
+		}
 	}, {
 		"ID": "id3",
-		"Module": "test3"
+		"Params": {
+			"Param1" :"value1",
+			"Param2" : 2
+		}
 	}]
 }`
 
@@ -143,14 +151,6 @@ func TestModules(t *testing.T) {
 
 	if cfg.Modules[0].ID != "id1" || cfg.Modules[1].ID != "id2" || cfg.Modules[2].ID != "id3" {
 		t.Error("Wrong module id")
-	}
-
-	if cfg.Modules[0].Module != "test1" || cfg.Modules[1].Module != "test2" || cfg.Modules[2].Module != "test3" {
-		t.Error("Wrong module plugin")
-	}
-
-	if cfg.Modules[0].Disabled != true || cfg.Modules[1].Disabled != false || cfg.Modules[2].Disabled != false {
-		t.Error("Wrong disable value")
 	}
 }
 
