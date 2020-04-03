@@ -1,6 +1,7 @@
 package fsmodule_test
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -381,7 +382,6 @@ func TestBadUpgrade(t *testing.T) {
 	// Create module
 
 	module, _ := doAction(t, nil, actionNew{testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, false)
-	defer doAction(t, module, actionClose{}, false)
 
 	// First upgrade
 
@@ -400,17 +400,15 @@ func TestBadUpgrade(t *testing.T) {
 		t.Errorf("Comapre partition error: %s", err)
 	}
 
+	doAction(t, module, actionClose{}, false)
+
 	// Check restore partition after reboot
 
-	// First upgrade
-
-	if _, err := doAction(t, module, actionUpgrade{version: 1, imagePath: tmpDir}, true); err == nil {
-		t.Error("Upgrade should failed due to size limitation")
+	if err := corruptPartition(disk.Partitions[partRoot1].Device); err != nil {
+		t.Fatalf("Can't corrupt partition: %s", err)
 	}
 
-	// Reboot
-
-	module, _ = doAction(t, module, actionReboot{testStateController{0, -1, []int{0, 1}, []bool{true, true}}}, false)
+	module, _ = doAction(t, nil, actionNew{testStateController{0, -1, []int{0, 1}, []bool{true, false}}}, false)
 
 	// Wait for restore partition finished by calling cancel upgrade
 
@@ -951,4 +949,30 @@ func compareContent(srcContent, dstContent []fsContent) (err error) {
 	}
 
 	return nil
+}
+
+func corruptPartition(part string) (err error) {
+	file, err := os.OpenFile(part, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for {
+		randBuffer := make([]byte, 1024)
+
+		if _, err = rand.Read(randBuffer); err != nil {
+			return err
+		}
+
+		if _, err = file.Write(randBuffer); err != nil {
+			log.Error(err)
+
+			if strings.HasSuffix(err.Error(), "no space left on device") {
+				return nil
+			}
+
+			return err
+		}
+	}
 }
