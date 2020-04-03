@@ -168,11 +168,11 @@ func New(id string, controller StateController, storage Storage, configJSON []by
 		return nil, err
 	}
 
-	if err = module.updatePartInfo(config.Partitions); err != nil {
-		return nil, err
+	if len(config.Partitions) < 2 {
+		return nil, errors.New("num of configured partitions should be more than 1")
 	}
 
-	if module.currentPartition, err = module.controller.GetCurrentBoot(); err != nil {
+	if err = module.updatePartInfo(config.Partitions); err != nil {
 		return nil, err
 	}
 
@@ -215,6 +215,14 @@ func (module *FSModule) Init() (err error) {
 
 	log.Infof("Initialize %s module", module.id)
 
+	if err = module.controller.WaitForReady(); err != nil {
+		return err
+	}
+
+	if module.currentPartition, err = module.controller.GetCurrentBoot(); err != nil {
+		return err
+	}
+
 	bootOrder, err := module.controller.GetBootOrder()
 	if err != nil {
 		return err
@@ -233,10 +241,6 @@ func (module *FSModule) Init() (err error) {
 	log.WithFields(log.Fields{"currentBoot": module.currentPartition}).Debugf("%s: current boot", module.id)
 	log.WithFields(log.Fields{"bootOrder": fmt.Sprintf("%d %d", bootOrder[0], bootOrder[1])}).Debugf("%s: boot order", module.id)
 	log.WithFields(log.Fields{"active": fmt.Sprintf("%v %v", active0, active1)}).Debugf("%s: active boot", module.id)
-
-	if err = module.controller.WaitForReady(); err != nil {
-		return err
-	}
 
 	if module.state.State != idleState {
 		if err = module.handleUpgradeReboot(); err != nil {
