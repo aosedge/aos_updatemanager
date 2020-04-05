@@ -32,6 +32,12 @@ type Storage interface {
 	SetSystemVersion(version uint64) (err error)
 }
 
+type readyLocker struct {
+	sync.Mutex
+
+	ready bool
+}
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
@@ -150,4 +156,16 @@ func (controller *Controller) waitForSuccessBoot() {
 	}()
 
 	// Determine success boot and notify controllers
+}
+
+func (locker *readyLocker) checkReadyAndLock() (err error) {
+	locker.Lock()
+
+	if !locker.ready {
+		locker.Unlock()
+
+		return errNotReady
+	}
+
+	return nil
 }

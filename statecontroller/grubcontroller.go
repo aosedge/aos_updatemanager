@@ -45,7 +45,7 @@ const (
 
 // GrubController GRUB controller instance
 type GrubController struct {
-	sync.Mutex
+	locker readyLocker
 
 	mountTimer  *time.Timer
 	boot        bootInfoProvider
@@ -58,8 +58,7 @@ type GrubController struct {
 
 	bootNext int
 
-	ready bool
-	wg    *sync.WaitGroup
+	wg *sync.WaitGroup
 }
 
 type bootInfoProvider interface {
@@ -73,8 +72,8 @@ type bootInfoProvider interface {
 
 // WaitForReady waits for controller to be ready
 func (controller *GrubController) WaitForReady() (err error) {
-	controller.Lock()
-	defer controller.Unlock()
+	controller.locker.Lock()
+	defer controller.locker.Unlock()
 
 	if controller.currentBootInfo, err = controller.boot.getCurrentBootPartition(); err != nil {
 		return err
@@ -113,31 +112,27 @@ func (controller *GrubController) WaitForReady() (err error) {
 		return err
 	}
 
-	controller.ready = true
+	controller.locker.ready = true
 
 	return nil
 }
 
 // GetCurrentBoot returns current boot index
 func (controller *GrubController) GetCurrentBoot() (index int, err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return 0, errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return 0, err
 	}
+	defer controller.locker.Unlock()
 
 	return controller.currentRootIndex, nil
 }
 
 // SetBootActive sets boot item as active
 func (controller *GrubController) SetBootActive(index int, active bool) (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	if index < 0 || index >= controller.partCount {
 		return errOutOfRange
@@ -167,12 +162,10 @@ func (controller *GrubController) SetBootActive(index int, active bool) (err err
 
 // GetBootActive returns boot item active state
 func (controller *GrubController) GetBootActive(index int) (active bool, err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return false, errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return false, err
 	}
+	defer controller.locker.Unlock()
 
 	if index < 0 || index >= controller.partCount {
 		return false, errOutOfRange
@@ -202,12 +195,10 @@ func (controller *GrubController) GetBootActive(index int) (active bool, err err
 
 // GetBootOrder returns boot order
 func (controller *GrubController) GetBootOrder() (indexes []int, err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return nil, errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return nil, err
 	}
+	defer controller.locker.Unlock()
 
 	envVar, err := controller.mountGrubEnv(controller.currentBootInfo)
 	if err != nil {
@@ -241,12 +232,10 @@ func (controller *GrubController) GetBootOrder() (indexes []int, err error) {
 
 // SetBootOrder sets boot order
 func (controller *GrubController) SetBootOrder(indexes []int) (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	valueStr := ""
 
@@ -280,12 +269,10 @@ func (controller *GrubController) SetBootOrder(indexes []int) (err error) {
 
 // SetBootNext sets next boot item
 func (controller *GrubController) SetBootNext(index int) (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	if index < 0 || index >= controller.partCount {
 		return errOutOfRange
@@ -298,12 +285,10 @@ func (controller *GrubController) SetBootNext(index int) (err error) {
 
 // ClearBootNext clears next boot item
 func (controller *GrubController) ClearBootNext() (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	envVar, err := controller.mountGrubEnv(controller.currentBootInfo)
 	if err != nil {
@@ -341,8 +326,8 @@ func newGrubController(rootParts []string, cmdLineFile string,
 }
 
 func (controller *GrubController) close() (err error) {
-	controller.Lock()
-	defer controller.Unlock()
+	controller.locker.Lock()
+	defer controller.locker.Unlock()
 
 	log.Debug("Close GRUB controller")
 
@@ -433,8 +418,8 @@ func (controller *GrubController) mountGrubEnv(part partition.Info) (env *grub.I
 	controller.mountedPart = part.Device
 
 	controller.mountTimer = time.AfterFunc(bootMountTimeout, func() {
-		controller.Lock()
-		defer controller.Unlock()
+		controller.locker.Lock()
+		defer controller.locker.Unlock()
 
 		if err := controller.umountGrubEnv(); err != nil {
 			log.Errorf("Can't umount GRUB env: %s", err)

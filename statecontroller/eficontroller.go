@@ -34,15 +34,14 @@ type EfiProvider interface {
 
 // EfiController EFI controller instance
 type EfiController struct {
-	sync.Mutex
+	locker readyLocker
 
 	efiProvider EfiProvider
 	bootCurrent int
 	bootIds     []uint16
 	partInfo    []partition.Info
 
-	ready bool
-	wg    *sync.WaitGroup
+	wg *sync.WaitGroup
 }
 
 /*******************************************************************************
@@ -51,38 +50,34 @@ type EfiController struct {
 
 // WaitForReady waits for controller is ready
 func (controller *EfiController) WaitForReady() (err error) {
-	controller.Lock()
-	defer controller.Unlock()
+	controller.locker.Lock()
+	defer controller.locker.Unlock()
 
 	log.Debug("EFI controller: wait for ready")
 
 	controller.wg.Wait()
 
-	controller.ready = true
+	controller.locker.ready = true
 
 	return nil
 }
 
 // GetCurrentBoot returns current boot index
 func (controller *EfiController) GetCurrentBoot() (index int, err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return 0, errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return 0, err
 	}
+	defer controller.locker.Unlock()
 
 	return controller.bootCurrent, nil
 }
 
 // SetBootActive sets boot item as active
 func (controller *EfiController) SetBootActive(index int, active bool) (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	if index < 0 || index >= len(controller.bootIds) {
 		return errOutOfRange
@@ -93,12 +88,10 @@ func (controller *EfiController) SetBootActive(index int, active bool) (err erro
 
 // GetBootActive returns boot item active state
 func (controller *EfiController) GetBootActive(index int) (active bool, err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return false, errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return false, err
 	}
+	defer controller.locker.Unlock()
 
 	if index < 0 || index >= len(controller.bootIds) {
 		return false, errOutOfRange
@@ -109,12 +102,10 @@ func (controller *EfiController) GetBootActive(index int) (active bool, err erro
 
 // GetBootOrder returns boot order
 func (controller *EfiController) GetBootOrder() (indexes []int, err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return nil, errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return nil, err
 	}
+	defer controller.locker.Unlock()
 
 	indexes = make([]int, 0, len(controller.bootIds))
 
@@ -142,12 +133,10 @@ func (controller *EfiController) GetBootOrder() (indexes []int, err error) {
 
 // SetBootOrder sets boot order
 func (controller *EfiController) SetBootOrder(indexes []int) (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	bootOrder, err := controller.efiProvider.GetBootOrder()
 	if err != nil {
@@ -197,12 +186,10 @@ func (controller *EfiController) SetBootOrder(indexes []int) (err error) {
 
 // SetBootNext sets next boot item
 func (controller *EfiController) SetBootNext(index int) (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	if index < 0 || index >= len(controller.bootIds) {
 		return errOutOfRange
@@ -213,12 +200,10 @@ func (controller *EfiController) SetBootNext(index int) (err error) {
 
 // ClearBootNext clears next boot item
 func (controller *EfiController) ClearBootNext() (err error) {
-	controller.Lock()
-	defer controller.Unlock()
-
-	if !controller.ready {
-		return errNotReady
+	if err = controller.locker.checkReadyAndLock(); err != nil {
+		return err
 	}
+	defer controller.locker.Unlock()
 
 	return controller.efiProvider.DeleteBootNext()
 }
