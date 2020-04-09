@@ -246,7 +246,7 @@ func (controller *EfiController) init(bootParts []string) (err error) {
 
 		bootID, err := controller.efiProvider.GetBootByPartUUID(info.PartUUID)
 		if err != nil {
-			log.Warnf("Can't find PARTUUID %s of %s in EFI bool list", info.PartUUID, info.Device)
+			log.Warnf("Can't find PARTUUID %s of %s in EFI boot list", info.PartUUID, info.Device)
 
 			continue
 		}
