@@ -2,6 +2,7 @@ package statecontroller
 
 import (
 	"errors"
+	"os"
 	"sync"
 	"syscall"
 
@@ -24,6 +25,8 @@ type Controller struct {
 	storage Storage
 
 	wg sync.WaitGroup
+
+	disableReboot bool
 }
 
 // Storage provides interface to get/set system version
@@ -73,6 +76,12 @@ func New(bootParts, rootParts []string, storage Storage,
 
 	if controller.grub, err = newGrubController(rootParts, cmdLineFile, controller.efi, &controller.wg); err != nil {
 		return nil, err
+	}
+
+	if _, exists := os.LookupEnv("NUANCE_DISABLE_REBOOT"); exists {
+		log.Warnf("Reboot is disabled by NUANCE_DISABLE_REBOOT env variable and should be performed manually")
+
+		controller.disableReboot = true
 	}
 
 	controller.wg.Add(1)
@@ -139,8 +148,12 @@ func (controller *Controller) SystemReboot() (err error) {
 
 	syscall.Sync()
 
-	if err = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		return err
+	if !controller.disableReboot {
+		if err = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
+			return err
+		}
+	} else {
+		log.Warnf("Reboot is disabled by NUANCE_DISABLE_REBOOT env variable and should be performed manually")
 	}
 
 	return nil
