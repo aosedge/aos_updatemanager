@@ -30,6 +30,11 @@ const (
 
 const ioBufferSize = 1024 * 1024
 
+const (
+	copyBreathInterval = 5 * time.Second
+	copyBreathTime     = 500 * time.Millisecond
+)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -105,8 +110,6 @@ func Umount(mountPoint string) (err error) {
 func Copy(dst, src string) (copied int64, err error) {
 	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Copy partition")
 
-	start := time.Now()
-
 	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
 		return 0, err
@@ -119,11 +122,13 @@ func Copy(dst, src string) (copied int64, err error) {
 	}
 	defer dstFile.Close()
 
-	if copied, err = io.Copy(dstFile, srcFile); err != nil {
-		return 0, err
+	var duration time.Duration
+
+	if copied, duration, err = copyData(dstFile, srcFile); err != nil {
+		return copied, err
 	}
 
-	log.WithFields(log.Fields{"copied": copied, "duration": time.Since(start)}).Debug("Copy partition")
+	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy partition")
 
 	return copied, nil
 }
@@ -131,8 +136,6 @@ func Copy(dst, src string) (copied int64, err error) {
 // CopyFromArchive copies partition from archived file
 func CopyFromArchive(dst, src string) (copied int64, err error) {
 	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Copy partition from archive")
-
-	start := time.Now()
 
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -152,27 +155,13 @@ func CopyFromArchive(dst, src string) (copied int64, err error) {
 	}
 	defer gz.Close()
 
-	buf := make([]byte, ioBufferSize)
+	var duration time.Duration
 
-	for err != io.EOF {
-		var readCount int
-
-		if readCount, err = gz.Read(buf); err != nil && err != io.EOF {
-			return copied, err
-		}
-
-		if readCount > 0 {
-			var writeCount int
-
-			if writeCount, err = dstFile.Write(buf[:readCount]); err != nil {
-				return copied, err
-			}
-
-			copied = copied + int64(writeCount)
-		}
+	if copied, duration, err = copyData(dstFile, gz); err != nil {
+		return copied, err
 	}
 
-	log.WithFields(log.Fields{"copied": copied, "duration": time.Since(start)}).Debug("Copy partition from archive")
+	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy partition from archive")
 
 	return copied, nil
 }
@@ -245,4 +234,39 @@ func retry(caller func() error, restorer func(error)) (err error) {
 
 		i++
 	}
+}
+
+func copyData(dst io.Writer, src io.Reader) (copied int64, duration time.Duration, err error) {
+	startTime := time.Now()
+	buf := make([]byte, ioBufferSize)
+
+	for err != io.EOF {
+		var readCount int
+
+		if readCount, err = src.Read(buf); err != nil && err != io.EOF {
+			return copied, duration, err
+		}
+
+		if readCount > 0 {
+			var writeCount int
+
+			if writeCount, err = dst.Write(buf[:readCount]); err != nil {
+				return copied, duration, err
+			}
+
+			copied = copied + int64(writeCount)
+		}
+
+		if time.Now().After(startTime.Add(duration).Add(copyBreathInterval)) {
+			time.Sleep(copyBreathTime)
+
+			duration = time.Since(startTime)
+
+			log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy progress")
+		}
+	}
+
+	duration = time.Since(startTime)
+
+	return copied, duration, nil
 }
