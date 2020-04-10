@@ -20,6 +20,7 @@ package database
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -32,7 +33,10 @@ import (
  ******************************************************************************/
 
 const (
-	dbVersion = 4
+	dbVersion   = 4
+	busyTimeout = 60000
+	journalMode = "WAL"
+	syncMode    = "NORMAL"
 )
 
 /*******************************************************************************
@@ -74,8 +78,8 @@ func New(name string) (db *Database, err error) {
 
 	var sqlite *sql.DB
 
-	sqlite, err = sql.Open("sqlite3", name)
-	if err != nil {
+	if sqlite, err = sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
+		name, busyTimeout, journalMode, syncMode)); err != nil {
 		return db, err
 	}
 

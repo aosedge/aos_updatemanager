@@ -22,6 +22,8 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strconv"
+	"sync"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -186,4 +188,58 @@ func TestModuleState(t *testing.T) {
 			t.Errorf("Index: %d, wrong module state: %s", i, string(state))
 		}
 	}
+}
+
+func TestMultiThread(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	const numIterations = 1000
+
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < numIterations; i++ {
+			if err := db.SetSystemVersion(uint64(i)); err != nil {
+				t.Fatalf("Can't set system version: %s", err)
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		if _, err := db.GetSystemVersion(); err != nil {
+			t.Fatalf("Can't get system version: %s", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < numIterations; i++ {
+			if err := db.SetOperationState([]byte(strconv.Itoa(i))); err != nil {
+				t.Fatalf("Can't set state: %s", err)
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < numIterations; i++ {
+			if _, err := db.GetOperationState(); err != nil {
+				t.Fatalf("Can't get state: %s", err)
+			}
+		}
+	}()
+
+	wg.Wait()
 }
