@@ -57,3 +57,7 @@ To increase log level use option -v:
 ```
 ./aos_updatemanager -c aos_updatemanager.cfg -v debug
 ```
+To send log messages directly to system journal use option -j:
+```
+./aos_updatemanager -c aos_updatemanager.cfg -v debug -j
+```

@@ -19,11 +19,13 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"path"
 	"syscall"
 
+	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/config"
@@ -55,6 +57,14 @@ const kernelCmdLine = "/proc/cmdline"
 var GitSummary string
 
 /*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+type journalHook struct {
+	severityMap map[log.Level]journal.Priority
+}
+
+/*******************************************************************************
  * Init
  ******************************************************************************/
 
@@ -63,7 +73,6 @@ func init() {
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
 		FullTimestamp:    true})
-	log.SetOutput(os.Stdout)
 }
 
 /*******************************************************************************
@@ -79,6 +88,35 @@ func cleanup(workingDir, dbFile string) {
 	}
 }
 
+func newJournalHook() (hook *journalHook) {
+	hook = &journalHook{
+		severityMap: map[log.Level]journal.Priority{
+			log.DebugLevel: journal.PriDebug,
+			log.InfoLevel:  journal.PriInfo,
+			log.WarnLevel:  journal.PriWarning,
+			log.ErrorLevel: journal.PriErr,
+			log.FatalLevel: journal.PriCrit,
+			log.PanicLevel: journal.PriEmerg,
+		}}
+
+	return hook
+}
+
+func (hook *journalHook) Fire(entry *log.Entry) error {
+	return journal.Print(hook.severityMap[entry.Level], entry.Message)
+}
+
+func (hook *journalHook) Levels() []log.Level {
+	return []log.Level{
+		log.PanicLevel,
+		log.FatalLevel,
+		log.ErrorLevel,
+		log.WarnLevel,
+		log.InfoLevel,
+		log.DebugLevel,
+	}
+}
+
 /*******************************************************************************
  * Main
  ******************************************************************************/
@@ -87,8 +125,16 @@ func main() {
 	// Initialize command line flags
 	configFile := flag.String("c", "aos_updatemanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)
+	useJournal := flag.Bool("j", false, "output logs to systemd journal")
 
 	flag.Parse()
+
+	if *useJournal {
+		log.AddHook(newJournalHook())
+		log.SetOutput(ioutil.Discard)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 
 	// Set log level
 	logLevel, err := log.ParseLevel(*strLogLevel)
