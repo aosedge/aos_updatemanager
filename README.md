@@ -11,15 +11,20 @@ AOS Update Manager (UM) is responsible for update of different system part. The 
 
 For more details see the [architecure document](doc/updatemanager.md)
 
-
 # Build
 
 ## Required GO packages
 
-Dependency tool `dep` (https://github.com/golang/dep) is used to handle external package dependencies. `dep` tool should be installed on the host machine before performing the build. `Gopkg.toml` contains list of required external go packages. Perform following command before build to fetch the required packages:
+All requires GO packages exist under `vendor` folder. Content of this folder is created with GO modules:
 
+```bash
+export GO111MODULE=on
+export GOPRIVATE=gitpct.epam.com/*
 ```
-dep ensure
+
+```golang
+go mod init
+go mod vendors
 ```
 
 ## Native build
