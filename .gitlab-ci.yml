@@ -15,7 +15,7 @@ test:
   stage: test
   script:
     - apt install -y ostree grub-common dosfstools parted udev
-    - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
+    - cp vendor/gitpct.epam.com/epmd-aepr/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - echo "-------   Run Lint -------"
     - ci/lint.sh
     - echo "-------   Run Unit tests   -------"
@@ -25,7 +25,7 @@ coverage:
   stage: test
   script:
     - apt install -y ostree grub-common dosfstools parted udev
-    - cp vendor/gitpct.epam.com/nunc-ota/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
+    - cp vendor/gitpct.epam.com/epmd-aepr/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
     - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
@@ -34,4 +34,4 @@ build:
   script:
     - go build
     - tar czf artifacts.tar.gz aos_updatemanager aos_updatemanager.cfg
-    - curl -H "X-JFrog-Art-Api:$CI_ARTIFACTS_TOKEN" -T ./artifacts.tar.gz "https://artifactory.epam.com/artifactory/NUNC-OTA/update_manager/builds/$CI_PIPELINE_ID/"
+    - curl -H "X-JFrog-Art-Api:$CI_ARTIFACTS_TOKEN" -T ./artifacts.tar.gz "https://artifactory.epam.com/artifactory/epmd-aepr/update_manager/builds/$CI_PIPELINE_ID/"

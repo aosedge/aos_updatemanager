@@ -27,8 +27,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
-	"gitpct.epam.com/nunc-ota/aos_common/wsclient"
+	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
+	"gitpct.epam.com/epmd-aepr/aos_common/wsclient"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umserver"

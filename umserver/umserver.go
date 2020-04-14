@@ -23,8 +23,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
-	"gitpct.epam.com/nunc-ota/aos_common/wsserver"
+	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
+	"gitpct.epam.com/epmd-aepr/aos_common/wsserver"
 
 	"aos_updatemanager/config"
 )

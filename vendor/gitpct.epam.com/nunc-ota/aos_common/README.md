@@ -1,6 +1,6 @@
 # aos_common
 
-[![pipeline status](https://gitpct.epam.com/nunc-ota/aos_common/badges/master/pipeline.svg)](https://gitpct.epam.com/nunc-ota/aos_common/commits/master) [![coverage report](https://gitpct.epam.com/nunc-ota/aos_common/badges/master/coverage.svg)](https://gitpct.epam.com/nunc-ota/aos_common/commits/master)
+[![pipeline status](https://gitpct.epam.com/epmd-aepr/aos_common/badges/master/pipeline.svg)](https://gitpct.epam.com/epmd-aepr/aos_common/commits/master) [![coverage report](https://gitpct.epam.com/epmd-aepr/aos_common/badges/master/coverage.svg)](https://gitpct.epam.com/epmd-aepr/aos_common/commits/master)
 
 Contains common aos packages:
 

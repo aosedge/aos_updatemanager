@@ -28,8 +28,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/nunc-ota/aos_common/image"
-	"gitpct.epam.com/nunc-ota/aos_common/umprotocol"
+	"gitpct.epam.com/epmd-aepr/aos_common/image"
+	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/updatehandler"
