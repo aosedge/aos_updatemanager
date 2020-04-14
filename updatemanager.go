@@ -18,7 +18,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -30,11 +29,11 @@ import (
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
-	"aos_updatemanager/modules/fsmodule"
-	"aos_updatemanager/statecontroller"
+	"aos_updatemanager/modules/sshmodule"
+	"aos_updatemanager/modules/testmodule"
+	"aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/utils/efi"
 )
 
 /*******************************************************************************
@@ -123,7 +122,13 @@ func main() {
 		}
 	}
 
-	stateController, modules, err := createUpdateModules(cfg, db)
+	controller, err := platform.New(db)
+	if err != nil {
+		log.Fatalf("Can't create platform controller: %s", err)
+	}
+	defer controller.Close()
+
+	modules, err := createUpdateModules(cfg)
 	if err != nil {
 		log.Fatalf("Can't create update modules: %s", err)
 	}
@@ -131,11 +136,9 @@ func main() {
 		for _, module := range modules {
 			module.Close()
 		}
-
-		stateController.Close()
 	}()
 
-	updater, err := updatehandler.New(cfg, modules, stateController, db)
+	updater, err := updatehandler.New(cfg, modules, controller, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
@@ -154,70 +157,35 @@ func main() {
 	<-terminateChannel
 }
 
-func createUpdateModules(cfg *config.Config, db *database.Database) (stateController *statecontroller.Controller,
-	modules []updatehandler.UpdateModule, err error) {
+func createUpdateModules(cfg *config.Config) (modules []updatehandler.UpdateModule, err error) {
+	var module updatehandler.UpdateModule
 
-	// Create EFI provider
+	modules = make([]updatehandler.UpdateModule, 0, len(cfg.Modules))
 
-	efiProvider, err := efi.New()
-	if err != nil {
-		return nil, nil, err
-	}
+	for _, moduleConfig := range cfg.Modules {
+		if moduleConfig.Disabled {
+			log.Warnf("Skip disabled module: %s", moduleConfig.ID)
 
-	// Get fs modules config to pass them to SC
-
-	var (
-		bootModuleCfg, rootModuleCfg fsmodule.ModuleConfig
-	)
-
-	for _, moduleCfg := range cfg.Modules {
-		switch moduleCfg.ID {
-		case rootfsModuleID:
-			if err := json.Unmarshal(moduleCfg.Params, &rootModuleCfg); err != nil {
-				return nil, nil, err
-			}
-
-		case bootloaderModuleID:
-			if err := json.Unmarshal(moduleCfg.Params, &bootModuleCfg); err != nil {
-				return nil, nil, err
-			}
+			continue
 		}
-	}
 
-	// Create SC
-
-	if stateController, err = statecontroller.New(
-		bootModuleCfg.Partitions, rootModuleCfg.Partitions, db, kernelCmdLine,
-		efiProvider); err != nil {
-		return nil, nil, err
-	}
-
-	// Create modules
-
-	modules = make([]updatehandler.UpdateModule, 0)
-
-	for _, moduleCfg := range cfg.Modules {
-		var module updatehandler.UpdateModule
-
-		switch moduleCfg.ID {
-		case rootfsModuleID:
-			if module, err = fsmodule.New(rootfsModuleID, stateController.GetGrubController(),
-				db, moduleCfg.Params); err != nil {
-				return nil, nil, err
+		switch moduleConfig.Plugin {
+		case "testmodule":
+			if module, err = testmodule.New(moduleConfig.ID, moduleConfig.Params); err != nil {
+				return nil, err
 			}
 
-		case bootloaderModuleID:
-			if module, err = fsmodule.New(bootloaderModuleID, stateController.GetEfiController(),
-				db, moduleCfg.Params); err != nil {
-				return nil, nil, err
+		case "sshmodule":
+			if module, err = sshmodule.New(moduleConfig.ID, moduleConfig.Params); err != nil {
+				return nil, err
 			}
 
 		default:
-			return nil, nil, fmt.Errorf("unknown module ID: %s", moduleCfg.ID)
+			return nil, fmt.Errorf("unsupported module plugin: %s", moduleConfig.Plugin)
 		}
 
 		modules = append(modules, module)
 	}
 
-	return stateController, modules, nil
+	return nil, nil
 }
