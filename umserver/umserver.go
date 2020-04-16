@@ -59,7 +59,7 @@ type Updater interface {
 func New(cfg *config.Config, updater Updater) (server *Server, err error) {
 	server = &Server{updater: updater}
 
-	if server.wsServer, err = wsserver.New("UM", cfg.ServerURL, cfg.Cert, cfg.Key, server.processMessage); err != nil {
+	if server.wsServer, err = wsserver.New("UM", cfg.ServerURL, cfg.Cert, cfg.Key, server); err != nil {
 		return nil, err
 	}
 
@@ -82,11 +82,16 @@ func (server *Server) Close() {
 	server.wsServer.Close()
 }
 
-/*******************************************************************************
- * Private
- ******************************************************************************/
+// ClientConnected called when new client is connected
+func (server *Server) ClientConnected(client *wsserver.Client) {
+}
 
-func (server *Server) processMessage(messageType int, messageJSON []byte) (response []byte, err error) {
+// ClientDisconnected called when client is disconnected
+func (server *Server) ClientDisconnected(client *wsserver.Client) {
+}
+
+// ProcessMessage called when new message is received
+func (server *Server) ProcessMessage(client *wsserver.Client, messageType int, messageJSON []byte) (response []byte, err error) {
 	if messageType != websocket.TextMessage {
 		return nil, errors.New("incoming message in unsupported format")
 	}
@@ -115,6 +120,10 @@ func (server *Server) processMessage(messageType int, messageJSON []byte) (respo
 		return nil, errors.New("unsupported request type: " + message.Header.MessageType)
 	}
 }
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
 
 func (server *Server) sendStatus(statusMessage umprotocol.StatusRsp) {
 	log.Debug("Send operation status")
