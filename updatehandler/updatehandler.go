@@ -78,7 +78,30 @@ const (
 	finishState
 )
 
-// Module states
+//
+// Upgrade module state machine:
+//
+//                      -> upgrade request                     -> initModuleState
+// initModuleState      -> upgrade module                      -> upgradingModuleState
+// upgradingModuleState -> module upgraded                     -> upgradedModuleState
+// upgradedModuleState  -> finish upgrade module               -> finishingModuleState
+// finishingModuleState -> module upgrade finished             -> finishedModuleState
+//
+// Revert module state machine:
+//
+//                      -> revert request                      ->
+// finishedModuleState  -> revert module                       -> revertingModuleState
+// revertingModuleState -> module reverted                     -> revertedModuleState
+// revertedModuleState  -> finish revert module                -> finishingModuleState
+// finishingModuleState -> module revert finished              -> finishedModuleState
+//
+// If some error happens during upgrade/revert modules and cancel procedure is performed:
+//
+// upgradedModuleState  -> cancel upgrade module               -> cancelingModuleState
+// cancelingModuleState -> module cancel upgrade finished      -> canceledModuleState
+//
+// The same sequence is applied for revert canceling
+//
 const (
 	initModuleState = iota
 	upgradingModuleState
@@ -359,7 +382,7 @@ func (state operationState) String() string {
 
 func (state moduleState) String() string {
 	return [...]string{
-		"invalid", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled", "finishing", "finished"}[state]
+		"init", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled", "finishing", "finished"}[state]
 }
 
 func createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
@@ -575,7 +598,7 @@ func (handler *Handler) revert() {
 
 		case cancelState:
 			rebootRequired, err = handler.moduleOperation(
-				cancelingModuleState, canceledModuleState, []moduleState{upgradedModuleState, canceledModuleState},
+				cancelingModuleState, canceledModuleState, []moduleState{finishedModuleState, canceledModuleState},
 				func(module UpdateModule) (rebootRequired bool, err error) {
 					return module.CancelRevert(handler.state.OperationVersion)
 				}, false)
