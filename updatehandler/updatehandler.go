@@ -80,13 +80,15 @@ const (
 
 // Module states
 const (
-	invalidState = iota
-	upgradingState
-	upgradedState
-	revertingState
-	revertedState
-	cancelingState
-	canceledState
+	initModuleState = iota
+	upgradingModuleState
+	upgradedModuleState
+	revertingModuleState
+	revertedModuleState
+	cancelingModuleState
+	canceledModuleState
+	finishingModuleState
+	finishedModuleState
 )
 
 const bundleDir = "bundleDir"
@@ -165,6 +167,7 @@ type handlerState struct {
 	OperationState   operationState         `json:"operationState"`
 	OperationVersion uint64                 `json:"operationVersion"`
 	ImagePath        string                 `json:"imagePath"`
+	ImageMetadata    imageMetadata          `json:"imageMetadata"`
 	LastError        error                  `json:"-"`
 	ErrorMsg         string                 `json:"errorMsg"`
 	ModuleStates     map[string]moduleState `json:"moduleStates"`
@@ -185,6 +188,8 @@ type imageMetadata struct {
 type operationType int
 type operationState int
 type moduleState int
+
+type moduleOperation func(module UpdateModule) (rebootRequired bool, err error)
 
 /*******************************************************************************
  * Public
@@ -279,12 +284,12 @@ func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) 
 		return err
 	}
 
-	handler.state.OperationState = initState
-	handler.state.OperationVersion = version
-	handler.state.OperationType = upgradeOperation
-	handler.state.LastError = nil
-	handler.state.ImagePath = imagePath
-	handler.state.ModuleStates = make(map[string]moduleState)
+	handler.state = handlerState{
+		OperationState:   initState,
+		OperationVersion: version,
+		OperationType:    upgradeOperation,
+		ImagePath:        imagePath,
+		ModuleStates:     make(map[string]moduleState)}
 
 	if err = handler.setState(); err != nil {
 		return err
@@ -354,7 +359,7 @@ func (state operationState) String() string {
 
 func (state moduleState) String() string {
 	return [...]string{
-		"invalid", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled"}[state]
+		"invalid", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled", "finishing", "finished"}[state]
 }
 
 func createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
@@ -473,7 +478,19 @@ func (handler *Handler) upgrade() {
 			handler.switchState(upgradeState, nil)
 
 		case upgradeState:
-			rebootRequired, err = handler.upgradeModules()
+			rebootRequired, err = handler.moduleOperation(
+				upgradingModuleState, upgradedModuleState, []moduleState{upgradedModuleState},
+				func(module UpdateModule) (rebootRequired bool, err error) {
+					id := module.GetID()
+
+					for _, item := range handler.state.ImageMetadata.UpdateItems {
+						if id == item.Type {
+							return module.Upgrade(handler.state.OperationVersion, path.Join(handler.bundleDir, item.Path))
+						}
+					}
+
+					return false, fmt.Errorf("module %s not found", id)
+				}, true)
 			if err != nil {
 				handler.switchState(cancelState, err)
 				break
@@ -486,7 +503,11 @@ func (handler *Handler) upgrade() {
 			handler.switchState(finishState, nil)
 
 		case cancelState:
-			rebootRequired, err = handler.cancelUpgradeModules()
+			rebootRequired, err = handler.moduleOperation(
+				cancelingModuleState, canceledModuleState, []moduleState{canceledModuleState},
+				func(module UpdateModule) (rebootRequired bool, err error) {
+					return module.CancelUpgrade(handler.state.OperationVersion)
+				}, false)
 			if err != nil {
 				log.Errorf("Error canceling upgrade modules: %s", err)
 			}
@@ -500,7 +521,10 @@ func (handler *Handler) upgrade() {
 			return
 
 		case finishState:
-			if err = handler.finishUpgradeModules(); err != nil {
+			if _, err = handler.moduleOperation(finishingModuleState, finishedModuleState, []moduleState{finishedModuleState},
+				func(module UpdateModule) (rebootRequired bool, err error) {
+					return false, module.FinishUpgrade(handler.state.OperationVersion)
+				}, false); err != nil {
 				log.Errorf("Error finishing upgrade modules: %s", err)
 			}
 
@@ -533,7 +557,11 @@ func (handler *Handler) revert() {
 			handler.switchState(revertState, nil)
 
 		case revertState:
-			rebootRequired, err = handler.revertModules()
+			rebootRequired, err = handler.moduleOperation(
+				revertingModuleState, revertedModuleState, []moduleState{revertedModuleState},
+				func(module UpdateModule) (rebootRequired bool, err error) {
+					return module.Revert(handler.state.OperationVersion)
+				}, true)
 			if err != nil {
 				handler.switchState(cancelState, err)
 				break
@@ -546,7 +574,11 @@ func (handler *Handler) revert() {
 			handler.switchState(finishState, nil)
 
 		case cancelState:
-			rebootRequired, err = handler.cancelRevertModules()
+			rebootRequired, err = handler.moduleOperation(
+				cancelingModuleState, canceledModuleState, []moduleState{upgradedModuleState, canceledModuleState},
+				func(module UpdateModule) (rebootRequired bool, err error) {
+					return module.CancelRevert(handler.state.OperationVersion)
+				}, false)
 			if err != nil {
 				log.Errorf("Error canceling revert modules: %s", err)
 			}
@@ -562,7 +594,10 @@ func (handler *Handler) revert() {
 		case finishState:
 			var err error
 
-			if err = handler.finishRevertModules(); err != nil {
+			if _, err = handler.moduleOperation(finishingModuleState, finishedModuleState, []moduleState{finishedModuleState},
+				func(module UpdateModule) (rebootRequired bool, err error) {
+					return false, module.FinishRevert(handler.state.OperationVersion)
+				}, false); err != nil {
 				log.Errorf("Error finishing revert modules: %s", err)
 			}
 
@@ -602,6 +637,8 @@ func (handler *Handler) switchState(state operationState, lastError error) {
 }
 
 func (handler *Handler) unpackImage() (err error) {
+	log.WithFields(log.Fields{"destination": handler.bundleDir, "source": handler.state.ImagePath}).Debug("Unpack image")
+
 	if err = os.RemoveAll(handler.bundleDir); err != nil {
 		return err
 	}
@@ -612,6 +649,27 @@ func (handler *Handler) unpackImage() (err error) {
 
 	if err = image.UntarGZArchive(handler.state.ImagePath, handler.bundleDir); err != nil {
 		return err
+	}
+
+	if handler.state.ImageMetadata, err = handler.getImageMetadata(); err != nil {
+		return err
+	}
+
+	platformID, err := handler.platform.GetPlatformID()
+	if err != nil {
+		return err
+	}
+
+	if handler.state.ImageMetadata.PlatformID != platformID {
+		return errors.New("wrong platform ID")
+	}
+
+	for _, item := range handler.state.ImageMetadata.UpdateItems {
+		if _, ok := handler.modules[item.Type]; !ok {
+			return fmt.Errorf("module %s not found", item.Type)
+		}
+
+		handler.state.ModuleStates[item.Type] = initModuleState
 	}
 
 	return nil
@@ -630,162 +688,59 @@ func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
 	return metadata, err
 }
 
-func (handler *Handler) upgradeModules() (rebootRequired bool, err error) {
-	metadata, err := handler.getImageMetadata()
-	if err != nil {
-		return false, err
-	}
-
-	platformID, err := handler.platform.GetPlatformID()
-	if err != nil {
-		return false, err
-	}
-
-	if metadata.PlatformID != platformID {
-		return false, errors.New("wrong platform ID")
-	}
-
-	// Check that all modules were found
-	for _, item := range metadata.UpdateItems {
-		if _, ok := handler.modules[item.Type]; !ok {
-			return false, fmt.Errorf("module %s not found", item.Type)
-		}
-	}
-
-	for _, item := range metadata.UpdateItems {
-		// Skip already upgraded modules
-		if handler.state.ModuleStates[item.Type] == upgradedState {
-			continue
-		}
-
-		if err = handler.setModuleState(item.Type, upgradingState); err != nil {
-			return false, err
-		}
-
-		moduleRebootRequired, err := handler.modules[item.Type].Upgrade(handler.state.OperationVersion,
-			path.Join(handler.bundleDir, item.Path))
-		if err != nil {
-			log.WithField("id", item.Type).Errorf("Upgrade module failed: %s", err)
-
-			return false, err
-		}
-
-		if moduleRebootRequired {
-			log.WithField("id", item.Type).Debug("Module reboot required")
-
-			rebootRequired = true
-
-			continue
-		}
-
-		if err = handler.setModuleState(item.Type, upgradedState); err != nil {
-			return false, err
-		}
-	}
-
-	return rebootRequired, nil
-}
-
-func (handler *Handler) cancelUpgradeModules() (rebootRequired bool, cancelErr error) {
+func (handler *Handler) moduleOperation(beginState, endState moduleState,
+	skipStates []moduleState, operation moduleOperation, stopOnError bool) (rebootRequired bool, operationErr error) {
 	for id, state := range handler.state.ModuleStates {
-		// Skip already canceled modules
-		if state == canceledState {
-			continue
+		skip := false
+
+		for _, skipState := range skipStates {
+			if state == skipState {
+				skip = true
+			}
 		}
 
-		if err := handler.setModuleState(id, cancelingState); err != nil {
-			log.Errorf("Can't set module state: %s", err)
-
-			if cancelErr == nil {
-				cancelErr = err
-			}
+		if skip {
+			continue
 		}
 
 		module, ok := handler.modules[id]
 		if !ok {
 			err := fmt.Errorf("module %s not found", id)
 
-			log.Errorf("Error finishing upgrade module: %s", err)
-
-			if cancelErr == nil {
-				cancelErr = err
-			}
-		} else {
-			moduleRebootRequired, err := module.CancelUpgrade(handler.state.OperationVersion)
-			if err != nil {
-				log.Errorf("Error canceling upgrade module: %s", err)
-
-				if cancelErr == nil {
-					cancelErr = err
-				}
+			if operationErr == nil {
+				operationErr = err
 			}
 
-			if moduleRebootRequired {
-				log.WithField("id", id).Debug("Module reboot required")
-
-				rebootRequired = true
-
-				continue
+			if stopOnError {
+				return false, operationErr
 			}
-		}
 
-		if err := handler.setModuleState(id, canceledState); err != nil {
-			log.Errorf("Can't set module state: %s", err)
-
-			if cancelErr == nil {
-				cancelErr = err
-			}
-		}
-	}
-
-	return rebootRequired, cancelErr
-}
-
-func (handler *Handler) finishUpgradeModules() (finishErr error) {
-	for id := range handler.state.ModuleStates {
-		module, ok := handler.modules[id]
-		if !ok {
-			err := fmt.Errorf("module %s not found", id)
-
-			log.Errorf("Error finishing upgrade module: %s", err)
-
-			if finishErr == nil {
-				finishErr = err
-			}
-		} else {
-			if err := module.FinishUpgrade(handler.state.OperationVersion); err != nil {
-				log.Errorf("Error finishing upgrade module: %s", err)
-
-				if finishErr == nil {
-					finishErr = err
-				}
-			}
-		}
-	}
-
-	return finishErr
-}
-
-func (handler *Handler) revertModules() (rebootRequired bool, err error) {
-	for id, state := range handler.state.ModuleStates {
-		// Skip already reverted modules
-		if state == revertedState {
 			continue
 		}
 
-		module, ok := handler.modules[id]
-		if !ok {
-			return false, fmt.Errorf("module %s not found", id)
+		if err := handler.setModuleState(id, beginState); err != nil {
+			log.Errorf("Can't set module state: %s", err)
+
+			if operationErr == nil {
+				operationErr = err
+			}
+
+			if stopOnError {
+				return false, operationErr
+			}
 		}
 
-		if err = handler.setModuleState(id, revertingState); err != nil {
-			return false, err
-		}
-
-		moduleRebootRequired, err := module.Revert(handler.state.OperationVersion)
+		moduleRebootRequired, err := operation(module)
 		if err != nil {
-			log.WithField("id", id).Errorf("Revert module failed: %s", err)
-			return false, err
+			log.Errorf("Module operation error: %s", err)
+
+			if operationErr == nil {
+				operationErr = err
+			}
+
+			if stopOnError {
+				return false, operationErr
+			}
 		}
 
 		if moduleRebootRequired {
@@ -796,92 +751,20 @@ func (handler *Handler) revertModules() (rebootRequired bool, err error) {
 			continue
 		}
 
-		if err = handler.setModuleState(id, revertedState); err != nil {
-			return false, err
-		}
-	}
-
-	return rebootRequired, nil
-}
-
-func (handler *Handler) cancelRevertModules() (rebootRequired bool, cancelErr error) {
-	for id, state := range handler.state.ModuleStates {
-		// Skip already canceled modules
-		if state == upgradedState || state == canceledState {
-			continue
-		}
-
-		if err := handler.setModuleState(id, cancelingState); err != nil {
+		if err := handler.setModuleState(id, endState); err != nil {
 			log.Errorf("Can't set module state: %s", err)
 
-			if cancelErr == nil {
-				cancelErr = err
-			}
-		}
-
-		module, ok := handler.modules[id]
-		if !ok {
-			err := fmt.Errorf("module %s not found", id)
-
-			log.Errorf("Error finishing upgrade module: %s", err)
-
-			if cancelErr == nil {
-				cancelErr = err
-			}
-		} else {
-			moduleRebootRequired, err := module.CancelRevert(handler.state.OperationVersion)
-
-			if err != nil {
-				log.Errorf("Error canceling revert module: %s", err)
-
-				if cancelErr == nil {
-					cancelErr = err
-				}
+			if operationErr == nil {
+				operationErr = err
 			}
 
-			if moduleRebootRequired {
-				log.WithField("id", id).Debug("Module reboot required")
-
-				rebootRequired = true
-				continue
-			}
-		}
-
-		if err := handler.setModuleState(id, canceledState); err != nil {
-			log.Errorf("Can't set module state: %s", err)
-
-			if cancelErr == nil {
-				cancelErr = err
+			if stopOnError {
+				return false, operationErr
 			}
 		}
 	}
 
-	return rebootRequired, cancelErr
-}
-
-func (handler *Handler) finishRevertModules() (finishErr error) {
-	for id := range handler.state.ModuleStates {
-		module, ok := handler.modules[id]
-		if !ok {
-			err := fmt.Errorf("module %s not found", id)
-
-			log.Errorf("Error finishing revert module: %s", err)
-
-			if finishErr == nil {
-				finishErr = err
-			}
-		} else {
-			if err := module.FinishUpgrade(handler.state.OperationVersion); err != nil {
-				log.Errorf("Error finishing revert module: %s", err)
-
-				if finishErr == nil {
-					finishErr = err
-				}
-			}
-		}
-	}
-
-	return finishErr
+	return rebootRequired, operationErr
 }
 
 func (handler *Handler) setModuleState(id string, state moduleState) (err error) {
