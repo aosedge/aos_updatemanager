@@ -95,6 +95,12 @@ const metadataFileName = "metadata.json"
 const statusChannelSize = 1
 
 /*******************************************************************************
+ * Vars
+ ******************************************************************************/
+
+var plugins = make(map[string]NewPlugin)
+
+/*******************************************************************************
  * Types
  ******************************************************************************/
 
@@ -151,6 +157,9 @@ type PlatformController interface {
 	SystemReboot() (err error)
 }
 
+// NewPlugin plugin new function
+type NewPlugin func(id string, configJSON json.RawMessage) (module UpdateModule, err error)
+
 type handlerState struct {
 	OperationType    operationType          `json:"operationType"`
 	OperationState   operationState         `json:"operationState"`
@@ -181,9 +190,15 @@ type moduleState int
  * Public
  ******************************************************************************/
 
+// RegisterPlugin registers data adapter plugin
+func RegisterPlugin(plugin string, newFunc NewPlugin) {
+	log.WithField("plugin", plugin).Info("Register plugin")
+
+	plugins[plugin] = newFunc
+}
+
 // New returns pointer to new Handler
-func New(cfg *config.Config, modules []UpdateModule,
-	platform PlatformController, storage StateStorage) (handler *Handler, err error) {
+func New(cfg *config.Config, platform PlatformController, storage StateStorage) (handler *Handler, err error) {
 	handler = &Handler{
 		platform:      platform,
 		storage:       storage,
@@ -210,8 +225,18 @@ func New(cfg *config.Config, modules []UpdateModule,
 
 	handler.modules = make(map[string]UpdateModule)
 
-	for _, module := range modules {
-		handler.modules[module.GetID()] = module
+	for _, moduleCfg := range cfg.Modules {
+		if moduleCfg.Disabled {
+			log.WithField("id", moduleCfg.ID).Debug("Skip disabled module")
+			continue
+		}
+
+		module, err := createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
+		if err != nil {
+			return nil, err
+		}
+
+		handler.modules[moduleCfg.ID] = module
 	}
 
 	handler.wg.Add(1)
@@ -306,6 +331,10 @@ func (handler *Handler) StatusChannel() (statusChannel <-chan umprotocol.StatusR
 func (handler *Handler) Close() {
 	log.Debug("Close update handler")
 
+	for _, module := range handler.modules {
+		module.Close()
+	}
+
 	close(handler.statusChannel)
 }
 
@@ -326,6 +355,19 @@ func (state operationState) String() string {
 func (state moduleState) String() string {
 	return [...]string{
 		"invalid", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled"}[state]
+}
+
+func createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
+	newFunc, ok := plugins[plugin]
+	if !ok {
+		return nil, fmt.Errorf("plugin %s not found", plugin)
+	}
+
+	if module, err = newFunc(id, params); err != nil {
+		return nil, err
+	}
+
+	return module, nil
 }
 
 func (handler *Handler) getState() (err error) {

@@ -25,13 +25,14 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/modules/sshmodule"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
  * Var
  ******************************************************************************/
 
-var module *sshmodule.SSHModule
+var module updatehandler.UpdateModule
 
 /*******************************************************************************
  * Init

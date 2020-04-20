@@ -19,7 +19,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -29,8 +28,7 @@ import (
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
-	"aos_updatemanager/modules/sshmodule"
-	"aos_updatemanager/modules/testmodule"
+	_ "aos_updatemanager/modules"
 	"aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
@@ -128,17 +126,7 @@ func main() {
 	}
 	defer controller.Close()
 
-	modules, err := createUpdateModules(cfg)
-	if err != nil {
-		log.Fatalf("Can't create update modules: %s", err)
-	}
-	defer func() {
-		for _, module := range modules {
-			module.Close()
-		}
-	}()
-
-	updater, err := updatehandler.New(cfg, modules, controller, db)
+	updater, err := updatehandler.New(cfg, controller, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
@@ -155,37 +143,4 @@ func main() {
 	signal.Notify(terminateChannel, os.Interrupt, syscall.SIGTERM)
 
 	<-terminateChannel
-}
-
-func createUpdateModules(cfg *config.Config) (modules []updatehandler.UpdateModule, err error) {
-	var module updatehandler.UpdateModule
-
-	modules = make([]updatehandler.UpdateModule, 0, len(cfg.Modules))
-
-	for _, moduleConfig := range cfg.Modules {
-		if moduleConfig.Disabled {
-			log.Warnf("Skip disabled module: %s", moduleConfig.ID)
-
-			continue
-		}
-
-		switch moduleConfig.Plugin {
-		case "testmodule":
-			if module, err = testmodule.New(moduleConfig.ID, moduleConfig.Params); err != nil {
-				return nil, err
-			}
-
-		case "sshmodule":
-			if module, err = sshmodule.New(moduleConfig.ID, moduleConfig.Params); err != nil {
-				return nil, err
-			}
-
-		default:
-			return nil, fmt.Errorf("unsupported module plugin: %s", moduleConfig.Plugin)
-		}
-
-		modules = append(modules, module)
-	}
-
-	return nil, nil
 }

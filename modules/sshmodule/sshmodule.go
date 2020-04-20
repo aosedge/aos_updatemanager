@@ -18,6 +18,7 @@
 package sshmodule
 
 import (
+	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -59,7 +60,7 @@ type moduleConfig struct {
  ******************************************************************************/
 
 // New creates ssh module instance
-func New(id string, configJSON []byte) (module *SSHModule, err error) {
+func New(id string, configJSON json.RawMessage) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Info("Create SSH module")
 
 	sshModule := &SSHModule{id: id}

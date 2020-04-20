@@ -18,9 +18,12 @@
 package testmodule
 
 import (
+	"encoding/json"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -45,7 +48,7 @@ type TestModule struct {
  ******************************************************************************/
 
 // New creates test module instance
-func New(id string, configJSON []byte) (module *TestModule, err error) {
+func New(id string, configJSON json.RawMessage) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Info("Create test module")
 
 	testModule := &TestModule{id: id}
