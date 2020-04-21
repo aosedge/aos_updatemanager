@@ -18,17 +18,22 @@
 package updatehandler_test
 
 import (
+	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"os"
-	"strconv"
+	"os/exec"
+	"path"
+	"path/filepath"
 	"testing"
-
-	"gitpct.epam.com/epmd-aepr/aos_servicemanager/image"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/updatehandler"
+	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/image"
+	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
+
+	"aos_updatemanager/config"
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -40,17 +45,37 @@ import (
  ******************************************************************************/
 
 type testStorage struct {
-	state     int
-	filesInfo []umserver.UpgradeFileInfo
-	version   uint64
-	lastError error
+	operationState []byte
+	moduleStatuses map[string]error
+}
+
+type testModule struct {
+	id             string
+	status         error
+	rebootRequired bool
+}
+
+type testPlatformController struct {
+	version       uint64
+	platformID    string
+	rebootChannel chan bool
 }
 
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
-var updater *updatehandler.Handler
+var tmpDir string
+
+var cfg config.Config
+
+var storage = testStorage{
+	operationState: []byte("{}"),
+	moduleStatuses: make(map[string]error)}
+
+var platform = testPlatformController{rebootChannel: make(chan bool)}
+
+var modules = []*testModule{}
 
 /*******************************************************************************
  * Init
@@ -72,36 +97,29 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if err := os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Can't crate tmp dir: %s", err)
-	}
-
-	if err := setImageVersion("tmp/version", 43); err != nil {
-		log.Fatalf("Can't set image file: %s", err)
-	}
-
-	updater, err = updatehandler.New(&config.Config{
-		UpgradeDir:  "tmp",
-		VersionFile: "tmp/version",
-		Modules: []config.ModuleConfig{
-			config.ModuleConfig{
-				ID:     "id1",
-				Plugin: "../testmodule.so"},
-			config.ModuleConfig{
-				ID:     "id2",
-				Plugin: "../testmodule.so"},
-			config.ModuleConfig{
-				ID:     "id3",
-				Plugin: "../testmodule.so"}}}, &testStorage{})
+	tmpDir, err = ioutil.TempDir("", "um_")
 	if err != nil {
-		log.Fatalf("Can't create updater: %s", err)
+		log.Fatalf("Error create temporary dir: %s", err)
 	}
+
+	cfg = config.Config{
+		UpgradeDir: tmpDir,
+		Modules: []config.ModuleConfig{
+			config.ModuleConfig{ID: "id1", Plugin: "testmodule"},
+			config.ModuleConfig{ID: "id2", Plugin: "testmodule"},
+			config.ModuleConfig{ID: "id3", Plugin: "testmodule"}}}
+
+	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage) (module updatehandler.UpdateModule, err error) {
+		testModule := &testModule{id: id}
+
+		modules = append(modules, testModule)
+
+		return testModule, nil
+	})
 
 	ret := m.Run()
 
-	updater.Close()
-
-	if err := os.RemoveAll("tmp"); err != nil {
+	if err := os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error removing tmp dir: %s", err)
 	}
 
@@ -112,134 +130,555 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
-func TestGetVersion(t *testing.T) {
-	version := updater.GetVersion()
-
-	if version != 43 {
-		t.Errorf("Wrong version: %d", version)
-	}
-}
-
 func TestUpgradeRevert(t *testing.T) {
-	version := updater.GetVersion()
-
-	filesInfo, err := generateFilesInfo()
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
 	if err != nil {
-		t.Fatalf("Can't generate files info: %s", err)
+		t.Fatalf("Can't create updater: %s", err)
 	}
+	defer updater.Close()
+
+	version := updater.GetStatus().CurrentVersion
 
 	version++
 
-	if err := updater.Upgrade(version, filesInfo); err != nil {
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	// Upgrade
+
+	if err = updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if err = checkOperationResult(updater, version, version,
+		umprotocol.UpgradeOperation, umprotocol.SuccessStatus, ""); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+
+	// Revert
+
+	version--
+
+	if err = updater.Revert(version); err != nil {
 		t.Errorf("Upgrading error: %s", err)
 	}
 
-	if updater.GetVersion() != version {
-		t.Error("Wrong version")
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
 	}
 
-	if updater.GetOperationVersion() != version {
-		t.Error("Wrong version")
+	if err = checkOperationResult(updater, version, version,
+		umprotocol.RevertOperation, umprotocol.SuccessStatus, ""); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+}
+
+func TestUpgradeFailed(t *testing.T) {
+	modules = make([]*testModule, 0, 3)
+
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+	defer updater.Close()
+
+	version := updater.GetStatus().CurrentVersion
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
 	}
 
-	if updater.GetState() != umserver.UpgradedState {
-		t.Error("Wrong state")
+	modules[1].status = errors.New("upgrade error")
+
+	// Upgrade
+
+	if err = updater.Upgrade(version+1, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
 	}
 
-	if err := updater.GetLastError(); err != nil {
-		t.Errorf("Upgrade error: %s", err)
+	if err = waitOperationFinished(updater, umprotocol.FailedStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
 	}
+
+	if err = checkOperationResult(updater, version, version+1,
+		umprotocol.UpgradeOperation, umprotocol.FailedStatus, "upgrade error"); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+}
+
+func TestRevertFailed(t *testing.T) {
+	modules = make([]*testModule, 0, 3)
+
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+	defer updater.Close()
+
+	version := updater.GetStatus().CurrentVersion
+
+	version++
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	// Upgrade
+
+	if err = updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	// Revert
+
+	modules[1].status = errors.New("revert error")
+
+	if err = updater.Revert(version - 1); err != nil {
+		t.Fatalf("Reverting error: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.FailedStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if err = checkOperationResult(updater, version, version-1,
+		umprotocol.RevertOperation, umprotocol.FailedStatus, "revert error"); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+}
+
+func TestUpgradeBadVersion(t *testing.T) {
+	modules = make([]*testModule, 0, 3)
+
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+	defer updater.Close()
+
+	version := updater.GetStatus().CurrentVersion + 1
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	// Upgrade
+
+	if err = updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if updater.GetStatus().CurrentVersion != version {
+		t.Error("Wrong current version")
+	}
+
+	initialVersion := updater.GetStatus().CurrentVersion
+
+	version--
+
+	// When a new bundle version less than current
+
+	if err = updater.Upgrade(version, imageInfo); err == nil {
+		t.Fatal("Error expected, but a new version less than a current")
+	}
+
+	if updater.GetStatus().CurrentVersion != initialVersion {
+		t.Error("Wrong current version")
+	}
+
+	// When a new bundle version equals than current
+
+	version = initialVersion
+
+	if err = updater.Upgrade(version, imageInfo); err == nil {
+		t.Fatal("Error expected, but a new version equals than a current")
+	}
+
+	if updater.GetStatus().CurrentVersion != initialVersion {
+		t.Error("Wrong current version")
+	}
+}
+
+func TestUpgradeRevertWithReboot(t *testing.T) {
+	modules = make([]*testModule, 0, 3)
+
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+
+	version := updater.GetStatus().CurrentVersion
+
+	version++
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	// Upgrade
+
+	modules[1].rebootRequired = true
+	modules[2].rebootRequired = true
+
+	if err = updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitForRebootRequest(); err != nil {
+		t.Fatalf("Reboot request failed: %s", err)
+	}
+
+	// Reboot
+
+	updater.Close()
+
+	modules = make([]*testModule, 0, 3)
+
+	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if err = checkOperationResult(updater, version, version,
+		umprotocol.UpgradeOperation, umprotocol.SuccessStatus, ""); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+
+	// Revert
+
+	modules[0].rebootRequired = true
+	modules[2].rebootRequired = true
 
 	version--
 
 	if err := updater.Revert(version); err != nil {
-		t.Errorf("Upgrading error: %s", err)
+		t.Fatalf("Reverting error: %s", err)
 	}
 
-	if updater.GetVersion() != version {
-		t.Error("Wrong version")
+	if err = waitForRebootRequest(); err != nil {
+		t.Fatalf("Reboot request failed: %s", err)
 	}
 
-	if updater.GetOperationVersion() != version {
-		t.Error("Wrong version")
+	// Reboot
+
+	updater.Close()
+
+	modules = make([]*testModule, 0, 3)
+
+	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+		t.Fatalf("Can't create updater: %s", err)
 	}
 
-	if updater.GetState() != umserver.RevertedState {
-		t.Error("Wrong state")
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
 	}
 
-	if err := updater.GetLastError(); err != nil {
-		t.Errorf("Upgrade error: %s", err)
+	if err = checkOperationResult(updater, version, version,
+		umprotocol.RevertOperation, umprotocol.SuccessStatus, ""); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
 	}
+
+	updater.Close()
+}
+
+func TestUpgradeFailedWithReboot(t *testing.T) {
+	modules = make([]*testModule, 0, 3)
+
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+
+	version := updater.GetStatus().CurrentVersion
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	// Upgrade
+
+	modules[1].status = errors.New("upgrade error")
+	modules[1].rebootRequired = true
+
+	if err := updater.Upgrade(version+1, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitForRebootRequest(); err != nil {
+		t.Fatalf("Reboot request failed: %s", err)
+	}
+
+	// Reboot
+
+	updater.Close()
+
+	modules = make([]*testModule, 0, 3)
+
+	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.FailedStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if err = checkOperationResult(updater, version, version+1,
+		umprotocol.UpgradeOperation, umprotocol.FailedStatus, "upgrade error"); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+
+	updater.Close()
+}
+
+func TestRevertFailedWithReboot(t *testing.T) {
+	modules = make([]*testModule, 0, 3)
+
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+
+	version := updater.GetStatus().CurrentVersion
+
+	version++
+
+	imageInfo, err := createImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't test image: %s", err)
+	}
+
+	// Upgrade
+
+	if err := updater.Upgrade(version, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.SuccessStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	// Revert
+
+	modules[1].status = errors.New("revert error")
+	modules[1].rebootRequired = true
+
+	if err := updater.Revert(version - 1); err != nil {
+		t.Fatalf("Reverting error: %s", err)
+	}
+
+	if err = waitForRebootRequest(); err != nil {
+		t.Fatalf("Reboot request failed: %s", err)
+	}
+
+	// Reboot
+
+	updater.Close()
+
+	modules = make([]*testModule, 0, 3)
+
+	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.FailedStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if err = checkOperationResult(updater, version, version-1,
+		umprotocol.RevertOperation, umprotocol.FailedStatus, "revert error"); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+
+	updater.Close()
+
 }
 
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
-func generateFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
-	if err = ioutil.WriteFile("tmp/image", []byte("This is image file"), 0644); err != nil {
-		return nil, err
+func waitForRebootRequest() (err error) {
+	select {
+	case <-time.After(5 * time.Second):
+		return errors.New("wait operation timeout")
+
+	case <-platform.rebootChannel:
 	}
 
-	info, err := image.CreateFileInfo("tmp/image")
+	return nil
+}
+
+func waitOperationFinished(handler *updatehandler.Handler, expectedStatus string) (err error) {
+	select {
+	case <-time.After(5 * time.Second):
+		return errors.New("wait operation timeout")
+
+	case status := <-handler.StatusChannel():
+		if status.Status != expectedStatus {
+			return errors.New("wrong operation status")
+		}
+	}
+
+	return nil
+}
+
+func checkOperationResult(handler *updatehandler.Handler, currentVersion,
+	operationVersion uint64, lastOperation, status string, lastError string) (err error) {
+	currentStatus := handler.GetStatus()
+
+	if currentStatus.CurrentVersion != currentVersion {
+		return errors.New("wrong current version")
+	}
+
+	if currentStatus.RequestedVersion != operationVersion {
+		return errors.New("wrong operation version")
+	}
+
+	if currentStatus.Operation != lastOperation {
+		return errors.New("wrong last operation")
+	}
+
+	if currentStatus.Status != status {
+		return errors.New("wrong status")
+	}
+
+	if currentStatus.Error != lastError {
+		return errors.New("wrong last error")
+	}
+
+	return nil
+}
+
+func createImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
+	metadataJSON := `
+{
+    "platformId": "SomePlatform",
+    "bundleVersion": "v1.24 28-02-2020",
+    "bundleDescription": "This is super update",
+    "updateItems": [
+        {
+            "type": "id1",
+            "path": "id1Dir"
+        },
+        {
+            "type": "id2",
+            "path": "id2Dir"
+        },
+        {
+            "type": "id3",
+            "path": "id3Dir"
+        }
+    ]
+}`
+
+	if err = os.MkdirAll(path.Join(tmpDir, "image"), 0755); err != nil {
+		return imageInfo, err
+	}
+
+	if err := ioutil.WriteFile(path.Join(tmpDir, "image", "metadata.json"), []byte(metadataJSON), 0644); err != nil {
+		return imageInfo, err
+	}
+
+	if err := exec.Command("tar", "-C", path.Join(tmpDir, "image"), "-czf", imagePath, "./").Run(); err != nil {
+		return imageInfo, err
+	}
+
+	fileInfo, err := image.CreateFileInfo(imagePath)
 	if err != nil {
-		return nil, err
+		return imageInfo, err
 	}
 
-	for i := 0; i < 3; i++ {
-		fileInfo := umserver.UpgradeFileInfo{
-			Target: "id" + strconv.Itoa(i+1),
-			URL:    "image",
-			Sha256: info.Sha256,
-			Sha512: info.Sha512,
-			Size:   info.Size}
-		filesInfo = append(filesInfo, fileInfo)
-	}
+	imageInfo.Path = filepath.Base(imagePath)
+	imageInfo.Sha256 = fileInfo.Sha256
+	imageInfo.Sha512 = fileInfo.Sha512
+	imageInfo.Size = fileInfo.Size
 
-	return filesInfo, nil
+	return imageInfo, nil
 }
 
-func setImageVersion(fileName string, version uint64) (err error) {
-	if err = ioutil.WriteFile(fileName, []byte(strconv.FormatUint(version, 10)), 0644); err != nil {
-		return err
-	}
+func (storage *testStorage) SetOperationState(state []byte) (err error) {
+	storage.operationState = state
+	return nil
+}
+
+func (storage *testStorage) GetOperationState() (state []byte, err error) {
+	return storage.operationState, nil
+}
+
+func (module *testModule) GetID() (id string) {
+	return module.id
+}
+
+func (module *testModule) Init() (err error) {
+	return module.status
+}
+
+func (module *testModule) Upgrade(version uint64, path string) (rebootRequired bool, err error) {
+	return module.rebootRequired, module.status
+}
+
+func (module *testModule) CancelUpgrade(version uint64) (rebootRequired bool, err error) {
+	return module.rebootRequired, module.status
+}
+
+func (module *testModule) FinishUpgrade(version uint64) (err error) {
+	return module.status
+}
+
+func (module *testModule) Revert(version uint64) (rebootRequired bool, err error) {
+	return module.rebootRequired, module.status
+}
+
+func (module *testModule) CancelRevert(version uint64) (rebootRequired bool, err error) {
+	return module.rebootRequired, module.status
+}
+
+func (module *testModule) FinishRevert(version uint64) (err error) {
+	return module.status
+}
+
+func (module *testModule) Close() (err error) {
+	return nil
+}
+
+func (platform *testPlatformController) GetVersion() (version uint64, err error) {
+	return platform.version, nil
+}
+
+func (platform *testPlatformController) SetVersion(version uint64) (err error) {
+	platform.version = version
 
 	return nil
 }
 
-func (storage *testStorage) SetState(state int) (err error) {
-	storage.state = state
+func (platform *testPlatformController) GetPlatformID() (id string, err error) {
+	return "SomePlatform", nil
+}
+
+func (platform *testPlatformController) SystemReboot() (err error) {
+	platform.rebootChannel <- true
+
 	return nil
-}
-
-func (storage *testStorage) GetState() (state int, err error) {
-	return storage.state, nil
-}
-
-func (storage *testStorage) SetFilesInfo(filesInfo []umserver.UpgradeFileInfo) (err error) {
-	storage.filesInfo = filesInfo
-	return nil
-}
-
-func (storage *testStorage) GetFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
-	return storage.filesInfo, nil
-}
-
-func (storage *testStorage) SetOperationVersion(version uint64) (err error) {
-	storage.version = version
-	return nil
-}
-
-func (storage *testStorage) GetOperationVersion() (version uint64, err error) {
-	return storage.version, nil
-}
-
-func (storage *testStorage) SetLastError(lastError error) (err error) {
-	storage.lastError = lastError
-	return nil
-}
-
-func (storage *testStorage) GetLastError() (lastError error, err error) {
-	return storage.lastError, nil
 }

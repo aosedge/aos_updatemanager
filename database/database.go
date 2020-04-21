@@ -19,15 +19,13 @@ package database
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
-
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
 )
 
 /*******************************************************************************
@@ -35,7 +33,10 @@ import (
  ******************************************************************************/
 
 const (
-	dbVersion = 1
+	dbVersion   = 4
+	busyTimeout = 60000
+	journalMode = "WAL"
+	syncMode    = "NORMAL"
 )
 
 /*******************************************************************************
@@ -75,14 +76,26 @@ func New(name string) (db *Database, err error) {
 		}
 	}
 
-	sqlite, err := sql.Open("sqlite3", name)
-	if err != nil {
+	var sqlite *sql.DB
+
+	if sqlite, err = sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
+		name, busyTimeout, journalMode, syncMode)); err != nil {
 		return db, err
 	}
 
+	defer func() {
+		if err != nil {
+			sqlite.Close()
+		}
+	}()
+
 	db = &Database{sqlite}
 
-	if err := db.createConfigTable(); err != nil {
+	if err = db.createConfigTable(); err != nil {
+		return db, err
+	}
+
+	if err := db.createModuleTable(); err != nil {
 		return db, err
 	}
 
@@ -98,9 +111,9 @@ func New(name string) (db *Database, err error) {
 	return db, nil
 }
 
-// SetState stores state
-func (db *Database) SetState(state int) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET state = ?", state)
+// SetOperationState stores operation state
+func (db *Database) SetOperationState(state []byte) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET operationState = ?", state)
 	if err != nil {
 		return err
 	}
@@ -117,126 +130,49 @@ func (db *Database) SetState(state int) (err error) {
 	return nil
 }
 
-// GetState returns state
-func (db *Database) GetState() (state int, err error) {
-	stmt, err := db.sql.Prepare("SELECT state FROM config")
+// GetOperationState returns operation state
+func (db *Database) GetOperationState() (state []byte, err error) {
+	stmt, err := db.sql.Prepare("SELECT operationState FROM config")
 	if err != nil {
-		return state, err
+		return nil, err
 	}
 	defer stmt.Close()
 
 	err = stmt.QueryRow().Scan(&state)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return state, ErrNotExist
+			return nil, ErrNotExist
 		}
 
-		return state, err
+		return nil, err
 	}
 
 	return state, nil
 }
 
-// SetFilesInfo stores files info
-func (db *Database) SetFilesInfo(filesInfo []umserver.UpgradeFileInfo) (err error) {
-	infoJSON, err := json.Marshal(&filesInfo)
+// GetSystemVersion returns system version
+func (db *Database) GetSystemVersion() (version uint64, err error) {
+	stmt, err := db.sql.Prepare("SELECT systemVersion FROM config")
 	if err != nil {
-		return err
-	}
-
-	result, err := db.sql.Exec("UPDATE config SET filesInfo = ?", infoJSON)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetFilesInfo returns files info
-func (db *Database) GetFilesInfo() (filesInfo []umserver.UpgradeFileInfo, err error) {
-	stmt, err := db.sql.Prepare("SELECT filesInfo FROM config")
-	if err != nil {
-		return nil, err
+		return version, err
 	}
 	defer stmt.Close()
 
-	var infoJSON []byte
-
-	if err = stmt.QueryRow().Scan(&infoJSON); err != nil {
+	err = stmt.QueryRow().Scan(&version)
+	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, ErrNotExist
+			return version, ErrNotExist
 		}
 
-		return nil, err
-	}
-
-	if infoJSON == nil {
-		return nil, nil
-	}
-
-	if err = json.Unmarshal(infoJSON, &filesInfo); err != nil {
-		return nil, err
-	}
-
-	return filesInfo, nil
-}
-
-// SetOperationVersion stores operation version
-func (db *Database) SetOperationVersion(version uint64) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET operationVersion = ?", version)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
-}
-
-// GetOperationVersion returns upgrade version
-func (db *Database) GetOperationVersion() (version uint64, err error) {
-	stmt, err := db.sql.Prepare("SELECT operationVersion FROM config")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-
-	if err = stmt.QueryRow().Scan(&version); err != nil {
-		if err == sql.ErrNoRows {
-			return 0, ErrNotExist
-		}
-
-		return 0, err
+		return version, err
 	}
 
 	return version, nil
 }
 
-// SetLastError stores last error
-func (db *Database) SetLastError(lastError error) (err error) {
-	errorStr := ""
-
-	if lastError != nil {
-		errorStr = lastError.Error()
-	}
-
-	result, err := db.sql.Exec("UPDATE config SET lastError = ?", errorStr)
+// SetSystemVersion sets system version
+func (db *Database) SetSystemVersion(version uint64) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET systemVersion = ?", version)
 	if err != nil {
 		return err
 	}
@@ -253,29 +189,42 @@ func (db *Database) SetLastError(lastError error) (err error) {
 	return nil
 }
 
-// GetLastError returns last error
-func (db *Database) GetLastError() (lastError error, err error) {
-	stmt, err := db.sql.Prepare("SELECT lastError FROM config")
+// GetModuleState returns module state
+func (db *Database) GetModuleState(id string) (state []byte, err error) {
+	rows, err := db.sql.Query("SELECT state FROM modules WHERE id = ?", id)
 	if err != nil {
 		return nil, err
 	}
-	defer stmt.Close()
+	defer rows.Close()
 
-	errorStr := ""
-
-	if err = stmt.QueryRow().Scan(&errorStr); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrNotExist
+	for rows.Next() {
+		if err = rows.Scan(&state); err != nil {
+			return nil, err
 		}
 
-		return nil, err
+		return state, nil
 	}
 
-	if errorStr == "" {
-		return nil, nil
+	return nil, ErrNotExist
+}
+
+// SetModuleState sets module state
+func (db *Database) SetModuleState(id string, state []byte) (err error) {
+	result, err := db.sql.Exec("REPLACE INTO modules (id, state) VALUES(?, ?)", id, state)
+	if err != nil {
+		return err
 	}
 
-	return errors.New(errorStr), nil
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
 }
 
 // Close closes database
@@ -351,20 +300,26 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE config (
 			version INTEGER,
-			state INTEGER,
-			operationVersion INTEGER,
-			filesInfo BLOB,
-			lastError TEXT)`); err != nil {
+			systemVersion INTEGER,
+			operationState TEXT)`); err != nil {
 		return err
 	}
 
 	if _, err = db.sql.Exec(
 		`INSERT INTO config (
 			version,
-			state,
-			operationVersion,
-			filesInfo,
-			lastError) values(?, ?, ?, ?, ?)`, dbVersion, umserver.UpgradedState, 0, []byte("null"), ""); err != nil {
+			systemVersion,
+			operationState) values(?, ?, ?)`, dbVersion, 0, "{}"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) createModuleTable() (err error) {
+	log.Info("Create module table")
+
+	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
 		return err
 	}
 

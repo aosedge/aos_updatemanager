@@ -27,10 +27,11 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_servicemanager/wsclient"
+	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
+	"gitpct.epam.com/epmd-aepr/aos_common/wsclient"
 
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/config"
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
+	"aos_updatemanager/config"
+	"aos_updatemanager/umserver"
 )
 
 /*******************************************************************************
@@ -38,6 +39,12 @@ import (
  ******************************************************************************/
 
 const serverURL = "wss://localhost:8088"
+
+// Server creation types
+const (
+	serverTypeSuccess = iota
+	serverTypeFail
+)
 
 /*******************************************************************************
  * Types
@@ -49,8 +56,13 @@ type testClient struct {
 }
 
 type testUpdater struct {
-	version uint64
-	state   int
+	status        umprotocol.StatusRsp
+	statusChannel chan umprotocol.StatusRsp
+}
+
+type testFailUpdater struct {
+	status        umprotocol.StatusRsp
+	statusChannel chan umprotocol.StatusRsp
 }
 
 /*******************************************************************************
@@ -71,41 +83,9 @@ func init() {
  ******************************************************************************/
 
 func TestMain(m *testing.M) {
-	configJSON := `{
-	"Cert": "../data/crt.pem",
-	"Key":  "../data/key.pem"
-}`
-
-	var cfg config.Config
-
-	decoder := json.NewDecoder(strings.NewReader(configJSON))
-	// Parse config
-	if err := decoder.Decode(&cfg); err != nil {
-		log.Fatalf("Can't parse config: %s", err)
-	}
-
-	url, err := url.Parse(serverURL)
-	if err != nil {
-		log.Fatalf("Can't parse url: %s", err)
-	}
-
-	cfg.ServerURL = url.Host
-
-	server, err := umserver.New(&cfg, &testUpdater{})
-	if err != nil {
-		log.Fatalf("Can't create ws server: %s", err)
-	}
-	defer server.Close()
-
-	// There is raise condition: after new listen is not started yet
-	// so we need this delay to wait for listen
-	time.Sleep(time.Second)
-
 	ret := m.Run()
 
 	time.Sleep(time.Second)
-
-	server.Close()
 
 	os.Exit(ret)
 }
@@ -115,68 +95,186 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetStatus(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
 	client, err := newTestClient(serverURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
 	defer client.close()
 
-	var response umserver.StatusMessage
+	var response umprotocol.StatusRsp
+	request := umprotocol.StatusReq{}
 
-	if err := client.sendRequest(&umserver.GetStatusReq{
-		MessageHeader: umserver.MessageHeader{Type: umserver.StatusType}}, &response, 5*time.Second); err != nil {
+	if err := client.sendRequest(umprotocol.StatusRequestType, &request, &response, 5*time.Second); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Status != umserver.SuccessStatus {
+	if response.Status != umprotocol.SuccessStatus {
 		t.Errorf("Wrong updater status: %s", response.Status)
 	}
 }
 
 func TestSystemUpgrade(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
 	client, err := newTestClient(serverURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
 	defer client.close()
 
-	var response umserver.StatusMessage
+	var response umprotocol.StatusRsp
+	request := umprotocol.UpgradeReq{ImageVersion: 3}
 
-	if err := client.sendRequest(&umserver.UpgradeReq{
-		MessageHeader: umserver.MessageHeader{Type: umserver.UpgradeType},
-		ImageVersion:  3}, &response, 5*time.Second); err != nil {
+	if err := client.sendRequest(umprotocol.UpgradeRequestType, &request, &response, 5*time.Second); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Status != umserver.SuccessStatus {
+	if response.Status != umprotocol.SuccessStatus {
 		t.Errorf("Wrong updater status: %s", response.Status)
 	}
 
-	if response.Operation != umserver.UpgradeType {
+	if response.Operation != umprotocol.UpgradeOperation {
 		t.Errorf("Wrong operation: %s", response.Operation)
 	}
 }
 
 func TestSystemRevert(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
 	client, err := newTestClient(serverURL)
 	if err != nil {
 		t.Fatalf("Can't create test client: %s", err)
 	}
 	defer client.close()
 
-	var response umserver.StatusMessage
+	var response umprotocol.StatusRsp
+	request := umprotocol.RevertReq{ImageVersion: 3}
 
-	if err := client.sendRequest(&umserver.RevertReq{
-		MessageHeader: umserver.MessageHeader{Type: umserver.RevertType},
-		ImageVersion:  3}, &response, 5*time.Second); err != nil {
+	if err := client.sendRequest(umprotocol.RevertRequestType, &request, &response, 5*time.Second); err != nil {
 		t.Fatalf("Can't send request: %s", err)
 	}
 
-	if response.Status != umserver.SuccessStatus {
+	if response.Status != umprotocol.SuccessStatus {
 		t.Errorf("Wrong updater status: %s", response.Status)
 	}
 
-	if response.Operation != umserver.RevertType {
+	if response.Operation != umprotocol.RevertOperation {
+		t.Errorf("Wrong operation: %s", response.Operation)
+	}
+}
+
+func TestUnsupportedRequest(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	request := umprotocol.UpgradeReq{ImageVersion: 3}
+
+	if err = client.sendRequest("WrongRequest", &request, &response, 5*time.Second); err == nil {
+		t.Fatal("Error is expected here")
+	}
+
+	// Test for the unsupported version
+	if err = client.sendVersionedRequest("WrongRequest", &request, &response, 5*time.Second, 255); err == nil {
+		t.Fatal("Error is expected here")
+	}
+
+	// Test with completely wrong message format
+	message := "Some wrong messageo"
+
+	if err = client.sendRawRequest(&message, &response, 5*time.Second); err == nil {
+		t.Fatal("Error is expected here")
+	}
+}
+
+func TestNilDataRequest(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeSuccess)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	message := umprotocol.Message{
+		Header: umprotocol.Header{
+			Version:     umprotocol.Version,
+			MessageType: umprotocol.UpgradeRequestType,
+		},
+	}
+
+	message.Data = nil
+
+	if err = client.sendRawRequest(&message, &response, 5*time.Second); err == nil {
+		t.Fatal("Expected error here")
+	}
+}
+
+func TestUpgradeFail(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeFail)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	request := umprotocol.UpgradeReq{ImageVersion: 3}
+
+	if err := client.sendRequest(umprotocol.UpgradeRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Status != umprotocol.FailedStatus {
+		t.Errorf("Wrong updater status: %s", response.Status)
+	}
+
+	if response.Operation != umprotocol.UpgradeOperation {
+		t.Errorf("Wrong operation: %s", response.Operation)
+	}
+}
+
+func TestRevertFail(t *testing.T) {
+	server := newTestServer(serverURL, serverTypeFail)
+	defer server.Close()
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.StatusRsp
+
+	request := umprotocol.RevertReq{ImageVersion: 3}
+
+	if err := client.sendRequest(umprotocol.RevertRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Status != umprotocol.FailedStatus {
+		t.Errorf("Wrong updater status: %s", response.Status)
+	}
+
+	if response.Operation != umprotocol.RevertOperation {
 		t.Errorf("Wrong operation: %s", response.Operation)
 	}
 }
@@ -184,6 +282,55 @@ func TestSystemRevert(t *testing.T) {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func CreateServerConfig(serverAddress string) (cfg config.Config) {
+	configJSON := `{
+	"Cert": "../data/crt.pem",
+	"Key":  "../data/key.pem"
+}`
+
+	decoder := json.NewDecoder(strings.NewReader(configJSON))
+	// Parse config
+	if err := decoder.Decode(&cfg); err != nil {
+		log.Fatalf("Can't parse config: %s", err)
+	}
+
+	url, err := url.Parse(serverAddress)
+	if err != nil {
+		log.Fatalf("Can't parse url: %s", err)
+	}
+
+	cfg.ServerURL = url.Host
+
+	return cfg
+}
+
+// Success or die
+func newTestServer(url string, serverType int) (server *umserver.Server) {
+	cfg := CreateServerConfig(serverURL)
+	var updater umserver.Updater
+
+	if serverType == serverTypeSuccess {
+		updater = &testUpdater{
+			status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
+			statusChannel: make(chan umprotocol.StatusRsp)}
+	} else {
+		updater = &testFailUpdater{
+			status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
+			statusChannel: make(chan umprotocol.StatusRsp)}
+	}
+
+	server, err := umserver.New(&cfg, updater)
+	if err != nil {
+		log.Fatalf("Can't create ws server: %s", err)
+	}
+
+	// There is raise condition: after new listen is not started yet
+	// so we need this delay to wait for listen
+	time.Sleep(time.Second)
+
+	return server
+}
 
 func newTestClient(url string) (client *testClient, err error) {
 	client = &testClient{messageChannel: make(chan []byte, 1)}
@@ -207,8 +354,29 @@ func (client *testClient) messageHandler(message []byte) {
 	client.messageChannel <- message
 }
 
-func (client *testClient) sendRequest(request, response interface{}, timeout time.Duration) (err error) {
-	if err := client.wsClient.SendMessage(request); err != nil {
+func (client *testClient) sendRequest(messageType string, request, response interface{}, timeout time.Duration) (err error) {
+	return client.sendVersionedRequest(messageType, request, response, timeout, umprotocol.Version)
+}
+
+//NOTE: amoiseev Setting optional parameter to be able to set wrong version in header
+func (client *testClient) sendVersionedRequest(messageType string, request, response interface{}, timeout time.Duration, version uint64) (err error) {
+	message := umprotocol.Message{
+		Header: umprotocol.Header{
+			Version:     version,
+			MessageType: messageType,
+		},
+	}
+
+	if message.Data, err = json.Marshal(request); err != nil {
+		return err
+	}
+
+	return client.sendRawRequest(message, response, timeout)
+}
+
+func (client *testClient) sendRawRequest(message, response interface{}, timeout time.Duration) (err error) {
+
+	if err = client.wsClient.SendMessage(&message); err != nil {
 		return err
 	}
 
@@ -216,18 +384,14 @@ func (client *testClient) sendRequest(request, response interface{}, timeout tim
 	case <-time.After(timeout):
 		return errors.New("wait response timeout")
 
-	case message := <-client.messageChannel:
-		var header umserver.MessageHeader
+	case messageJSON := <-client.messageChannel:
+		var message umprotocol.Message
 
-		if err = json.Unmarshal(message, &header); err != nil {
+		if err = json.Unmarshal(messageJSON, &message); err != nil {
 			return err
 		}
 
-		if header.Type != umserver.StatusType && header.Error != "" {
-			return errors.New(header.Error)
-		}
-
-		if err = json.Unmarshal(message, response); err != nil {
+		if err = json.Unmarshal(message.Data, response); err != nil {
 			return err
 		}
 	}
@@ -235,28 +399,60 @@ func (client *testClient) sendRequest(request, response interface{}, timeout tim
 	return nil
 }
 
-func (updater *testUpdater) GetVersion() (version uint64) {
-	return updater.version
+func (updater *testUpdater) GetStatus() (status umprotocol.StatusRsp) {
+	return updater.status
 }
 
-func (updater *testUpdater) GetOperationVersion() (version uint64) {
-	return updater.version
-}
+func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.UpgradeOperation
+	updater.status.Status = umprotocol.SuccessStatus
 
-func (updater *testUpdater) GetState() (state int) {
-	return updater.state
-}
+	updater.statusChannel <- updater.status
 
-func (updater *testUpdater) GetLastError() (err error) {
-	return nil
-}
-
-func (updater *testUpdater) Upgrade(version uint64, filesInfo []umserver.UpgradeFileInfo) (err error) {
-	updater.version = version
 	return nil
 }
 
 func (updater *testUpdater) Revert(version uint64) (err error) {
-	updater.version = version
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.RevertOperation
+	updater.status.Status = umprotocol.SuccessStatus
+
+	updater.statusChannel <- updater.status
+
 	return nil
+}
+
+func (updater *testUpdater) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
+	return updater.statusChannel
+}
+
+/*******************************************************************************
+ * testFailUpdater implementation
+ ******************************************************************************/
+
+func (updater *testFailUpdater) GetStatus() (status umprotocol.StatusRsp) {
+	return updater.status
+}
+
+func (updater *testFailUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.UpgradeOperation
+	updater.status.Status = umprotocol.FailedStatus
+	updater.status.Error = "UnitTest: failed update"
+
+	return errors.New(updater.status.Error)
+}
+
+func (updater *testFailUpdater) Revert(version uint64) (err error) {
+	updater.status.CurrentVersion = version
+	updater.status.Operation = umprotocol.RevertOperation
+	updater.status.Status = umprotocol.FailedStatus
+	updater.status.Error = "UnitTest: failed revert"
+
+	return errors.New(updater.status.Error)
+}
+
+func (updater *testFailUpdater) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
+	return updater.statusChannel
 }

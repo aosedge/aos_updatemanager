@@ -18,12 +18,13 @@
 package database
 
 import (
-	"errors"
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
+	"strconv"
+	"sync"
 	"testing"
-
-	"gitpct.epam.com/epmd-aepr/aos_updatemanager/umserver"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -32,7 +33,7 @@ import (
  * Variables
  ******************************************************************************/
 
-var db *Database
+var dbPath string
 
 /*******************************************************************************
  * Main
@@ -41,22 +42,18 @@ var db *Database
 func TestMain(m *testing.M) {
 	var err error
 
-	if err = os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Error creating tmp dir %s", err)
+	tmpDir, err := ioutil.TempDir("", "um_")
+	if err != nil {
+		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
-	db, err = New("tmp/test.db")
-	if err != nil {
-		log.Fatalf("Can't create database: %s", err)
-	}
+	dbPath = path.Join(tmpDir, "test.db")
 
 	ret := m.Run()
 
-	if err = os.RemoveAll("tmp"); err != nil {
+	if err = os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error deleting tmp dir: %s", err)
 	}
-
-	db.Close()
 
 	os.Exit(ret)
 }
@@ -66,107 +63,183 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestDBVersion(t *testing.T) {
-	db, err := New("tmp/version.db")
+	db, err := New(dbPath)
 	if err != nil {
-		log.Fatalf("Can't create database: %s", err)
+		t.Fatalf("Can't create database: %s", err)
 	}
 
 	if err = db.setVersion(dbVersion - 1); err != nil {
-		log.Errorf("Can't set database version: %s", err)
+		t.Errorf("Can't set database version: %s", err)
 	}
 
 	db.Close()
 
-	db, err = New("tmp/version.db")
+	db, err = New(dbPath)
 	if err == nil {
-		log.Error("Expect version mismatch error")
+		t.Error("Expect version mismatch error")
 	} else if err != ErrVersionMismatch {
-		log.Errorf("Can't create database: %s", err)
+		t.Errorf("Can't create database: %s", err)
+	}
+
+	if err := os.RemoveAll(dbPath); err != nil {
+		t.Fatalf("Can't remove database: %s", err)
 	}
 
 	db.Close()
 }
 
-func TestState(t *testing.T) {
-	setState := umserver.RevertingState
-	if err := db.SetState(setState); err != nil {
+func TestNewErrors(t *testing.T) {
+	// Check MkdirAll in New statement
+	db, err := New("/sys/rooooot/test.db")
+	if err == nil {
+		db.Close()
+		t.Fatal("expecting error with no access rights")
+	}
+
+	//Trying to create test.db with no access rights
+	//Check fail of the createConfigTable
+	db, err = New("/sys/test.db")
+	if err == nil {
+		db.Close()
+		t.Fatal("Expecting error with no access rights")
+	}
+}
+
+func TestOperationState(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	setState := []byte("{This is test}")
+
+	if err := db.SetOperationState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
 
-	getState, err := db.GetState()
+	getState, err := db.GetOperationState()
 	if err != nil {
 		t.Fatalf("Can't get state: %s", err)
 	}
 
-	if setState != getState {
+	if !reflect.DeepEqual(setState, getState) {
 		t.Fatalf("Wrong state value: %v", getState)
 	}
 }
 
-func TestFilesInfo(t *testing.T) {
-	setFilesInfo := []umserver.UpgradeFileInfo{
-		umserver.UpgradeFileInfo{
-			Target: "target",
-			URL:    "url1",
-			Sha256: []byte{1, 2, 3, 4, 5, 6},
-			Sha512: []byte{1, 2, 3, 4, 5, 6},
-			Size:   1234}}
-	if err := db.SetFilesInfo(setFilesInfo); err != nil {
-		t.Fatalf("Can't set files info: %s", err)
-	}
-
-	getFilesInfo, err := db.GetFilesInfo()
+func TestSystemVersion(t *testing.T) {
+	db, err := New(dbPath)
 	if err != nil {
-		t.Fatalf("Can't get files info: %s", err)
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	var setVersion uint64 = 32
+
+	if err := db.SetSystemVersion(setVersion); err != nil {
+		t.Fatalf("Can't set system version: %s", err)
 	}
 
-	if !reflect.DeepEqual(setFilesInfo, getFilesInfo) {
-		t.Fatalf("Wrong files info value: %v", getFilesInfo)
-	}
-}
-
-func TestOperationVersion(t *testing.T) {
-	setVersion := uint64(5)
-	if err := db.SetOperationVersion(setVersion); err != nil {
-		t.Fatalf("Can't set operation version: %s", err)
-	}
-
-	getVersion, err := db.GetOperationVersion()
+	getVersion, err := db.GetSystemVersion()
 	if err != nil {
-		t.Fatalf("Can't get operation version: %s", err)
+		t.Fatalf("Can't get system version: %s", err)
 	}
 
 	if setVersion != getVersion {
-		t.Fatalf("Wrong operation version value: %v", getVersion)
+		t.Fatalf("Wrong system version value: %d", getVersion)
 	}
 }
 
-func TestLastError(t *testing.T) {
-	setError := errors.New("last error")
-	if err := db.SetLastError(setError); err != nil {
-		t.Fatalf("Can't set last error: %s", err)
+func TestModuleState(t *testing.T) {
+	type testItem struct {
+		id    string
+		state string
 	}
 
-	getError, err := db.GetLastError()
+	testData := []testItem{
+		{"id0", "state00"},
+		{"id1", "state01"},
+		{"id2", "state02"},
+		{"id3", "state03"},
+		{"id0", "state10"},
+		{"id1", "state11"},
+		{"id2", "state12"},
+		{"id3", "state13"},
+	}
+
+	db, err := New(dbPath)
 	if err != nil {
-		t.Fatalf("Can't get last error: %s", err)
+		t.Fatalf("Can't create database: %s", err)
 	}
+	defer db.Close()
 
-	if setError.Error() != getError.Error() {
-		t.Fatalf("Wrong last error value: %v", getError)
+	for i, item := range testData {
+		if err = db.SetModuleState(item.id, []byte(item.state)); err != nil {
+			t.Errorf("Index: %d, can't set module state: %s", i, err)
+		}
+
+		state, err := db.GetModuleState(item.id)
+		if err != nil {
+			t.Errorf("Index: %d, can't get module state: %s", i, err)
+		}
+
+		if string(state) != item.state {
+			t.Errorf("Index: %d, wrong module state: %s", i, string(state))
+		}
 	}
+}
 
-	setError = nil
-	if err := db.SetLastError(setError); err != nil {
-		t.Fatalf("Can't set last error: %s", err)
-	}
-
-	getError, err = db.GetLastError()
+func TestMultiThread(t *testing.T) {
+	db, err := New(dbPath)
 	if err != nil {
-		t.Fatalf("Can't get last error: %s", err)
+		t.Fatalf("Can't create database: %s", err)
 	}
+	defer db.Close()
 
-	if setError != getError {
-		t.Fatalf("Wrong last error value: %v", getError)
-	}
+	const numIterations = 1000
+
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < numIterations; i++ {
+			if err := db.SetSystemVersion(uint64(i)); err != nil {
+				t.Fatalf("Can't set system version: %s", err)
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		if _, err := db.GetSystemVersion(); err != nil {
+			t.Fatalf("Can't get system version: %s", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < numIterations; i++ {
+			if err := db.SetOperationState([]byte(strconv.Itoa(i))); err != nil {
+				t.Fatalf("Can't set state: %s", err)
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < numIterations; i++ {
+			if _, err := db.GetOperationState(); err != nil {
+				t.Fatalf("Can't get state: %s", err)
+			}
+		}
+	}()
+
+	wg.Wait()
 }

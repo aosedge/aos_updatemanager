@@ -1,0 +1,37 @@
+image: golang:1.12
+
+stages:
+  - test
+  - build
+
+before_script:
+  - apt update
+  - apt install -y libefivar-dev libefiboot-dev libblkid-dev
+  - go get -u golang.org/x/lint/golint
+  - ln -svf $CI_PROJECT_DIR /go/src/aos_updatemanager
+  - cd /go/src/aos_updatemanager
+
+test:
+  stage: test
+  script:
+    - apt install -y ostree grub-common dosfstools parted udev
+    - cp vendor/gitpct.epam.com/epmd-aepr/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
+    - echo "-------   Run Lint -------"
+    - ci/lint.sh
+    - echo "-------   Run Unit tests   -------"
+    - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v
+
+coverage:
+  stage: test
+  script:
+    - apt install -y ostree grub-common dosfstools parted udev
+    - cp vendor/gitpct.epam.com/epmd-aepr/aos_common/ci/rootCA.crt.pem  /etc/ssl/certs/
+    - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v -coverprofile .testCoverage.txt
+    - go tool cover -func=.testCoverage.txt
+
+build:
+  stage: build
+  script:
+    - go build
+    - tar czf artifacts.tar.gz aos_updatemanager aos_updatemanager.cfg
+    - curl -H "X-JFrog-Art-Api:$CI_ARTIFACTS_TOKEN" -T ./artifacts.tar.gz "https://artifactory.epam.com/artifactory/epmd-aepr/update_manager/builds/$CI_PIPELINE_ID/"
