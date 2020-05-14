@@ -515,6 +515,36 @@ func TestRevertFailedWithReboot(t *testing.T) {
 
 }
 
+func TestUpgradeBadFile(t *testing.T) {
+	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	if err != nil {
+		t.Fatalf("Can't create updater: %s", err)
+	}
+	defer updater.Close()
+
+	version := updater.GetStatus().CurrentVersion
+
+	imageInfo, err := createBadImage(path.Join(tmpDir, "testimage.bin"))
+	if err != nil {
+		t.Fatalf("Can't create test image: %s", err)
+	}
+
+	// Upgrade
+
+	if err = updater.Upgrade(version+1, imageInfo); err != nil {
+		t.Fatalf("Upgrading error: %s", err)
+	}
+
+	if err = waitOperationFinished(updater, umprotocol.FailedStatus); err != nil {
+		t.Fatalf("Operation failed: %s", err)
+	}
+
+	if err = checkOperationResult(updater, version, version+1,
+		umprotocol.UpgradeOperation, umprotocol.FailedStatus, "gzip: invalid header"); err != nil {
+		t.Errorf("Wrong operation state: %s", err)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -602,6 +632,24 @@ func createImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
 	}
 
 	if err := exec.Command("tar", "-C", path.Join(tmpDir, "image"), "-czf", imagePath, "./").Run(); err != nil {
+		return imageInfo, err
+	}
+
+	fileInfo, err := image.CreateFileInfo(imagePath)
+	if err != nil {
+		return imageInfo, err
+	}
+
+	imageInfo.Path = filepath.Base(imagePath)
+	imageInfo.Sha256 = fileInfo.Sha256
+	imageInfo.Sha512 = fileInfo.Sha512
+	imageInfo.Size = fileInfo.Size
+
+	return imageInfo, nil
+}
+
+func createBadImage(imagePath string) (imageInfo umprotocol.ImageInfo, err error) {
+	if err := ioutil.WriteFile(imagePath, []byte("This is bad file"), 0644); err != nil {
 		return imageInfo, err
 	}
 

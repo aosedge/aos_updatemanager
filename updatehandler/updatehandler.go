@@ -494,8 +494,11 @@ func (handler *Handler) upgrade() {
 		switch handler.state.OperationState {
 		case initState:
 			if err = handler.unpackImage(); err != nil {
-				handler.switchState(finishState, err)
-				break
+				log.Errorf("Can't unpack image: %s", err)
+
+				handler.finishOperation(err)
+
+				return
 			}
 
 			handler.switchState(upgradeState, nil)
