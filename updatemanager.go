@@ -126,8 +126,15 @@ func main() {
 	configFile := flag.String("c", "aos_updatemanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)
 	useJournal := flag.Bool("j", false, "output logs to systemd journal")
+	showVersion := flag.Bool("version", false, `show update manager version`)
 
 	flag.Parse()
+
+	// Show version
+	if *showVersion {
+		fmt.Printf("Version: %s\n", GitSummary)
+		return
+	}
 
 	if *useJournal {
 		log.AddHook(newJournalHook())
