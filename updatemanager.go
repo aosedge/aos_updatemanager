@@ -18,7 +18,9 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/signal"
@@ -102,8 +104,19 @@ func newJournalHook() (hook *journalHook) {
 	return hook
 }
 
-func (hook *journalHook) Fire(entry *log.Entry) error {
-	return journal.Print(hook.severityMap[entry.Level], entry.Message)
+func (hook *journalHook) Fire(entry *log.Entry) (err error) {
+	if entry == nil {
+		return errors.New("log entry is nil")
+	}
+
+	logMessage, err := entry.String()
+	if err != nil {
+		return err
+	}
+
+	err = journal.Print(hook.severityMap[entry.Level], logMessage)
+
+	return err
 }
 
 func (hook *journalHook) Levels() []log.Level {
