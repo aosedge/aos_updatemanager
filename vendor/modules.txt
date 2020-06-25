@@ -1,5 +1,7 @@
 # github.com/cavaliercoder/grab v2.0.0+incompatible
 github.com/cavaliercoder/grab
+# github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+github.com/coreos/go-systemd/journal
 # github.com/google/uuid v1.1.1
 github.com/google/uuid
 # github.com/gorilla/websocket v1.4.2
