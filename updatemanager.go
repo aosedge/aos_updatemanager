@@ -33,7 +33,6 @@ import (
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
 	_ "aos_updatemanager/modules"
-	"aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
 )
@@ -186,13 +185,7 @@ func main() {
 		}
 	}
 
-	controller, err := platform.New(db)
-	if err != nil {
-		log.Fatalf("Can't create platform controller: %s", err)
-	}
-	defer controller.Close()
-
-	updater, err := updatehandler.New(cfg, controller, db)
+	updater, err := updatehandler.New(cfg, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}

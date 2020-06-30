@@ -31,6 +31,7 @@ import (
 	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
+	"aos_updatemanager/platform"
 )
 
 /*******************************************************************************
@@ -172,6 +173,8 @@ type UpdateModule interface {
 type StateStorage interface {
 	SetOperationState(jsonState []byte) (err error)
 	GetOperationState() (jsonState []byte, err error)
+	GetSystemVersion() (version uint64, err error)
+	SetSystemVersion(version uint64) (err error)
 }
 
 // PlatformController platform controller
@@ -180,6 +183,7 @@ type PlatformController interface {
 	SetVersion(version uint64) (err error)
 	GetPlatformID() (id string, err error)
 	SystemReboot() (err error)
+	Close() (err error)
 }
 
 // NewPlugin plugin new function
@@ -226,13 +230,17 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 }
 
 // New returns pointer to new Handler
-func New(cfg *config.Config, platform PlatformController, storage StateStorage) (handler *Handler, err error) {
+func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error) {
 	handler = &Handler{
-		platform:      platform,
 		storage:       storage,
 		upgradeDir:    cfg.UpgradeDir,
 		bundleDir:     path.Join(cfg.UpgradeDir, bundleDir),
 		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
+	}
+
+	handler.platform, err = platform.New(storage)
+	if err != nil {
+		return nil, err
 	}
 
 	if _, err := os.Stat(handler.bundleDir); os.IsNotExist(err) {
@@ -362,6 +370,8 @@ func (handler *Handler) Close() {
 	for _, module := range handler.modules {
 		module.Close()
 	}
+
+	handler.platform.Close()
 
 	close(handler.statusChannel)
 }
