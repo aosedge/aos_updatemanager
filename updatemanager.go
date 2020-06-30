@@ -33,6 +33,7 @@ import (
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
 	_ "aos_updatemanager/modules"
+	_ "aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
 	"aos_updatemanager/updatehandler"
 )

@@ -31,7 +31,6 @@ import (
 	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
-	"aos_updatemanager/platform"
 )
 
 /*******************************************************************************
@@ -126,6 +125,8 @@ const statusChannelSize = 1
 
 var plugins = make(map[string]NewPlugin)
 
+var platformController NewPlatfromContoller
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -189,6 +190,9 @@ type PlatformController interface {
 // NewPlugin plugin new function
 type NewPlugin func(id string, configJSON json.RawMessage) (module UpdateModule, err error)
 
+// NewPlatfromContoller plugin for platform Contoller
+type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
+
 type handlerState struct {
 	OperationType    operationType          `json:"operationType"`
 	OperationState   operationState         `json:"operationState"`
@@ -229,6 +233,11 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 	plugins[plugin] = newFunc
 }
 
+//RegisterControllerPlugin  registers platfrom controller plugin
+func RegisterControllerPlugin(newFunc NewPlatfromContoller) {
+	platformController = newFunc
+}
+
 // New returns pointer to new Handler
 func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error) {
 	handler = &Handler{
@@ -238,7 +247,11 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
 	}
 
-	handler.platform, err = platform.New(storage)
+	if platformController == nil {
+		return nil, errors.New("controller plugin should be registered")
+	}
+
+	handler.platform, err = platformController(storage, cfg.Modules)
 	if err != nil {
 		return nil, err
 	}
