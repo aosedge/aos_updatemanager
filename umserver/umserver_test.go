@@ -54,11 +54,19 @@ type testUpdater struct {
 	statusChannel chan umprotocol.StatusRsp
 }
 
+type testCrtHandler struct {
+	csr    string
+	crtURL string
+	keyURL string
+	err    error
+}
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
 var updater *testUpdater
+var crtHandler *testCrtHandler
 
 /*******************************************************************************
  * Init
@@ -286,6 +294,107 @@ func TestRevertFail(t *testing.T) {
 	}
 }
 
+func TestCreateKeys(t *testing.T) {
+	server := newTestServer(serverURL)
+	defer server.Close()
+
+	crtHandler.csr = "this is csr"
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.CreateKeysRsp
+	request := umprotocol.CreateKeysReq{Type: "online"}
+
+	if err := client.sendRequest(umprotocol.CreateKeysRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Type != request.Type {
+		t.Errorf("Wrong response type: %s", response.Type)
+	}
+
+	if string(response.Csr) != string(crtHandler.csr) {
+		t.Errorf("Wrong CSR value: %s", string(response.Csr))
+	}
+
+	if response.Error != "" {
+		t.Errorf("Response error: %s", response.Error)
+	}
+}
+
+func TestApplyCert(t *testing.T) {
+	server := newTestServer(serverURL)
+	defer server.Close()
+
+	crtHandler.crtURL = "crtURL"
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.ApplyCertRsp
+	request := umprotocol.ApplyCertReq{Type: "online"}
+
+	if err := client.sendRequest(umprotocol.ApplyCertRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Type != request.Type {
+		t.Errorf("Wrong response type: %s", response.Type)
+	}
+
+	if response.CrtURL != crtHandler.crtURL {
+		t.Errorf("Wrong crt URL: %s", response.CrtURL)
+	}
+
+	if response.Error != "" {
+		t.Errorf("Response error: %s", response.Error)
+	}
+}
+
+func TestGetCert(t *testing.T) {
+	server := newTestServer(serverURL)
+	defer server.Close()
+
+	crtHandler.crtURL = "crtURL"
+	crtHandler.keyURL = "keyURL"
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.GetCertRsp
+	request := umprotocol.GetCertReq{Issuer: []byte("issuer"), Serial: "serial"}
+
+	if err := client.sendRequest(umprotocol.GetCertRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Type != request.Type {
+		t.Errorf("Wrong response type: %s", response.Type)
+	}
+
+	if response.CrtURL != "crtURL" {
+		t.Errorf("Wrong crt URL: %s", response.CrtURL)
+	}
+
+	if response.KeyURL != "keyURL" {
+		t.Errorf("Wrong key URL: %s", response.KeyURL)
+	}
+
+	if response.Error != "" {
+		t.Errorf("Response error: %s", response.Error)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -320,7 +429,9 @@ func newTestServer(url string) (server *umserver.Server) {
 		status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
 		statusChannel: make(chan umprotocol.StatusRsp)}
 
-	server, err := umserver.New(&cfg, updater)
+	crtHandler = &testCrtHandler{}
+
+	server, err := umserver.New(&cfg, updater, crtHandler)
 	if err != nil {
 		log.Fatalf("Can't create ws server: %s", err)
 	}
@@ -421,4 +532,16 @@ func (updater *testUpdater) Revert(version uint64) (err error) {
 
 func (updater *testUpdater) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
 	return updater.statusChannel
+}
+
+func (handler *testCrtHandler) CreateKeys(crtType, systemID, password string) (csr string, err error) {
+	return handler.csr, handler.err
+}
+
+func (handler *testCrtHandler) ApplyCertificate(crtType string, crt string) (crtURL string, err error) {
+	return handler.crtURL, handler.err
+}
+
+func (handler *testCrtHandler) GetCertificate(crtType string, issuer []byte, serial string) (crtURL, keyURL string, err error) {
+	return handler.crtURL, handler.keyURL, handler.err
 }

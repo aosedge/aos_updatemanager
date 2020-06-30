@@ -192,7 +192,7 @@ func main() {
 	}
 	defer updater.Close()
 
-	server, err := umserver.New(cfg, updater)
+	server, err := umserver.New(cfg, updater, nil)
 	if err != nil {
 		log.Fatalf("Can't create UM server: %s", err)
 	}
