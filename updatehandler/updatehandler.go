@@ -185,10 +185,11 @@ type PlatformController interface {
 	GetPlatformID() (id string, err error)
 	SystemReboot() (err error)
 	Close() (err error)
+	GetModuleContoller(id string) (contoller interface{}, err error)
 }
 
 // NewPlugin plugin new function
-type NewPlugin func(id string, configJSON json.RawMessage) (module UpdateModule, err error)
+type NewPlugin func(id string, configJSON json.RawMessage, controller interface{}) (module UpdateModule, err error)
 
 // NewPlatfromContoller plugin for platform Contoller
 type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
@@ -280,7 +281,7 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 			continue
 		}
 
-		module, err := createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
+		module, err := handler.createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
 		if err != nil {
 			return nil, err
 		}
@@ -408,13 +409,18 @@ func (state moduleState) String() string {
 		"init", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled", "finishing", "finished"}[state]
 }
 
-func createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
+func (handler *Handler) createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, fmt.Errorf("plugin %s not found", plugin)
 	}
 
-	if module, err = newFunc(id, params); err != nil {
+	ctrl, err := handler.platform.GetModuleContoller(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if module, err = newFunc(id, params, ctrl); err != nil {
 		return nil, err
 	}
 

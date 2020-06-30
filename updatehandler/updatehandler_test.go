@@ -109,7 +109,7 @@ func TestMain(m *testing.M) {
 			config.ModuleConfig{ID: "id2", Plugin: "testmodule"},
 			config.ModuleConfig{ID: "id3", Plugin: "testmodule"}}}
 
-	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage) (module updatehandler.UpdateModule, err error) {
+	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage, controller interface{}) (module updatehandler.UpdateModule, err error) {
 		testModule := &testModule{id: id}
 
 		modules = append(modules, testModule)
@@ -746,4 +746,8 @@ func (platform *testPlatformController) SystemReboot() (err error) {
 
 func (platform *testPlatformController) Close() (err error) {
 	return nil
+}
+
+func (platform *testPlatformController) GetModuleContoller(id string) (contoller interface{}, err error) {
+	return nil, nil
 }
