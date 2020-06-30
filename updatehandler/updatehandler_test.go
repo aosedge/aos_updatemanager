@@ -109,7 +109,8 @@ func TestMain(m *testing.M) {
 			config.ModuleConfig{ID: "id2", Plugin: "testmodule"},
 			config.ModuleConfig{ID: "id3", Plugin: "testmodule"}}}
 
-	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage, controller interface{}) (module updatehandler.UpdateModule, err error) {
+	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage,
+		controller interface{}, storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
 		testModule := &testModule{id: id}
 
 		modules = append(modules, testModule)
@@ -685,6 +686,14 @@ func (storage *testStorage) GetSystemVersion() (version uint64, err error) {
 }
 
 func (storage *testStorage) SetSystemVersion(version uint64) (err error) {
+	return nil
+}
+
+func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
+	return []byte("valid"), nil
+}
+
+func (storage *testStorage) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 

@@ -70,7 +70,7 @@ func (controller *Controller) SystemReboot() (err error) {
 	return errors.New("not implemented")
 }
 
-//GetModuleContoller provides module specific controller
+// GetModuleContoller provides module specific controller
 func (controller *Controller) GetModuleContoller(id string) (contoller interface{}, err error) {
 	// aos contoller doesn't support module controllers
 	return nil, nil

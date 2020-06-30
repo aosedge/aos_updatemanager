@@ -176,6 +176,8 @@ type StateStorage interface {
 	GetOperationState() (jsonState []byte, err error)
 	GetSystemVersion() (version uint64, err error)
 	SetSystemVersion(version uint64) (err error)
+	GetModuleState(id string) (state []byte, err error)
+	SetModuleState(id string, state []byte) (err error)
 }
 
 // PlatformController platform controller
@@ -189,7 +191,7 @@ type PlatformController interface {
 }
 
 // NewPlugin plugin new function
-type NewPlugin func(id string, configJSON json.RawMessage, controller interface{}) (module UpdateModule, err error)
+type NewPlugin func(id string, configJSON json.RawMessage, controller interface{}, storage StateStorage) (module UpdateModule, err error)
 
 // NewPlatfromContoller plugin for platform Contoller
 type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
@@ -420,7 +422,7 @@ func (handler *Handler) createModule(plugin, id string, params json.RawMessage) 
 		return nil, err
 	}
 
-	if module, err = newFunc(id, params, ctrl); err != nil {
+	if module, err = newFunc(id, params, ctrl, handler.storage); err != nil {
 		return nil, err
 	}
 
