@@ -194,7 +194,7 @@ func main() {
 	}
 	defer updater.Close()
 
-	crtHandler, err := crthandler.New(cfg, nil)
+	crtHandler, err := crthandler.New(cfg, db)
 	if err != nil {
 		log.Fatalf("Can't create crt handler: %s", err)
 	}
