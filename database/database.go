@@ -99,6 +99,10 @@ func New(name string) (db *Database, err error) {
 		return db, err
 	}
 
+	if err := db.createModulesDataTable(); err != nil {
+		return db, err
+	}
+
 	version, err := db.getVersion()
 	if err != nil {
 		return db, err
@@ -227,6 +231,43 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
+func (db *Database) SetControllerState(controllerId string, name string, value []byte) (err error) {
+	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerId,
+		name, value)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return ErrNotExist
+	}
+
+	return nil
+}
+
+func (db *Database) GetControllerState(controllerId string, name string) (value []byte, err error) {
+	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerId, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if err = rows.Scan(&value); err != nil {
+			return nil, err
+		}
+
+		return value, nil
+	}
+
+	return nil, ErrNotExist
+}
+
 // Close closes database
 func (db *Database) Close() {
 	db.sql.Close()
@@ -320,6 +361,16 @@ func (db *Database) createModuleTable() (err error) {
 	log.Info("Create module table")
 
 	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) createModulesDataTable() (err error) {
+	log.Info("Create modules_data table")
+
+	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules_data (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, value TEXT)`); err != nil {
 		return err
 	}
 

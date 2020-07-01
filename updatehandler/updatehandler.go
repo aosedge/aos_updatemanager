@@ -178,6 +178,8 @@ type StateStorage interface {
 	SetSystemVersion(version uint64) (err error)
 	GetModuleState(id string) (state []byte, err error)
 	SetModuleState(id string, state []byte) (err error)
+	SetControllerState(controllerID string, name string, value []byte) (err error)
+	GetControllerState(controllerID string, name string) (value []byte, err error)
 }
 
 // PlatformController platform controller

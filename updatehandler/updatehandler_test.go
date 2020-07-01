@@ -697,6 +697,14 @@ func (storage *testStorage) SetModuleState(id string, state []byte) (err error) 
 	return nil
 }
 
+func (storage *testStorage) GetControllerState(controllerID string, name string) (value []byte, err error) {
+	return []byte("valid"), nil
+}
+
+func (storage *testStorage) SetControllerState(controllerID string, name string, value []byte) (err error) {
+	return nil
+}
+
 func (module *testModule) GetID() (id string) {
 	return module.id
 }
