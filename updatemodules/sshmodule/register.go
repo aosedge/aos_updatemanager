@@ -15,10 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package plugins
+package sshmodule
 
-import (
-	// include all supported plugins
-	_ "aos_updatemanager/modules/sshmodule"
-	_ "aos_updatemanager/modules/testmodule"
-)
+import "aos_updatemanager/updatehandler"
+
+/*******************************************************************************
+ * Init
+ ******************************************************************************/
+
+func init() {
+	updatehandler.RegisterPlugin("sshmodule", New)
+}

@@ -125,6 +125,8 @@ const statusChannelSize = 1
 
 var plugins = make(map[string]NewPlugin)
 
+var platformController NewPlatfromContoller
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -172,6 +174,12 @@ type UpdateModule interface {
 type StateStorage interface {
 	SetOperationState(jsonState []byte) (err error)
 	GetOperationState() (jsonState []byte, err error)
+	GetSystemVersion() (version uint64, err error)
+	SetSystemVersion(version uint64) (err error)
+	GetModuleState(id string) (state []byte, err error)
+	SetModuleState(id string, state []byte) (err error)
+	SetControllerState(controllerID string, name string, value []byte) (err error)
+	GetControllerState(controllerID string, name string) (value []byte, err error)
 }
 
 // PlatformController platform controller
@@ -180,10 +188,15 @@ type PlatformController interface {
 	SetVersion(version uint64) (err error)
 	GetPlatformID() (id string, err error)
 	SystemReboot() (err error)
+	Close() (err error)
+	GetModuleContoller(id string) (contoller interface{}, err error)
 }
 
 // NewPlugin plugin new function
-type NewPlugin func(id string, configJSON json.RawMessage) (module UpdateModule, err error)
+type NewPlugin func(id string, configJSON json.RawMessage, controller interface{}, storage StateStorage) (module UpdateModule, err error)
+
+// NewPlatfromContoller plugin for platform Contoller
+type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
 
 type handlerState struct {
 	OperationType    operationType          `json:"operationType"`
@@ -225,14 +238,27 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 	plugins[plugin] = newFunc
 }
 
+//RegisterControllerPlugin  registers platfrom controller plugin
+func RegisterControllerPlugin(newFunc NewPlatfromContoller) {
+	platformController = newFunc
+}
+
 // New returns pointer to new Handler
-func New(cfg *config.Config, platform PlatformController, storage StateStorage) (handler *Handler, err error) {
+func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error) {
 	handler = &Handler{
-		platform:      platform,
 		storage:       storage,
 		upgradeDir:    cfg.UpgradeDir,
 		bundleDir:     path.Join(cfg.UpgradeDir, bundleDir),
 		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
+	}
+
+	if platformController == nil {
+		return nil, errors.New("controller plugin should be registered")
+	}
+
+	handler.platform, err = platformController(storage, cfg.Modules)
+	if err != nil {
+		return nil, err
 	}
 
 	if _, err := os.Stat(handler.bundleDir); os.IsNotExist(err) {
@@ -259,7 +285,7 @@ func New(cfg *config.Config, platform PlatformController, storage StateStorage) 
 			continue
 		}
 
-		module, err := createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
+		module, err := handler.createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
 		if err != nil {
 			return nil, err
 		}
@@ -363,6 +389,8 @@ func (handler *Handler) Close() {
 		module.Close()
 	}
 
+	handler.platform.Close()
+
 	close(handler.statusChannel)
 }
 
@@ -385,13 +413,18 @@ func (state moduleState) String() string {
 		"init", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled", "finishing", "finished"}[state]
 }
 
-func createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
+func (handler *Handler) createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, fmt.Errorf("plugin %s not found", plugin)
 	}
 
-	if module, err = newFunc(id, params); err != nil {
+	ctrl, err := handler.platform.GetModuleContoller(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if module, err = newFunc(id, params, ctrl, handler.storage); err != nil {
 		return nil, err
 	}
 

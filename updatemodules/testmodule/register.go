@@ -15,9 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package platform
+package testmodule
 
-import (
-	// include all supported platform controller plugins
-	_ "aos_updatemanager/platform/aoscontroller"
-)
+import "aos_updatemanager/updatehandler"
+
+/*******************************************************************************
+ * Init
+ ******************************************************************************/
+
+func init() {
+	updatehandler.RegisterPlugin("testmodule", New)
+}

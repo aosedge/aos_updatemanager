@@ -109,12 +109,18 @@ func TestMain(m *testing.M) {
 			config.ModuleConfig{ID: "id2", Plugin: "testmodule"},
 			config.ModuleConfig{ID: "id3", Plugin: "testmodule"}}}
 
-	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage) (module updatehandler.UpdateModule, err error) {
+	updatehandler.RegisterPlugin("testmodule", func(id string, configJSON json.RawMessage,
+		controller interface{}, storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
 		testModule := &testModule{id: id}
 
 		modules = append(modules, testModule)
 
 		return testModule, nil
+	})
+
+	updatehandler.RegisterControllerPlugin(func(storage updatehandler.StateStorage,
+		modules []config.ModuleConfig) (controller updatehandler.PlatformController, err error) {
+		return &platform, nil
 	})
 
 	ret := m.Run()
@@ -131,7 +137,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestUpgradeRevert(t *testing.T) {
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -182,7 +188,7 @@ func TestUpgradeRevert(t *testing.T) {
 func TestUpgradeFailed(t *testing.T) {
 	modules = make([]*testModule, 0, 3)
 
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -216,7 +222,7 @@ func TestUpgradeFailed(t *testing.T) {
 func TestRevertFailed(t *testing.T) {
 	modules = make([]*testModule, 0, 3)
 
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -262,7 +268,7 @@ func TestRevertFailed(t *testing.T) {
 func TestUpgradeBadVersion(t *testing.T) {
 	modules = make([]*testModule, 0, 3)
 
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -319,7 +325,7 @@ func TestUpgradeBadVersion(t *testing.T) {
 func TestUpgradeRevertWithReboot(t *testing.T) {
 	modules = make([]*testModule, 0, 3)
 
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -352,7 +358,7 @@ func TestUpgradeRevertWithReboot(t *testing.T) {
 
 	modules = make([]*testModule, 0, 3)
 
-	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+	if updater, err = updatehandler.New(&cfg, &storage); err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -386,7 +392,7 @@ func TestUpgradeRevertWithReboot(t *testing.T) {
 
 	modules = make([]*testModule, 0, 3)
 
-	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+	if updater, err = updatehandler.New(&cfg, &storage); err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -405,7 +411,7 @@ func TestUpgradeRevertWithReboot(t *testing.T) {
 func TestUpgradeFailedWithReboot(t *testing.T) {
 	modules = make([]*testModule, 0, 3)
 
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -436,7 +442,7 @@ func TestUpgradeFailedWithReboot(t *testing.T) {
 
 	modules = make([]*testModule, 0, 3)
 
-	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+	if updater, err = updatehandler.New(&cfg, &storage); err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -455,7 +461,7 @@ func TestUpgradeFailedWithReboot(t *testing.T) {
 func TestRevertFailedWithReboot(t *testing.T) {
 	modules = make([]*testModule, 0, 3)
 
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -498,7 +504,7 @@ func TestRevertFailedWithReboot(t *testing.T) {
 
 	modules = make([]*testModule, 0, 3)
 
-	if updater, err = updatehandler.New(&cfg, &platform, &storage); err != nil {
+	if updater, err = updatehandler.New(&cfg, &storage); err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
 
@@ -516,7 +522,7 @@ func TestRevertFailedWithReboot(t *testing.T) {
 }
 
 func TestUpgradeBadFile(t *testing.T) {
-	updater, err := updatehandler.New(&cfg, &platform, &storage)
+	updater, err := updatehandler.New(&cfg, &storage)
 	if err != nil {
 		t.Fatalf("Can't create updater: %s", err)
 	}
@@ -675,6 +681,30 @@ func (storage *testStorage) GetOperationState() (state []byte, err error) {
 	return storage.operationState, nil
 }
 
+func (storage *testStorage) GetSystemVersion() (version uint64, err error) {
+	return 1, nil
+}
+
+func (storage *testStorage) SetSystemVersion(version uint64) (err error) {
+	return nil
+}
+
+func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
+	return []byte("valid"), nil
+}
+
+func (storage *testStorage) SetModuleState(id string, state []byte) (err error) {
+	return nil
+}
+
+func (storage *testStorage) GetControllerState(controllerID string, name string) (value []byte, err error) {
+	return []byte("valid"), nil
+}
+
+func (storage *testStorage) SetControllerState(controllerID string, name string, value []byte) (err error) {
+	return nil
+}
+
 func (module *testModule) GetID() (id string) {
 	return module.id
 }
@@ -729,4 +759,12 @@ func (platform *testPlatformController) SystemReboot() (err error) {
 	platform.rebootChannel <- true
 
 	return nil
+}
+
+func (platform *testPlatformController) Close() (err error) {
+	return nil
+}
+
+func (platform *testPlatformController) GetModuleContoller(id string) (contoller interface{}, err error) {
+	return nil, nil
 }

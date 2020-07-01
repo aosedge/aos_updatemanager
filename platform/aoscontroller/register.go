@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build WITH_SSHMODULE
-
-package sshmodule
+package aoscontroller
 
 import "aos_updatemanager/updatehandler"
 
@@ -26,5 +24,5 @@ import "aos_updatemanager/updatehandler"
  ******************************************************************************/
 
 func init() {
-	updatehandler.RegisterPlugin("sshmodule", New)
+	updatehandler.RegisterControllerPlugin(New)
 }

@@ -15,16 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build WITH_TESTMODULE
+package plugins
 
-package testmodule
-
-import "aos_updatemanager/updatehandler"
-
-/*******************************************************************************
- * Init
- ******************************************************************************/
-
-func init() {
-	updatehandler.RegisterPlugin("testmodule", New)
-}
+import (
+	// include all supported plugins
+	_ "aos_updatemanager/updatemodules/sshmodule"
+	_ "aos_updatemanager/updatemodules/testmodule"
+)

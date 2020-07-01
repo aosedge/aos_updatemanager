@@ -190,6 +190,50 @@ func TestModuleState(t *testing.T) {
 	}
 }
 
+func TestControllerState(t *testing.T) {
+	type testItem struct {
+		id    string
+		name  string
+		value string
+	}
+
+	testData := []testItem{
+		{"id0", "name00", "state00"},
+		{"id0", "name01", "state00"},
+		{"id1", "name01", "state01"},
+		{"id1", "name02", "state01"},
+		{"id2", "name02", "state02"},
+		{"id2", "name03", "state02"},
+		{"id3", "name03", "state03"},
+		{"id0", "name10", "state10"},
+		{"id0", "name10", "state11"},
+		{"id1", "name11", "state11"},
+		{"id2", "name12", "state12"},
+		{"id3", "name13", "state13"},
+	}
+
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	for i, item := range testData {
+		if err = db.SetControllerState(item.id, item.name, []byte(item.value)); err != nil {
+			t.Errorf("Index: %d, can't set module state: %s", i, err)
+		}
+
+		value, err := db.GetControllerState(item.id, item.name)
+		if err != nil {
+			t.Errorf("Index: %d, can't get module state: %s", i, err)
+		}
+
+		if string(value) != item.value {
+			t.Errorf("Index: %d, wrong module state: %s", i, string(value))
+		}
+	}
+}
+
 func TestMultiThread(t *testing.T) {
 	db, err := New(dbPath)
 	if err != nil {
