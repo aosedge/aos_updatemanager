@@ -31,6 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/config"
+	"aos_updatemanager/crthandler"
 	"aos_updatemanager/database"
 	_ "aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
@@ -192,7 +193,13 @@ func main() {
 	}
 	defer updater.Close()
 
-	server, err := umserver.New(cfg, updater, nil)
+	crtHandler, err := crthandler.New(cfg, nil)
+	if err != nil {
+		log.Fatalf("Can't create cert handler: %s", err)
+	}
+	defer crtHandler.Close()
+
+	server, err := umserver.New(cfg, updater, crtHandler)
 	if err != nil {
 		log.Fatalf("Can't create UM server: %s", err)
 	}
