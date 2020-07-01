@@ -19,6 +19,6 @@ package plugins
 
 import (
 	// include all supported plugins
-	_ "aos_updatemanager/modules/sshmodule"
-	_ "aos_updatemanager/modules/testmodule"
+	_ "aos_updatemanager/updatemodules/sshmodule"
+	_ "aos_updatemanager/updatemodules/testmodule"
 )
