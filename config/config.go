@@ -29,12 +29,13 @@ import (
 
 // Config instance
 type Config struct {
-	ServerURL  string
-	Cert       string
-	Key        string
-	UpgradeDir string
-	WorkingDir string
-	Modules    []ModuleConfig
+	ServerURL     string         `json:"serverURL"`
+	Cert          string         `json:"cert"`
+	Key           string         `json:"key"`
+	UpgradeDir    string         `json:"upgradeDir"`
+	WorkingDir    string         `json:"workingDir"`
+	UpdateModules []ModuleConfig `json:"updateModules"`
+	CrtModules    []ModuleConfig `json:"crtModules"`
 }
 
 // ModuleConfig module configuration

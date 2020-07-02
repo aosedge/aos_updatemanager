@@ -256,7 +256,7 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 		return nil, errors.New("controller plugin should be registered")
 	}
 
-	handler.platform, err = platformController(storage, cfg.Modules)
+	handler.platform, err = platformController(storage, cfg.UpdateModules)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 
 	handler.modules = make(map[string]UpdateModule)
 
-	for _, moduleCfg := range cfg.Modules {
+	for _, moduleCfg := range cfg.UpdateModules {
 		if moduleCfg.Disabled {
 			log.WithField("id", moduleCfg.ID).Debug("Skip disabled module")
 			continue
