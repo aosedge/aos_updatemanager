@@ -32,6 +32,7 @@ import (
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/crthandler"
+	_ "aos_updatemanager/crtmodules"
 	"aos_updatemanager/database"
 	_ "aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
@@ -195,7 +196,7 @@ func main() {
 
 	crtHandler, err := crthandler.New(cfg, nil)
 	if err != nil {
-		log.Fatalf("Can't create cert handler: %s", err)
+		log.Fatalf("Can't create crt handler: %s", err)
 	}
 	defer crtHandler.Close()
 
