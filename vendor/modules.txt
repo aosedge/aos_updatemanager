@@ -16,7 +16,7 @@ github.com/mattn/go-sqlite3
 github.com/sirupsen/logrus
 # github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 github.com/tmc/scp
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20200415150449-14cbd70bccaf
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20200706165910-60f4c9bb318e
 gitpct.epam.com/epmd-aepr/aos_common/image
 gitpct.epam.com/epmd-aepr/aos_common/umprotocol
 gitpct.epam.com/epmd-aepr/aos_common/wsclient

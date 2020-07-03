@@ -203,7 +203,7 @@ func (server *Server) deleteClient(client *Client) (err error) {
 
 func (client *Client) close(sendCloseMessage bool) (err error) {
 	log.WithFields(log.Fields{
-		"remoteAddr": client.connection.RemoteAddr()}).Info("Close client")
+		"remoteAddr": client.RemoteAddr}).Info("Close client")
 
 	if sendCloseMessage {
 		client.SendMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
