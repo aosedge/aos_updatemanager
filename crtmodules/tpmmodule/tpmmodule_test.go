@@ -217,6 +217,80 @@ func TestUpdateCertificate(t *testing.T) {
 	}
 }
 
+func TestMaxItems(t *testing.T) {
+	crtStorage := path.Join(tmpDir, "crtStorage")
+
+	if err := os.RemoveAll(crtStorage); err != nil {
+		t.Fatalf("Can't remove cert storage: %s", err)
+	}
+
+	if err := tpmSimulator.ManufactureReset(); err != nil {
+		t.Fatalf("Can't reset TPM: %s", err)
+	}
+
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d}`, crtStorage, 1))
+
+	storage := &testStorage{}
+
+	module, err := tpmmodule.New("test", config, storage, tpmSimulator)
+	if err != nil {
+		t.Fatalf("Can't create TPM module: %s", err)
+	}
+	defer module.Close()
+
+	for i := 0; i < 3; i++ {
+
+		// Create keys
+
+		csr, err := module.CreateKeys("testsystem", "")
+		if err != nil {
+			t.Fatalf("Can't create keys: %s", err)
+		}
+
+		// Apply certificate
+
+		crt, err := generateCertificate(csr)
+		if err != nil {
+			t.Fatalf("Can't generate certificate: %s", err)
+		}
+
+		crtURL, keyURL, err := module.ApplyCertificate(crt)
+		if err != nil {
+			t.Fatalf("Can't apply certificate: %s", err)
+		}
+
+		// Check persistent handle
+
+		handles, err := getPersistentHandles()
+		if err != nil {
+			t.Fatalf("Can't get peristent handles")
+		}
+
+		if len(handles) != 1 {
+			t.Fatalf("Wrong persistent handles count: %d", len(handles))
+		}
+
+		if err = checkKeyURL(keyURL, handles[0]); err != nil {
+			t.Errorf("Check key URL error: %s", err)
+		}
+
+		// Check cert files
+
+		files, err := getCrtFiles(crtStorage)
+		if err != nil {
+			t.Fatalf("Can't get cert files")
+		}
+
+		if len(files) != 1 {
+			t.Fatalf("Wrong cert files count: %d", len(files))
+		}
+
+		if err = checkCrtURL(crtURL, files[0]); err != nil {
+			t.Errorf("Check cert URL error: %s", err)
+		}
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/
@@ -395,4 +469,71 @@ IP.1 = 127.0.0.1`
 	}
 
 	return string(crtData), nil
+}
+
+func getPersistentHandles() (handles []tpmutil.Handle, err error) {
+	values, _, err := tpm2.GetCapability(tpmSimulator, tpm2.CapabilityHandles,
+		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, value := range values {
+		handle, ok := value.(tpmutil.Handle)
+		if !ok {
+			return nil, errors.New("wrong TPM data format")
+		}
+
+		handles = append(handles, handle)
+	}
+
+	return handles, nil
+}
+
+func checkKeyURL(keyURL string, handle tpmutil.Handle) (err error) {
+	urlVal, err := url.Parse(keyURL)
+	if err != nil {
+		return err
+	}
+
+	handleVal, err := strconv.ParseUint(urlVal.Hostname(), 0, 32)
+	if err != nil {
+		return err
+	}
+
+	if handle != tpmutil.Handle(handleVal) {
+		return fmt.Errorf("handle mismatch: %s != 0x%X", keyURL, handle)
+	}
+
+	return nil
+}
+
+func getCrtFiles(storagePath string) (files []string, err error) {
+	content, err := ioutil.ReadDir(storagePath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range content {
+		if item.IsDir() {
+			continue
+		}
+
+		files = append(files, path.Join(storagePath, item.Name()))
+	}
+
+	return files, nil
+}
+
+func checkCrtURL(crtURL string, file string) (err error) {
+	urlVal, err := url.Parse(crtURL)
+	if err != nil {
+		return err
+	}
+
+	if file != urlVal.Path {
+		return fmt.Errorf("cert file mismatch: %s !=%s", crtURL, file)
+	}
+
+	return nil
 }

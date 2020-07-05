@@ -221,7 +221,7 @@ func (module *TPMModule) ApplyCertificate(crt string) (crtURL, keyURL string, er
 		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certs", len(crts), module.config.MaxItems)
 
 		if crts, err = module.removeOldestCertificate(crts, module.currentKey.password); err != nil {
-			return "", "", err
+			log.Errorf("Can't delete old certificate: %s", err)
 		}
 	}
 
