@@ -237,8 +237,9 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
-func (db *Database) SetControllerState(controllerId string, name string, value []byte) (err error) {
-	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerId,
+// SetControllerState sets controller state
+func (db *Database) SetControllerState(controllerID string, name string, value []byte) (err error) {
+	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerID,
 		name, value)
 	if err != nil {
 		return err
@@ -256,8 +257,9 @@ func (db *Database) SetControllerState(controllerId string, name string, value [
 	return nil
 }
 
-func (db *Database) GetControllerState(controllerId string, name string) (value []byte, err error) {
-	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerId, name)
+// GetControllerState returns controller state
+func (db *Database) GetControllerState(controllerID string, name string) (value []byte, err error) {
+	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerID, name)
 	if err != nil {
 		return nil, err
 	}
