@@ -34,6 +34,7 @@ import (
 	"math/big"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"time"
 
@@ -148,6 +149,80 @@ func (module *TPMModule) Close() (err error) {
 
 // SyncStorage syncs cert storage
 func (module *TPMModule) SyncStorage() (err error) {
+	log.WithFields(log.Fields{"crtType": module.crtType}).Debug("Sync storage")
+
+	files, err := getCrtFiles(module.config.StoragePath)
+	if err != nil {
+		return err
+	}
+
+	infos, err := module.storage.GetCertificates(module.crtType)
+	if err != nil {
+		return err
+	}
+
+	// Certs that no need to update
+
+	var validURLs []string
+
+	for _, file := range files {
+		for _, info := range infos {
+			if fileToCrtURL(file) == info.CrtURL {
+				validURLs = append(validURLs, info.CrtURL)
+			}
+		}
+	}
+
+	// FS certs that need to be updated
+
+	var updateFiles []string
+
+	for _, file := range files {
+		found := false
+
+		for _, validURL := range validURLs {
+			if fileToCrtURL(file) == validURL {
+				found = true
+			}
+		}
+
+		if !found {
+			updateFiles = append(updateFiles, file)
+		}
+	}
+
+	if err = module.updateCrts(updateFiles); err != nil {
+		return err
+	}
+
+	// DB entries that should be removed
+
+	var removeURLs []string
+
+	for _, info := range infos {
+		found := false
+
+		for _, validURL := range validURLs {
+			if info.CrtURL == validURL {
+				found = true
+			}
+		}
+
+		if !found {
+			removeURLs = append(removeURLs, info.CrtURL)
+		}
+	}
+
+	// Remove invalid DB entries
+
+	for _, removeURL := range removeURLs {
+		log.WithFields(log.Fields{"crtType": module.crtType, "crtURL": removeURL}).Warn("Remove invalid storage entry")
+
+		if err = module.storage.RemoveCertificate(module.crtType, removeURL); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -510,6 +585,23 @@ func (module *TPMModule) removeCrt(crt crthandler.CrtInfo, password string) (err
 	return nil
 }
 
+func getCrtFiles(storagePath string) (files []string, err error) {
+	content, err := ioutil.ReadDir(storagePath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range content {
+		if item.IsDir() {
+			continue
+		}
+
+		files = append(files, path.Join(storagePath, item.Name()))
+	}
+
+	return files, nil
+}
+
 func fileToCrtURL(file string) (crtURL string) {
 	urlVal := url.URL{Scheme: "file", Path: file}
 
@@ -542,6 +634,84 @@ func (module *TPMModule) addCrtToDB(x509Crt *x509.Certificate, crtURL, keyURL st
 		"crtURL":   crtInfo.CrtURL,
 		"keyURL":   crtInfo.KeyURL,
 		"notAfter": x509Crt.NotAfter}).Debug("Add certificate")
+
+	return nil
+}
+
+func (module *TPMModule) getPersistentHandles() (handles []tpmutil.Handle, err error) {
+	values, _, err := tpm2.GetCapability(module.device, tpm2.CapabilityHandles,
+		uint32(tpm2.PersistentLast)-uint32(tpm2.PersistentFirst), uint32(tpm2.PersistentFirst))
+	if err != nil {
+		return nil, err
+	}
+
+	for _, value := range values {
+		handle, ok := value.(tpmutil.Handle)
+		if !ok {
+			return nil, errors.New("wrong TPM data format")
+		}
+
+		handles = append(handles, handle)
+	}
+
+	return handles, nil
+}
+
+func (module *TPMModule) updateCrts(files []string) (err error) {
+	pubs := make(map[tpmutil.Handle]tpm2.Public)
+
+	handles, err := module.getPersistentHandles()
+	if err != nil {
+		return err
+	}
+
+	for _, handle := range handles {
+		pub, _, _, err := tpm2.ReadPublic(module.device, handle)
+		if err != nil {
+			return err
+		}
+
+		pubs[handle] = pub
+	}
+
+	for _, crtFile := range files {
+		crtPem, err := ioutil.ReadFile(crtFile)
+		if err != nil {
+			return err
+		}
+
+		x509Crt, err := pemToX509Crt(string(crtPem))
+		if err != nil {
+			return err
+		}
+
+		var crtHandle tpmutil.Handle
+
+		for handle, pub := range pubs {
+			publicKey, err := pub.Key()
+			if err != nil {
+				return err
+			}
+
+			if err = checkCrt(x509Crt, publicKey); err == nil {
+				crtHandle = handle
+			}
+		}
+
+		if crtHandle != 0 {
+			log.WithFields(log.Fields{"crtType": module.crtType, "file": crtFile}).Warn("Store valid certificate")
+
+			if err = module.addCrtToDB(x509Crt, fileToCrtURL(crtFile), handleToKeyURL(crtHandle)); err != nil {
+				return err
+			}
+		} else {
+			log.WithFields(log.Fields{"crtType": module.crtType, "file": crtFile}).Warn("Remove invalid certificate")
+
+			if err = os.Remove(crtFile); err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }

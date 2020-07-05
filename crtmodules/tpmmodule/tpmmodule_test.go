@@ -291,6 +291,142 @@ func TestMaxItems(t *testing.T) {
 	}
 }
 
+func TestSyncStorage(t *testing.T) {
+	// Test items:
+	// * valid     - crt file, handle, DB entry
+	// * wrongDB   - DB entry but no crt file
+	// * wrongFile - no DB entry and no handle
+	// If crt file has DB entry but no handle - not considered
+
+	testData := []string{"valid", "wrongDB", "wrongDB", "valid", "wrongFile", "validFile", "valid", "valid"}
+
+	var goodItems []crthandler.CrtInfo
+
+	crtStorage := path.Join(tmpDir, "crtStorage")
+
+	if err := os.RemoveAll(crtStorage); err != nil {
+		t.Fatalf("Can't remove cert storage: %s", err)
+	}
+
+	if err := tpmSimulator.ManufactureReset(); err != nil {
+		t.Fatalf("Can't reset TPM: %s", err)
+	}
+
+	config := json.RawMessage(fmt.Sprintf(`{"storagePath":"%s","maxItems":%d}`, crtStorage, len(testData)))
+
+	storage := &testStorage{}
+
+	module, err := tpmmodule.New("test", config, storage, tpmSimulator)
+	if err != nil {
+		t.Fatalf("Can't create TPM module: %s", err)
+	}
+
+	for _, item := range testData {
+		// Create keys
+
+		csr, err := module.CreateKeys("testsystem", "")
+		if err != nil {
+			t.Fatalf("Can't create keys: %s", err)
+		}
+
+		// Apply certificate
+
+		crt, err := generateCertificate(csr)
+		if err != nil {
+			t.Fatalf("Can't generate certificate: %s", err)
+		}
+
+		crtURL, keyURL, err := module.ApplyCertificate(crt)
+		if err != nil {
+			t.Fatalf("Can't apply certificate: %s", err)
+		}
+
+		crtVal, err := url.Parse(crtURL)
+		if err != nil {
+			t.Errorf("Can't parse crt URL: %s", err)
+		}
+
+		keyVal, err := url.Parse(keyURL)
+		if err != nil {
+			t.Errorf("Can't parse key URL: %s", err)
+		}
+
+		crtFile := crtVal.Path
+
+		handle, err := strconv.ParseUint(keyVal.Hostname(), 0, 32)
+		if err != nil {
+			t.Errorf("Can't parse key handle: %s", err)
+		}
+
+		crtHandle := tpmutil.Handle(handle)
+
+		switch item {
+		case "wrongDB":
+			if err = os.Remove(crtFile); err != nil {
+				t.Errorf("Can't remove crt file: %s", err)
+			}
+
+		case "wrongFile":
+			if err = storage.RemoveCertificate("test", crtURL); err != nil {
+				t.Errorf("Can't remove crt entry: %s", err)
+			}
+
+			if err = tpm2.EvictControl(tpmSimulator, "", tpm2.HandleOwner, crtHandle, crtHandle); err != nil {
+				t.Errorf("Can't remove key handle: %s", err)
+			}
+
+		case "validFile":
+			if err = storage.RemoveCertificate("test", crtURL); err != nil {
+				t.Errorf("Can't remove crt entry: %s", err)
+			}
+
+			fallthrough
+
+		default:
+			goodItems = append(goodItems, crthandler.CrtInfo{CrtURL: crtURL, KeyURL: keyURL})
+		}
+	}
+
+	module.Close()
+
+	if module, err = tpmmodule.New("test", config, storage, tpmSimulator); err != nil {
+		t.Fatalf("Can't create TPM module: %s", err)
+	}
+	defer module.Close()
+
+	if err = module.SyncStorage(); err != nil {
+		t.Fatalf("Can't sync storage: %s", err)
+	}
+
+	crtInfos, err := storage.GetCertificates("test")
+	if err != nil {
+		t.Fatalf("Can't get certificates: %s", err)
+	}
+
+	for _, goodItem := range goodItems {
+		found := false
+
+		infoIndex := 0
+
+		for i, info := range crtInfos {
+			if info.CrtURL == goodItem.CrtURL && info.KeyURL == goodItem.KeyURL {
+				found = true
+				infoIndex = i
+			}
+		}
+
+		if !found {
+			t.Errorf("Expected item not found in storage, crtURL: %s, keyURL: %s", goodItem.CrtURL, goodItem.KeyURL)
+		} else {
+			crtInfos = append(crtInfos[:infoIndex], crtInfos[infoIndex+1:]...)
+		}
+	}
+
+	for _, badItem := range crtInfos {
+		t.Errorf("Item should not be in srorage, crtURL: %s, keyURL: %s", badItem.CrtURL, badItem.KeyURL)
+	}
+}
+
 /*******************************************************************************
  * Interfaces
  ******************************************************************************/
