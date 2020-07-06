@@ -40,12 +40,6 @@ import (
 
 const serverURL = "wss://localhost:8088"
 
-// Server creation types
-const (
-	serverTypeSuccess = iota
-	serverTypeFail
-)
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -60,10 +54,19 @@ type testUpdater struct {
 	statusChannel chan umprotocol.StatusRsp
 }
 
-type testFailUpdater struct {
-	status        umprotocol.StatusRsp
-	statusChannel chan umprotocol.StatusRsp
+type testCrtHandler struct {
+	csr    string
+	crtURL string
+	keyURL string
+	err    error
 }
+
+/*******************************************************************************
+ * Vars
+ ******************************************************************************/
+
+var updater *testUpdater
+var crtHandler *testCrtHandler
 
 /*******************************************************************************
  * Init
@@ -95,8 +98,10 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetStatus(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeSuccess)
+	server := newTestServer(serverURL)
 	defer server.Close()
+
+	updater.status.Status = umprotocol.SuccessStatus
 
 	client, err := newTestClient(serverURL)
 	if err != nil {
@@ -117,8 +122,10 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestSystemUpgrade(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeSuccess)
+	server := newTestServer(serverURL)
 	defer server.Close()
+
+	updater.status.Status = umprotocol.SuccessStatus
 
 	client, err := newTestClient(serverURL)
 	if err != nil {
@@ -143,8 +150,10 @@ func TestSystemUpgrade(t *testing.T) {
 }
 
 func TestSystemRevert(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeSuccess)
+	server := newTestServer(serverURL)
 	defer server.Close()
+
+	updater.status.Status = umprotocol.SuccessStatus
 
 	client, err := newTestClient(serverURL)
 	if err != nil {
@@ -169,7 +178,7 @@ func TestSystemRevert(t *testing.T) {
 }
 
 func TestUnsupportedRequest(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeSuccess)
+	server := newTestServer(serverURL)
 	defer server.Close()
 
 	client, err := newTestClient(serverURL)
@@ -192,7 +201,7 @@ func TestUnsupportedRequest(t *testing.T) {
 	}
 
 	// Test with completely wrong message format
-	message := "Some wrong messageo"
+	message := "Some wrong message"
 
 	if err = client.sendRawRequest(&message, &response, 5*time.Second); err == nil {
 		t.Fatal("Error is expected here")
@@ -200,7 +209,7 @@ func TestUnsupportedRequest(t *testing.T) {
 }
 
 func TestNilDataRequest(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeSuccess)
+	server := newTestServer(serverURL)
 	defer server.Close()
 
 	client, err := newTestClient(serverURL)
@@ -226,8 +235,11 @@ func TestNilDataRequest(t *testing.T) {
 }
 
 func TestUpgradeFail(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeFail)
+	server := newTestServer(serverURL)
 	defer server.Close()
+
+	updater.status.Status = umprotocol.FailedStatus
+	updater.status.Error = "Can't upgrade"
 
 	client, err := newTestClient(serverURL)
 	if err != nil {
@@ -253,8 +265,11 @@ func TestUpgradeFail(t *testing.T) {
 }
 
 func TestRevertFail(t *testing.T) {
-	server := newTestServer(serverURL, serverTypeFail)
+	server := newTestServer(serverURL)
 	defer server.Close()
+
+	updater.status.Status = umprotocol.FailedStatus
+	updater.status.Error = "Can't revert"
 
 	client, err := newTestClient(serverURL)
 	if err != nil {
@@ -279,11 +294,112 @@ func TestRevertFail(t *testing.T) {
 	}
 }
 
+func TestCreateKeys(t *testing.T) {
+	server := newTestServer(serverURL)
+	defer server.Close()
+
+	crtHandler.csr = "this is csr"
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.CreateKeysRsp
+	request := umprotocol.CreateKeysReq{Type: "online"}
+
+	if err := client.sendRequest(umprotocol.CreateKeysRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Type != request.Type {
+		t.Errorf("Wrong response type: %s", response.Type)
+	}
+
+	if string(response.Csr) != string(crtHandler.csr) {
+		t.Errorf("Wrong CSR value: %s", string(response.Csr))
+	}
+
+	if response.Error != "" {
+		t.Errorf("Response error: %s", response.Error)
+	}
+}
+
+func TestApplyCert(t *testing.T) {
+	server := newTestServer(serverURL)
+	defer server.Close()
+
+	crtHandler.crtURL = "crtURL"
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.ApplyCertRsp
+	request := umprotocol.ApplyCertReq{Type: "online"}
+
+	if err := client.sendRequest(umprotocol.ApplyCertRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Type != request.Type {
+		t.Errorf("Wrong response type: %s", response.Type)
+	}
+
+	if response.CrtURL != crtHandler.crtURL {
+		t.Errorf("Wrong crt URL: %s", response.CrtURL)
+	}
+
+	if response.Error != "" {
+		t.Errorf("Response error: %s", response.Error)
+	}
+}
+
+func TestGetCert(t *testing.T) {
+	server := newTestServer(serverURL)
+	defer server.Close()
+
+	crtHandler.crtURL = "crtURL"
+	crtHandler.keyURL = "keyURL"
+
+	client, err := newTestClient(serverURL)
+	if err != nil {
+		t.Fatalf("Can't create test client: %s", err)
+	}
+	defer client.close()
+
+	var response umprotocol.GetCertRsp
+	request := umprotocol.GetCertReq{Issuer: []byte("issuer"), Serial: "serial"}
+
+	if err := client.sendRequest(umprotocol.GetCertRequestType, &request, &response, 5*time.Second); err != nil {
+		t.Fatalf("Can't send request: %s", err)
+	}
+
+	if response.Type != request.Type {
+		t.Errorf("Wrong response type: %s", response.Type)
+	}
+
+	if response.CrtURL != "crtURL" {
+		t.Errorf("Wrong crt URL: %s", response.CrtURL)
+	}
+
+	if response.KeyURL != "keyURL" {
+		t.Errorf("Wrong key URL: %s", response.KeyURL)
+	}
+
+	if response.Error != "" {
+		t.Errorf("Response error: %s", response.Error)
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
-func CreateServerConfig(serverAddress string) (cfg config.Config) {
+func createServerConfig(serverAddress string) (cfg config.Config) {
 	configJSON := `{
 	"Cert": "../data/crt.pem",
 	"Key":  "../data/key.pem"
@@ -306,21 +422,16 @@ func CreateServerConfig(serverAddress string) (cfg config.Config) {
 }
 
 // Success or die
-func newTestServer(url string, serverType int) (server *umserver.Server) {
-	cfg := CreateServerConfig(serverURL)
-	var updater umserver.Updater
+func newTestServer(url string) (server *umserver.Server) {
+	cfg := createServerConfig(serverURL)
 
-	if serverType == serverTypeSuccess {
-		updater = &testUpdater{
-			status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
-			statusChannel: make(chan umprotocol.StatusRsp)}
-	} else {
-		updater = &testFailUpdater{
-			status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
-			statusChannel: make(chan umprotocol.StatusRsp)}
-	}
+	updater = &testUpdater{
+		status:        umprotocol.StatusRsp{Status: umprotocol.SuccessStatus},
+		statusChannel: make(chan umprotocol.StatusRsp)}
 
-	server, err := umserver.New(&cfg, updater)
+	crtHandler = &testCrtHandler{}
+
+	server, err := umserver.New(&cfg, updater, crtHandler)
 	if err != nil {
 		log.Fatalf("Can't create ws server: %s", err)
 	}
@@ -358,7 +469,6 @@ func (client *testClient) sendRequest(messageType string, request, response inte
 	return client.sendVersionedRequest(messageType, request, response, timeout, umprotocol.Version)
 }
 
-//NOTE: amoiseev Setting optional parameter to be able to set wrong version in header
 func (client *testClient) sendVersionedRequest(messageType string, request, response interface{}, timeout time.Duration, version uint64) (err error) {
 	message := umprotocol.Message{
 		Header: umprotocol.Header{
@@ -375,7 +485,6 @@ func (client *testClient) sendVersionedRequest(messageType string, request, resp
 }
 
 func (client *testClient) sendRawRequest(message, response interface{}, timeout time.Duration) (err error) {
-
 	if err = client.wsClient.SendMessage(&message); err != nil {
 		return err
 	}
@@ -406,7 +515,6 @@ func (updater *testUpdater) GetStatus() (status umprotocol.StatusRsp) {
 func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
 	updater.status.CurrentVersion = version
 	updater.status.Operation = umprotocol.UpgradeOperation
-	updater.status.Status = umprotocol.SuccessStatus
 
 	updater.statusChannel <- updater.status
 
@@ -416,7 +524,6 @@ func (updater *testUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageIn
 func (updater *testUpdater) Revert(version uint64) (err error) {
 	updater.status.CurrentVersion = version
 	updater.status.Operation = umprotocol.RevertOperation
-	updater.status.Status = umprotocol.SuccessStatus
 
 	updater.statusChannel <- updater.status
 
@@ -427,32 +534,14 @@ func (updater *testUpdater) StatusChannel() (statusChannel <-chan umprotocol.Sta
 	return updater.statusChannel
 }
 
-/*******************************************************************************
- * testFailUpdater implementation
- ******************************************************************************/
-
-func (updater *testFailUpdater) GetStatus() (status umprotocol.StatusRsp) {
-	return updater.status
+func (handler *testCrtHandler) CreateKeys(crtType, systemID, password string) (csr string, err error) {
+	return handler.csr, handler.err
 }
 
-func (updater *testFailUpdater) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
-	updater.status.CurrentVersion = version
-	updater.status.Operation = umprotocol.UpgradeOperation
-	updater.status.Status = umprotocol.FailedStatus
-	updater.status.Error = "UnitTest: failed update"
-
-	return errors.New(updater.status.Error)
+func (handler *testCrtHandler) ApplyCertificate(crtType string, crt string) (crtURL string, err error) {
+	return handler.crtURL, handler.err
 }
 
-func (updater *testFailUpdater) Revert(version uint64) (err error) {
-	updater.status.CurrentVersion = version
-	updater.status.Operation = umprotocol.RevertOperation
-	updater.status.Status = umprotocol.FailedStatus
-	updater.status.Error = "UnitTest: failed revert"
-
-	return errors.New(updater.status.Error)
-}
-
-func (updater *testFailUpdater) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
-	return updater.statusChannel
+func (handler *testCrtHandler) GetCertificate(crtType string, issuer []byte, serial string) (crtURL, keyURL string, err error) {
+	return handler.crtURL, handler.keyURL, handler.err
 }

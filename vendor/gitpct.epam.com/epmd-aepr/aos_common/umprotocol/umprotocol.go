@@ -17,7 +17,9 @@
 
 package umprotocol
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 /*******************************************************************************
  * Consts
@@ -25,10 +27,16 @@ import "encoding/json"
 
 // Message types
 const (
-	UpgradeRequestType = "upgradeRequest"
-	RevertRequestType  = "revertRequest"
-	StatusRequestType  = "statusRequest"
-	StatusResponseType = "statusResponse"
+	UpgradeRequestType     = "upgradeRequest"
+	RevertRequestType      = "revertRequest"
+	StatusRequestType      = "statusRequest"
+	StatusResponseType     = "statusResponse"
+	CreateKeysRequestType  = "createKeysRequest"
+	CreateKeysResponseType = "createKeysResponse"
+	ApplyCertRequestType   = "applyCertRequest"
+	ApplyCertResponseType  = "applyCertResponse"
+	GetCertRequestType     = "getCertRequest"
+	GetCertResponseType    = "getCertResponse"
 )
 
 // Operation status
@@ -93,4 +101,46 @@ type StatusRsp struct {
 	Error            string `json:"error,omitempty"` // error message if status failed
 	RequestedVersion uint64 `json:"requestedVersion"`
 	CurrentVersion   uint64 `json:"currentVersion"`
+}
+
+// CreateKeysReq creates key pair request
+type CreateKeysReq struct {
+	Type     string `json:"type"`
+	SystemID string `json:"systemID"`
+	Password string `json:"password"`
+}
+
+// CreateKeysRsp creates key pair response
+type CreateKeysRsp struct {
+	Type  string `json:"type"`
+	Csr   string `json:"csr"`
+	Error string `json:"error,omitempty"`
+}
+
+// ApplyCertReq apply certificate request
+type ApplyCertReq struct {
+	Type string `json:"type"`
+	Crt  string `json:"crt"`
+}
+
+// ApplyCertRsp apply certificate response
+type ApplyCertRsp struct {
+	Type   string `json:"type"`
+	CrtURL string `json:"crtUrl"`
+	Error  string `json:"error,omitempty"`
+}
+
+// GetCertReq get certificate request
+type GetCertReq struct {
+	Type   string `json:"type"`
+	Issuer []byte `json:"issuer,omitempty"`
+	Serial string `json:"serial,omitempty"`
+}
+
+// GetCertRsp get certificate response
+type GetCertRsp struct {
+	Type   string `json:"type"`
+	CrtURL string `json:"crtUrl"`
+	KeyURL string `json:"keyUrl"`
+	Error  string `json:"error,omitempty"`
 }

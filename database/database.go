@@ -26,6 +26,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
+
+	"aos_updatemanager/crthandler"
 )
 
 /*******************************************************************************
@@ -100,6 +102,10 @@ func New(name string) (db *Database, err error) {
 	}
 
 	if err := db.createModulesDataTable(); err != nil {
+		return db, err
+	}
+
+	if err := db.createCertTable(); err != nil {
 		return db, err
 	}
 
@@ -231,8 +237,9 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
-func (db *Database) SetControllerState(controllerId string, name string, value []byte) (err error) {
-	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerId,
+// SetControllerState sets controller state
+func (db *Database) SetControllerState(controllerID string, name string, value []byte) (err error) {
+	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerID,
 		name, value)
 	if err != nil {
 		return err
@@ -250,8 +257,9 @@ func (db *Database) SetControllerState(controllerId string, name string, value [
 	return nil
 }
 
-func (db *Database) GetControllerState(controllerId string, name string) (value []byte, err error) {
-	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerId, name)
+// GetControllerState returns controller state
+func (db *Database) GetControllerState(controllerID string, name string) (value []byte, err error) {
+	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +274,66 @@ func (db *Database) GetControllerState(controllerId string, name string) (value 
 	}
 
 	return nil, ErrNotExist
+}
+
+// AddCertificate adds new certificate to database
+func (db *Database) AddCertificate(crtType string, crt crthandler.CrtInfo) (err error) {
+	if _, err = db.sql.Exec("INSERT INTO certificates values(?, ?, ?, ?, ?, ?)",
+		crtType, crt.Issuer, crt.Serial, crt.CrtURL, crt.KeyURL, crt.NotAfter); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetCertificate returns certificate by issuer and serial
+func (db *Database) GetCertificate(issuer, serial string) (crt crthandler.CrtInfo, err error) {
+	rows, err := db.sql.Query("SELECT issuer, serial, crtURL, keyURL, notAfter FROM certificates WHERE issuer = ? AND serial = ?",
+		issuer, serial)
+	if err != nil {
+		return crt, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if err = rows.Scan(&crt.Issuer, &crt.Serial, &crt.CrtURL, &crt.KeyURL, &crt.NotAfter); err != nil {
+			return crt, err
+		}
+
+		return crt, nil
+	}
+
+	return crt, ErrNotExist
+}
+
+// GetCertificates returns certificates of selected type
+func (db *Database) GetCertificates(crtType string) (crts []crthandler.CrtInfo, err error) {
+	rows, err := db.sql.Query("SELECT issuer, serial, crtURL, keyURL, notAfter FROM certificates WHERE type = ?", crtType)
+	if err != nil {
+		return crts, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var crt crthandler.CrtInfo
+
+		if err = rows.Scan(&crt.Issuer, &crt.Serial, &crt.CrtURL, &crt.KeyURL, &crt.NotAfter); err != nil {
+			return crts, err
+		}
+
+		crts = append(crts, crt)
+	}
+
+	return crts, nil
+}
+
+// RemoveCertificate removes certificate from database
+func (db *Database) RemoveCertificate(crtType, crtURL string) (err error) {
+	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ? AND crtURL = ?", crtType, crtURL); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Close closes database
@@ -371,6 +439,23 @@ func (db *Database) createModulesDataTable() (err error) {
 	log.Info("Create modules_data table")
 
 	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules_data (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, value TEXT)`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Database) createCertTable() (err error) {
+	log.Info("Create cert table")
+
+	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS certificates (
+		type TEXT NOT NULL,
+		issuer TEXT NOT NULL,
+		serial TEXT NOT NULL,
+		crtURL TEXT,
+		keyURL TEXT,
+		notAfter TIMESTAMP,
+		PRIMARY KEY (issuer, serial))`); err != nil {
 		return err
 	}
 

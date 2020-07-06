@@ -31,6 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/config"
+	"aos_updatemanager/crthandler"
+	_ "aos_updatemanager/crtmodules"
 	"aos_updatemanager/database"
 	_ "aos_updatemanager/platform"
 	"aos_updatemanager/umserver"
@@ -185,6 +187,7 @@ func main() {
 			log.Fatalf("Can't create database: %s", err)
 		}
 	}
+	defer db.Close()
 
 	updater, err := updatehandler.New(cfg, db)
 	if err != nil {
@@ -192,7 +195,13 @@ func main() {
 	}
 	defer updater.Close()
 
-	server, err := umserver.New(cfg, updater)
+	crtHandler, err := crthandler.New(cfg, db)
+	if err != nil {
+		log.Fatalf("Can't create crt handler: %s", err)
+	}
+	defer crtHandler.Close()
+
+	server, err := umserver.New(cfg, updater, crtHandler)
 	if err != nil {
 		log.Fatalf("Can't create UM server: %s", err)
 	}

@@ -1,0 +1,13 @@
+@startuml protocolsd
+Cloud -> Device: Renew certs req (cert serials)
+Activate Device
+Note right of Device: Generate new keys
+Cloud <-- Device: Renew certs rsp (pub keys)
+Deactivate Device
+
+Cloud -> Device: Apply certs (cert list) 
+Activate Device
+Note right of Device: Applies new certs
+Cloud <-- Device: Apply status
+Deactivate Device
+@enduml

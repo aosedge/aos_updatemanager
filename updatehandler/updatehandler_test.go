@@ -104,7 +104,7 @@ func TestMain(m *testing.M) {
 
 	cfg = config.Config{
 		UpgradeDir: tmpDir,
-		Modules: []config.ModuleConfig{
+		UpdateModules: []config.ModuleConfig{
 			config.ModuleConfig{ID: "id1", Plugin: "testmodule"},
 			config.ModuleConfig{ID: "id2", Plugin: "testmodule"},
 			config.ModuleConfig{ID: "id3", Plugin: "testmodule"}}}

@@ -25,8 +25,11 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"aos_updatemanager/crthandler"
 )
 
 /*******************************************************************************
@@ -286,4 +289,116 @@ func TestMultiThread(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+func TestAddRemoveCertificate(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	type testData struct {
+		crtType       string
+		crt           crthandler.CrtInfo
+		errorExpected bool
+	}
+
+	data := []testData{
+		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()}, errorExpected: false},
+		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()}, errorExpected: true},
+		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer1", "s0", "crtURL1", "keyURL1", time.Now().UTC()}, errorExpected: false},
+		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer1", "s0", "crtURL1", "keyURL1", time.Now().UTC()}, errorExpected: true},
+		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer2", "s0", "crtURL2", "keyURL2", time.Now().UTC()}, errorExpected: false}}
+
+	// Add certificates
+
+	for _, item := range data {
+		if err = db.AddCertificate(item.crtType, item.crt); err != nil && !item.errorExpected {
+			t.Errorf("Can't add certificate: %s", err)
+		}
+	}
+
+	// Get certificates
+
+	for _, item := range data {
+		crt, err := db.GetCertificate(item.crt.Issuer, item.crt.Serial)
+		if err != nil && !item.errorExpected {
+			t.Errorf("Can't get certificate: %s", err)
+
+			continue
+		}
+
+		if item.errorExpected {
+			continue
+		}
+
+		if !reflect.DeepEqual(crt, item.crt) {
+			t.Errorf("Wrong crt info: %v", crt)
+		}
+	}
+
+	// Remove certificates
+
+	for _, item := range data {
+		if err = db.RemoveCertificate(item.crtType, item.crt.CrtURL); err != nil && !item.errorExpected {
+			t.Errorf("Can't remove certificate: %s", err)
+		}
+
+		if _, err = db.GetCertificate(item.crtType, item.crt.CrtURL); err == nil {
+			t.Error("Certificate should be removed")
+		}
+	}
+}
+
+func TestGetCertificates(t *testing.T) {
+	db, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+	defer db.Close()
+
+	data := [][]crthandler.CrtInfo{
+		[]crthandler.CrtInfo{
+			crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer0", "s1", "crtURL1", "keyURL1", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer0", "s2", "crtURL2", "keyURL2", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer0", "s3", "crtURL3", "keyURL3", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer0", "s4", "crtURL4", "keyURL4", time.Now().UTC()},
+		},
+		[]crthandler.CrtInfo{
+			crthandler.CrtInfo{"issuer1", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer1", "s1", "crtURL1", "keyURL1", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer1", "s2", "crtURL2", "keyURL2", time.Now().UTC()},
+		},
+		[]crthandler.CrtInfo{
+			crthandler.CrtInfo{"issuer2", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer2", "s1", "crtURL1", "keyURL1", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer2", "s2", "crtURL2", "keyURL2", time.Now().UTC()},
+			crthandler.CrtInfo{"issuer2", "s3", "crtURL3", "keyURL3", time.Now().UTC()},
+		},
+	}
+
+	for i, items := range data {
+		for _, crt := range items {
+			if err = db.AddCertificate("crt"+strconv.Itoa(i), crt); err != nil {
+				t.Errorf("Can't add certificate: %s", err)
+			}
+		}
+	}
+
+	for i, items := range data {
+		crts, err := db.GetCertificates("crt" + strconv.Itoa(i))
+		if err != nil {
+			t.Errorf("Can't get certificates: %s", err)
+
+			continue
+		}
+
+		if !reflect.DeepEqual(crts, items) {
+			t.Error("Wrong crts data")
+
+			continue
+		}
+	}
 }

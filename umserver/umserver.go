@@ -18,6 +18,7 @@
 package umserver
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 
@@ -39,8 +40,9 @@ import (
 
 // Server update manager server structure
 type Server struct {
-	wsServer *wsserver.Server
-	updater  Updater
+	wsServer   *wsserver.Server
+	updater    Updater
+	crtHandler CrtHandler
 }
 
 // Updater interface
@@ -51,13 +53,20 @@ type Updater interface {
 	StatusChannel() (statusChannel <-chan umprotocol.StatusRsp)
 }
 
+// CrtHandler interface
+type CrtHandler interface {
+	CreateKeys(crtType, systemdID, password string) (csr string, err error)
+	ApplyCertificate(crtType string, crt string) (crtURL string, err error)
+	GetCertificate(crtType string, issuer []byte, serial string) (crtURL, keyURL string, err error)
+}
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // New creates new Web socket server
-func New(cfg *config.Config, updater Updater) (server *Server, err error) {
-	server = &Server{updater: updater}
+func New(cfg *config.Config, updater Updater, crtHandler CrtHandler) (server *Server, err error) {
+	server = &Server{updater: updater, crtHandler: crtHandler}
 
 	if server.wsServer, err = wsserver.New("UM", cfg.ServerURL, cfg.Cert, cfg.Key, server); err != nil {
 		return nil, err
@@ -115,6 +124,15 @@ func (server *Server) ProcessMessage(client *wsserver.Client, messageType int, m
 
 	case umprotocol.RevertRequestType:
 		return server.processSystemRevert(message.Data)
+
+	case umprotocol.CreateKeysRequestType:
+		return server.processCreateKeys(message.Data)
+
+	case umprotocol.ApplyCertRequestType:
+		return server.processApplyCert(message.Data)
+
+	case umprotocol.GetCertRequestType:
+		return server.processGetCert(message.Data)
 
 	default:
 		return nil, errors.New("unsupported request type: " + message.Header.MessageType)
@@ -186,6 +204,65 @@ func (server *Server) processSystemRevert(request []byte) (response []byte, err 
 	}
 
 	return nil, nil
+}
+
+func (server *Server) processCreateKeys(request []byte) (response []byte, err error) {
+	var createKeysReq umprotocol.CreateKeysReq
+
+	if err = json.Unmarshal(request, &createKeysReq); err != nil {
+		return nil, err
+	}
+
+	log.WithField("type", createKeysReq.Type).Debug("Process create keys request")
+
+	createKeysRsp := umprotocol.CreateKeysRsp{Type: createKeysReq.Type}
+
+	if createKeysRsp.Csr, err = server.crtHandler.CreateKeys(createKeysReq.Type,
+		createKeysReq.SystemID, createKeysReq.Password); err != nil {
+		createKeysRsp.Error = err.Error()
+	}
+
+	return marshalResponse(umprotocol.CreateKeysResponseType, &createKeysRsp)
+}
+
+func (server *Server) processApplyCert(request []byte) (response []byte, err error) {
+	var applyCertReq umprotocol.ApplyCertReq
+
+	if err = json.Unmarshal(request, &applyCertReq); err != nil {
+		return nil, err
+	}
+
+	log.WithField("type", applyCertReq.Type).Debug("Process apply cert request")
+
+	applyCertRsp := umprotocol.ApplyCertRsp{Type: applyCertReq.Type}
+
+	if applyCertRsp.CrtURL, err = server.crtHandler.ApplyCertificate(applyCertReq.Type, applyCertReq.Crt); err != nil {
+		applyCertRsp.Error = err.Error()
+	}
+
+	return marshalResponse(umprotocol.ApplyCertResponseType, &applyCertRsp)
+}
+
+func (server *Server) processGetCert(request []byte) (response []byte, err error) {
+	var getCertReq umprotocol.GetCertReq
+
+	if err = json.Unmarshal(request, &getCertReq); err != nil {
+		return nil, err
+	}
+
+	log.WithFields(log.Fields{
+		"type":   getCertReq.Type,
+		"serial": getCertReq.Serial,
+		"issuer": base64.StdEncoding.EncodeToString(getCertReq.Issuer)}).Debug("Process get cert request")
+
+	getCertRsp := umprotocol.GetCertRsp{Type: getCertReq.Type}
+
+	if getCertRsp.CrtURL, getCertRsp.KeyURL, err = server.crtHandler.GetCertificate(
+		getCertReq.Type, getCertReq.Issuer, getCertReq.Serial); err != nil {
+		getCertRsp.Error = err.Error()
+	}
+
+	return marshalResponse(umprotocol.GetCertResponseType, &getCertRsp)
 }
 
 func marshalResponse(messageType string, data interface{}) (messageJSON []byte, err error) {
