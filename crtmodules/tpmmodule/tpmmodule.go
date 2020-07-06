@@ -289,15 +289,27 @@ func (module *TPMModule) ApplyCertificate(crt string) (crtURL, keyURL string, er
 
 	crts, err := module.storage.GetCertificates(module.crtType)
 	if err != nil {
-		return "", "", err
+		log.Errorf("Can' get certificates: %s", err)
 	}
 
 	for len(crts) > module.config.MaxItems && module.config.MaxItems != 0 {
 		log.Warnf("Current cert count exceeds max count: %d > %d. Remove old certs", len(crts), module.config.MaxItems)
 
-		if crts, err = module.removeOldestCertificate(crts, module.currentKey.password); err != nil {
+		var minTime time.Time
+		var minIndex int
+
+		for i, crt := range crts {
+			if minTime.IsZero() || crt.NotAfter.Before(minTime) {
+				minTime = crt.NotAfter
+				minIndex = i
+			}
+		}
+
+		if err = module.removeCrt(crts[minIndex], module.currentKey.password); err != nil {
 			log.Errorf("Can't delete old certificate: %s", err)
 		}
+
+		crts = append(crts[:minIndex], crts[minIndex+1:]...)
 	}
 
 	return crtURL, keyURL, nil
@@ -509,56 +521,17 @@ func (module *TPMModule) findEmptyPersistentHandle() (handle tpmutil.Handle, err
 	return 0, errors.New("no empty persistent slot found")
 }
 
-func (module *TPMModule) removeOldestCertificate(crts []crthandler.CrtInfo, password string) (result []crthandler.CrtInfo, err error) {
-	var minTime time.Time
-	var minIndex int
-
-	if len(crts) == 0 {
-		return crts, nil
-	}
-
-	for i, crt := range crts {
-		url, err := url.Parse(crt.CrtURL)
-		if err != nil {
-			return crts, err
-		}
-
-		pemCrt, err := ioutil.ReadFile(url.Path)
-		if err != nil {
-			return crts, err
-		}
-
-		x509Crt, err := pemToX509Crt(string(pemCrt))
-		if err != nil {
-			return crts, nil
-		}
-
-		if minTime.IsZero() || x509Crt.NotAfter.Before(minTime) {
-			minTime = x509Crt.NotAfter
-			minIndex = i
-		}
-	}
-
-	crtInfo := crts[minIndex]
-
+func (module *TPMModule) removeCrt(crt crthandler.CrtInfo, password string) (err error) {
 	log.WithFields(log.Fields{
 		"crtType":  module.crtType,
-		"crtURL":   crtInfo.CrtURL,
-		"keyURL":   crtInfo.KeyURL,
-		"notAfter": minTime}).Debug("Remove certificate")
+		"crtURL":   crt.CrtURL,
+		"keyURL":   crt.KeyURL,
+		"notAfter": crt.NotAfter}).Debug("Remove certificate")
 
-	if err = module.removeCrt(crtInfo, password); err != nil {
-		return crts, err
+	if err = module.storage.RemoveCertificate(module.crtType, crt.CrtURL); err != nil {
+		return err
 	}
 
-	if err = module.storage.RemoveCertificate(module.crtType, crtInfo.CrtURL); err != nil {
-		return crts, err
-	}
-
-	return append(crts[:minIndex], crts[minIndex+1:]...), nil
-}
-
-func (module *TPMModule) removeCrt(crt crthandler.CrtInfo, password string) (err error) {
 	keyURL, err := url.Parse(crt.KeyURL)
 	if err != nil {
 		return err
