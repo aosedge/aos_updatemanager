@@ -15,10 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package plugins
+package swmodule
 
 import (
-	// include all supported plugins
-	_ "aos_updatemanager/crtmodules/swmodule"
-	_ "aos_updatemanager/crtmodules/tpmmodule"
+	"aos_updatemanager/crthandler"
 )
+
+/*******************************************************************************
+ * Init
+ ******************************************************************************/
+
+func init() {
+	crthandler.RegisterPlugin("swmodule", New)
+}
