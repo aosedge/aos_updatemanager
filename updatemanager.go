@@ -187,6 +187,7 @@ func main() {
 			log.Fatalf("Can't create database: %s", err)
 		}
 	}
+	defer db.Close()
 
 	updater, err := updatehandler.New(cfg, db)
 	if err != nil {
