@@ -4,6 +4,8 @@ go 1.13
 
 require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/google/go-tpm v0.2.1-0.20200701210658-e06fe77d4428
+	github.com/google/go-tpm-tools v0.1.3-0.20200626093744-11f284793aa8
 	github.com/gorilla/websocket v1.4.2
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
