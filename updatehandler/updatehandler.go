@@ -125,7 +125,7 @@ const statusChannelSize = 1
 
 var plugins = make(map[string]NewPlugin)
 
-var platformController NewPlatfromContoller
+var newPlatformController NewPlatfromContoller
 
 /*******************************************************************************
  * Types
@@ -239,7 +239,7 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 
 //RegisterControllerPlugin  registers platfrom controller plugin
 func RegisterControllerPlugin(newFunc NewPlatfromContoller) {
-	platformController = newFunc
+	newPlatformController = newFunc
 }
 
 // New returns pointer to new Handler
@@ -251,11 +251,11 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
 	}
 
-	if platformController == nil {
+	if newPlatformController == nil {
 		return nil, errors.New("controller plugin should be registered")
 	}
 
-	handler.platform, err = platformController(storage, cfg.UpdateModules)
+	handler.platform, err = newPlatformController(storage, cfg.UpdateModules)
 	if err != nil {
 		return nil, err
 	}
