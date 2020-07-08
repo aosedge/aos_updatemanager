@@ -60,7 +60,7 @@ type moduleConfig struct {
  ******************************************************************************/
 
 // New creates ssh module instance
-func New(id string, configJSON json.RawMessage, controller interface{},
+func New(id string, configJSON json.RawMessage,
 	storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Info("Create SSH module")
 
