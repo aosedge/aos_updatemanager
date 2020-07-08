@@ -17,12 +17,19 @@
 
 package testmodule
 
-import "aos_updatemanager/updatehandler"
+import (
+	"aos_updatemanager/updatehandler"
+	"encoding/json"
+)
 
 /*******************************************************************************
  * Init
  ******************************************************************************/
 
 func init() {
-	updatehandler.RegisterPlugin("testmodule", New)
+	updatehandler.RegisterPlugin("testmodule",
+		func(id string, configJSON json.RawMessage, controller updatehandler.PlatformController,
+			storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
+			return New(id, configJSON, storage)
+		})
 }
