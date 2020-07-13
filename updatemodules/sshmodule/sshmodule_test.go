@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 		]
 	}`
 
-	module, err = sshmodule.New("TestComponent", []byte(configJSON), nil, nil)
+	module, err = sshmodule.New("TestComponent", []byte(configJSON), nil)
 	if err != nil {
 		log.Fatalf("Can't create SSH module: %s", err)
 	}
@@ -113,7 +113,7 @@ func TestWrongJson(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil, nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
 	if err == nil {
 		module.Close()
 		log.Fatalf("Expecting error here")
@@ -134,7 +134,7 @@ func TestUpgradeErrors(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil, nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}
@@ -145,7 +145,7 @@ func TestUpgradeErrors(t *testing.T) {
 	}
 
 	if _, err := module.Upgrade(1, "tmp/testfile"); err == nil {
-		t.Errorf("Error expected because of wrong adress")
+		t.Errorf("Error expected because of wrong address")
 	}
 }
 
@@ -163,7 +163,7 @@ func TestUpgradeWrongCommands(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil, nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}

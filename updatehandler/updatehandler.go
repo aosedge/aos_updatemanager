@@ -125,7 +125,7 @@ const statusChannelSize = 1
 
 var plugins = make(map[string]NewPlugin)
 
-var platformController NewPlatfromContoller
+var newPlatformController NewPlatfromContoller
 
 /*******************************************************************************
  * Types
@@ -189,11 +189,10 @@ type PlatformController interface {
 	GetPlatformID() (id string, err error)
 	SystemReboot() (err error)
 	Close() (err error)
-	GetModuleContoller(id string) (contoller interface{}, err error)
 }
 
-// NewPlugin plugin new function
-type NewPlugin func(id string, configJSON json.RawMessage, controller interface{}, storage StateStorage) (module UpdateModule, err error)
+// NewPlugin udpate module new function
+type NewPlugin func(id string, configJSON json.RawMessage, controller PlatformController, storage StateStorage) (module UpdateModule, err error)
 
 // NewPlatfromContoller plugin for platform Contoller
 type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
@@ -231,16 +230,16 @@ type moduleOperation func(module UpdateModule) (rebootRequired bool, err error)
  * Public
  ******************************************************************************/
 
-// RegisterPlugin registers data adapter plugin
+// RegisterPlugin registers update plugin
 func RegisterPlugin(plugin string, newFunc NewPlugin) {
-	log.WithField("plugin", plugin).Info("Register plugin")
+	log.WithField("plugin", plugin).Info("Register update plugin")
 
 	plugins[plugin] = newFunc
 }
 
 //RegisterControllerPlugin  registers platfrom controller plugin
 func RegisterControllerPlugin(newFunc NewPlatfromContoller) {
-	platformController = newFunc
+	newPlatformController = newFunc
 }
 
 // New returns pointer to new Handler
@@ -252,11 +251,11 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
 	}
 
-	if platformController == nil {
+	if newPlatformController == nil {
 		return nil, errors.New("controller plugin should be registered")
 	}
 
-	handler.platform, err = platformController(storage, cfg.UpdateModules)
+	handler.platform, err = newPlatformController(storage, cfg.UpdateModules)
 	if err != nil {
 		return nil, err
 	}
@@ -419,12 +418,7 @@ func (handler *Handler) createModule(plugin, id string, params json.RawMessage) 
 		return nil, fmt.Errorf("plugin %s not found", plugin)
 	}
 
-	ctrl, err := handler.platform.GetModuleContoller(id)
-	if err != nil {
-		return nil, err
-	}
-
-	if module, err = newFunc(id, params, ctrl, handler.storage); err != nil {
+	if module, err = newFunc(id, params, handler.platform, handler.storage); err != nil {
 		return nil, err
 	}
 

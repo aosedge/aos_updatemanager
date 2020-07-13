@@ -5,7 +5,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/config"
 	"aos_updatemanager/updatehandler"
 )
 
@@ -33,7 +32,7 @@ type Storage interface {
  ******************************************************************************/
 
 // New creates new platform controller
-func New(storage updatehandler.StateStorage, modules []config.ModuleConfig) (controller updatehandler.PlatformController, err error) {
+func New(storage Storage) (controller updatehandler.PlatformController, err error) {
 	log.Info("Create platform constoller")
 
 	controller = &Controller{storage: storage}
@@ -68,10 +67,4 @@ func (controller *Controller) SystemReboot() (err error) {
 	log.Info("System reboot")
 
 	return errors.New("not implemented")
-}
-
-// GetModuleContoller provides module specific controller
-func (controller *Controller) GetModuleContoller(id string) (contoller interface{}, err error) {
-	// aos contoller doesn't support module controllers
-	return nil, nil
 }

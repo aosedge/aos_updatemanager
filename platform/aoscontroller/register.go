@@ -17,12 +17,19 @@
 
 package aoscontroller
 
-import "aos_updatemanager/updatehandler"
+import (
+	"aos_updatemanager/config"
+	"aos_updatemanager/updatehandler"
+)
 
 /*******************************************************************************
  * Init
  ******************************************************************************/
 
 func init() {
-	updatehandler.RegisterControllerPlugin(New)
+	updatehandler.RegisterControllerPlugin(
+		func(storage updatehandler.StateStorage,
+			modules []config.ModuleConfig) (controller updatehandler.PlatformController, err error) {
+			return New(storage)
+		})
 }
