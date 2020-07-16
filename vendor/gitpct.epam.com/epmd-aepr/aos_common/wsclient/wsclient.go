@@ -36,7 +36,7 @@ import (
  ******************************************************************************/
 
 const (
-	websocketTimeout = 30 * time.Second
+	websocketTimeout = 120 * time.Second
 	errorChannelSize = 1
 )
 
