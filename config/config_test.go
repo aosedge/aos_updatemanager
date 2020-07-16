@@ -61,7 +61,7 @@ func createConfigFile() (err error) {
 	"Key": "key.pem",
 	"UpgradeDir": "/var/aos/upgrade",
 	"WorkingDir": "/var/aos/updatemanager",
-	"Modules":[{
+	"UpdateModules":[{
 		"ID": "id1",
 		"Plugin": "test1",
 		"Params": {
@@ -149,19 +149,19 @@ func TestGetCredentials(t *testing.T) {
 	}
 }
 func TestModules(t *testing.T) {
-	if len(cfg.Modules) != 3 {
-		t.Fatalf("Wrong modules len: %d", len(cfg.Modules))
+	if len(cfg.UpdateModules) != 3 {
+		t.Fatalf("Wrong modules len: %d", len(cfg.UpdateModules))
 	}
 
-	if cfg.Modules[0].ID != "id1" || cfg.Modules[1].ID != "id2" || cfg.Modules[2].ID != "id3" {
+	if cfg.UpdateModules[0].ID != "id1" || cfg.UpdateModules[1].ID != "id2" || cfg.UpdateModules[2].ID != "id3" {
 		t.Error("Wrong module id")
 	}
 
-	if cfg.Modules[0].Plugin != "test1" || cfg.Modules[1].Plugin != "test2" || cfg.Modules[2].Plugin != "test3" {
+	if cfg.UpdateModules[0].Plugin != "test1" || cfg.UpdateModules[1].Plugin != "test2" || cfg.UpdateModules[2].Plugin != "test3" {
 		t.Error("Wrong plugin value")
 	}
 
-	if cfg.Modules[0].Disabled != false || cfg.Modules[1].Disabled != false || cfg.Modules[2].Disabled != true {
+	if cfg.UpdateModules[0].Disabled != false || cfg.UpdateModules[1].Disabled != false || cfg.UpdateModules[2].Disabled != true {
 		t.Error("Disabled value")
 	}
 }
