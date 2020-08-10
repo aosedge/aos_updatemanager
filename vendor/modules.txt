@@ -32,10 +32,12 @@ github.com/sirupsen/logrus
 # github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 ## explicit
 github.com/tmc/scp
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20200716160403-88226f17b11b
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20200820133115-eea02142fdf3
 ## explicit
+gitpct.epam.com/epmd-aepr/aos_common/fs
 gitpct.epam.com/epmd-aepr/aos_common/image
 gitpct.epam.com/epmd-aepr/aos_common/umprotocol
+gitpct.epam.com/epmd-aepr/aos_common/utils/testtools
 gitpct.epam.com/epmd-aepr/aos_common/wsclient
 gitpct.epam.com/epmd-aepr/aos_common/wsserver
 # golang.org/x/crypto v0.0.0-20200414173820-0848c9571904
