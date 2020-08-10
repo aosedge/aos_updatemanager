@@ -2,6 +2,8 @@ package aoscontroller
 
 import (
 	"errors"
+	"io/ioutil"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -11,6 +13,7 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
+const modelFileName = "/etc/aos/model_name.txt"
 
 /*******************************************************************************
  * Types
@@ -18,7 +21,8 @@ import (
 
 // Controller platform controller
 type Controller struct {
-	storage Storage
+	storage    Storage
+	platformID string
 }
 
 // Storage provides interface to get/set system version
@@ -32,10 +36,23 @@ type Storage interface {
  ******************************************************************************/
 
 // New creates new platform controller
-func New(storage Storage) (controller updatehandler.PlatformController, err error) {
+func New(storage Storage, modelFile string) (controller updatehandler.PlatformController, err error) {
 	log.Info("Create platform constoller")
 
-	controller = &Controller{storage: storage}
+	modelName := ""
+	data, err := ioutil.ReadFile(modelFile)
+	if err == nil {
+		modelVersion := strings.Split(string(data), ";")
+		if len(modelVersion) > 0 {
+			modelName = modelVersion[0]
+		} else {
+			log.Error("No model name in ", modelFile)
+		}
+	} else {
+		log.Error("Error read model name: ", err)
+	}
+
+	controller = &Controller{storage: storage, platformID: modelName}
 
 	return controller, nil
 }
@@ -59,7 +76,7 @@ func (controller *Controller) SetVersion(version uint64) (err error) {
 
 // GetPlatformID returns platform ID
 func (controller *Controller) GetPlatformID() (id string, err error) {
-	return "Test Platform", nil
+	return controller.platformID, nil
 }
 
 // SystemReboot performs system reboot
