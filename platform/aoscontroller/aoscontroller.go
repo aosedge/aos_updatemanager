@@ -1,9 +1,9 @@
 package aoscontroller
 
 import (
-	"errors"
 	"io/ioutil"
 	"strings"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 
@@ -83,5 +83,7 @@ func (controller *Controller) GetPlatformID() (id string, err error) {
 func (controller *Controller) SystemReboot() (err error) {
 	log.Info("System reboot")
 
-	return errors.New("not implemented")
+	syscall.Sync()
+
+	return syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART)
 }
