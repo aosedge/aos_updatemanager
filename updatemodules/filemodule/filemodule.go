@@ -296,7 +296,7 @@ func updateFileFromGz(fileToUpdate, resource string) (err error) {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.OpenFile(fileToUpdate, os.O_RDWR, 0)
+	dstFile, err := os.OpenFile(fileToUpdate, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return err
 	}

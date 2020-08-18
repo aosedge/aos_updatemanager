@@ -104,6 +104,58 @@ func TestGetID(t *testing.T) {
 	}
 }
 
+func TestUpgradeUnavailableFile(t *testing.T) {
+	var updatedString string = "This updated file"
+
+	tmpDir, err := ioutil.TempDir("", "um_")
+	if err != nil {
+		log.Fatalf("Error creating tmp dir: %s", err)
+	}
+	defer os.Remove(tmpDir)
+
+	metadataJSON := `
+	{
+		"componentType": "TestFileUpdate",
+		"resources": [{
+			"id": "testConfig",
+			"resource": "testConfig.gz"
+		}]
+	}
+	`
+
+	if err := ioutil.WriteFile(path.Join(tmpDir, "metadata.json"), []byte(metadataJSON), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	file, err := os.Create(path.Join(tmpDir, "testConfig.gz"))
+	if err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	zw := gzip.NewWriter(file)
+	zw.Write([]byte(updatedString))
+	zw.Close()
+
+	file.Close()
+
+	if _, err := module.Upgrade(0, tmpDir); err != nil {
+		t.Errorf("Upgrade failed: %s", err)
+	}
+
+	resultData, err := ioutil.ReadFile("tmp/test_configuration.cfg")
+	if err != nil {
+		t.Error("Can't read tmp/test_configuration.cfg ", err)
+	}
+
+	if string(resultData) != updatedString {
+		t.Error("Incorrect update content")
+	}
+
+	if err := os.RemoveAll(tmpDir); err != nil {
+		log.Fatalf("Error removing tmp dir: %s", err)
+	}
+}
+
 func TestUpgrade(t *testing.T) {
 	var updatedString string = "This updated file"
 	if err := ioutil.WriteFile("tmp/test_configuration.cfg", []byte("This is test file"), 0644); err != nil {
