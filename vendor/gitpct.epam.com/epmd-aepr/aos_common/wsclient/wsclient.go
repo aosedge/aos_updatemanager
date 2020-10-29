@@ -283,6 +283,8 @@ func (client *Client) processMessages() {
 			}
 
 			if key == requestID.Interface() {
+				client.requests.Delete(param.id)
+
 				param.rspChannel <- true
 				rspFound = true
 				return false

@@ -27,10 +27,11 @@ import (
 
 // Message types
 const (
-	UpgradeRequestType     = "upgradeRequest"
-	RevertRequestType      = "revertRequest"
-	StatusRequestType      = "statusRequest"
-	StatusResponseType     = "statusResponse"
+	GetComponentsRequestType  = "getComponentsRequest"
+	GetComponentsResponseType = "getComponentsResponse"
+	UpdateRequestType         = "updateRequest"
+	UpdateStatusType          = "updateStatus"
+
 	CreateKeysRequestType  = "createKeysRequest"
 	CreateKeysResponseType = "createKeysResponse"
 	ApplyCertRequestType   = "applyCertRequest"
@@ -39,21 +40,18 @@ const (
 	GetCertResponseType    = "getCertResponse"
 )
 
-// Operation status
+// Component status
 const (
-	SuccessStatus    = "success"
-	FailedStatus     = "failed"
-	InProgressStatus = "inProgress"
-)
-
-// Operation type
-const (
-	UpgradeOperation = "upgrade"
-	RevertOperation  = "revert"
+	StatusPending     = "pending"
+	StatusDownloading = "downloading"
+	StatusDownloaded  = "downloaded"
+	StatusInstalling  = "installing"
+	StatusInstalled   = "installed"
+	StatusError       = "error"
 )
 
 // Version specifies the protocol version
-const Version = 1
+const Version = 2
 
 /*******************************************************************************
  * Types
@@ -71,36 +69,25 @@ type Message struct {
 	Data   json.RawMessage `json:"data,omitempty"`
 }
 
-// ImageInfo upgrade image info
-type ImageInfo struct {
-	Path   string `json:"path"`
-	Sha256 []byte `json:"sha256"`
-	Sha512 []byte `json:"sha512"`
-	Size   uint64 `json:"size"`
+// ComponentStatus information about system component
+type ComponentStatus struct {
+	ID            string `json:"id"`
+	AosVersion    uint64 `json:"aosVersion"`
+	VendorVersion string `json:"vendorVersion,omitempty"`
+	Status        string `json:"status"`
+	Error         string `json:"error,omitempty"`
 }
 
-// UpgradeReq system upgrade request
-type UpgradeReq struct {
-	ImageVersion uint64    `json:"imageVersion"`
-	ImageInfo    ImageInfo `json:"imageInfo"`
-}
-
-// RevertReq system revert request
-type RevertReq struct {
-	ImageVersion uint64 `json:"imageVersion"`
-}
-
-// StatusReq get system status request
-type StatusReq struct {
-}
-
-// StatusRsp status response message
-type StatusRsp struct {
-	Operation        string `json:"operation"`       // upgrade, revert
-	Status           string `json:"status"`          // success, failed, inProgress
-	Error            string `json:"error,omitempty"` // error message if status failed
-	RequestedVersion uint64 `json:"requestedVersion"`
-	CurrentVersion   uint64 `json:"currentVersion"`
+// ComponentInfo info about update component
+type ComponentInfo struct {
+	ID            string          `json:"id"`
+	AosVersion    uint64          `json:"aosVersion,omitempty"`
+	VendorVersion string          `json:"vendorVersion"`
+	Annotations   json.RawMessage `json:"annotations,omitempty"`
+	Path          string          `json:"path"`
+	Sha256        []byte          `json:"sha256"`
+	Sha512        []byte          `json:"sha512"`
+	Size          uint64          `json:"size"`
 }
 
 // CreateKeysReq creates key pair request

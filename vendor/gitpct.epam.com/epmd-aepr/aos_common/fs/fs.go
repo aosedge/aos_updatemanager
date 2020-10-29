@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
+// Copyright 2020 Renesas Inc.
 // Copyright 2020 EPAM Systems Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,10 +33,11 @@ import (
 const (
 	retryCount = 3
 	retryDelay = 1 * time.Second
-
-	//FS_MOUNT_RO is an exported type for internal type of syscall.MS_RDONLY
-	FS_MOUNT_RO = syscall.MS_RDONLY
 )
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
 
 /*******************************************************************************
  * Public
