@@ -47,10 +47,9 @@ type Server struct {
 
 // Updater interface
 type Updater interface {
-	GetStatus() (status umprotocol.StatusRsp)
-	Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error)
-	Revert(version uint64) (err error)
-	StatusChannel() (statusChannel <-chan umprotocol.StatusRsp)
+	GetStatus() (status []umprotocol.ComponentStatus)
+	Update(infos []umprotocol.ComponentInfo)
+	StatusChannel() (statusChannel <-chan []umprotocol.ComponentStatus)
 }
 
 // CrtHandler interface
@@ -116,14 +115,11 @@ func (server *Server) ProcessMessage(client *wsserver.Client, messageType int, m
 	}
 
 	switch string(message.Header.MessageType) {
-	case umprotocol.StatusRequestType:
-		return server.processGetStatus()
+	case umprotocol.GetComponentsRequestType:
+		return server.processGetComponents()
 
-	case umprotocol.UpgradeRequestType:
-		return server.processSystemUpgrade(message.Data)
-
-	case umprotocol.RevertRequestType:
-		return server.processSystemRevert(message.Data)
+	case umprotocol.UpdateRequestType:
+		return server.processUpdate(message.Data)
 
 	case umprotocol.CreateKeysRequestType:
 		return server.processCreateKeys(message.Data)
@@ -143,10 +139,10 @@ func (server *Server) ProcessMessage(client *wsserver.Client, messageType int, m
  * Private
  ******************************************************************************/
 
-func (server *Server) sendStatus(statusMessage umprotocol.StatusRsp) {
-	log.Debug("Send operation status")
+func (server *Server) sendStatus(status []umprotocol.ComponentStatus) {
+	log.Debug("Send components status")
 
-	statusJSON, err := marshalResponse(umprotocol.StatusResponseType, &statusMessage)
+	statusJSON, err := marshalResponse(umprotocol.UpdateStatusType, status)
 	if err != nil {
 		log.Errorf("Can't marshal status message: %s", err)
 	}
@@ -158,50 +154,24 @@ func (server *Server) sendStatus(statusMessage umprotocol.StatusRsp) {
 	}
 }
 
-func (server *Server) processGetStatus() (response []byte, err error) {
-	statusMessage := server.updater.GetStatus()
+func (server *Server) processGetComponents() (response []byte, err error) {
+	status := server.updater.GetStatus()
 
-	log.Debug("Process get status request")
+	log.Debug("Process get components request")
 
-	return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
+	return marshalResponse(umprotocol.GetComponentsResponseType, &status)
 }
 
-func (server *Server) processSystemUpgrade(request []byte) (response []byte, err error) {
-	var upgradeReq umprotocol.UpgradeReq
+func (server *Server) processUpdate(request []byte) (response []byte, err error) {
+	var infos []umprotocol.ComponentInfo
 
-	if err = json.Unmarshal(request, &upgradeReq); err != nil {
+	if err = json.Unmarshal(request, &infos); err != nil {
 		return nil, err
 	}
 
-	log.WithField("imageVersion", upgradeReq.ImageVersion).Debug("Process system upgrade request")
+	log.Debug("Process update request")
 
-	if err := server.updater.Upgrade(upgradeReq.ImageVersion, upgradeReq.ImageInfo); err != nil {
-		log.Errorf("Upgrade failed: %s", err)
-
-		statusMessage := server.updater.GetStatus()
-
-		return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
-	}
-
-	return nil, nil
-}
-
-func (server *Server) processSystemRevert(request []byte) (response []byte, err error) {
-	var revertReq umprotocol.RevertReq
-
-	if err = json.Unmarshal(request, &revertReq); err != nil {
-		return nil, err
-	}
-
-	log.WithField("imageVersion", revertReq.ImageVersion).Debug("Process system revert request")
-
-	if err := server.updater.Revert(revertReq.ImageVersion); err != nil {
-		log.Errorf("Revert failed: %s", err)
-
-		statusMessage := server.updater.GetStatus()
-
-		return marshalResponse(umprotocol.StatusResponseType, &statusMessage)
-	}
+	server.updater.Update(infos)
 
 	return nil, nil
 }
