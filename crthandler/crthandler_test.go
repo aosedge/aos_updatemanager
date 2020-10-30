@@ -23,7 +23,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -81,15 +80,7 @@ func init() {
  ******************************************************************************/
 
 func TestMain(m *testing.M) {
-	var err error
-
-	tmpDir, err = ioutil.TempDir("", "um_")
-	if err != nil {
-		log.Fatalf("Error create temporary dir: %s", err)
-	}
-
 	cfg = config.Config{
-		UpgradeDir: tmpDir,
 		CrtModules: []config.ModuleConfig{
 			config.ModuleConfig{ID: "crt1", Plugin: "testmodule"},
 			config.ModuleConfig{ID: "crt2", Plugin: "testmodule"},
@@ -106,10 +97,6 @@ func TestMain(m *testing.M) {
 		return crtModule, nil
 	})
 	ret := m.Run()
-
-	if err := os.RemoveAll(tmpDir); err != nil {
-		log.Fatalf("Error removing tmp dir: %s", err)
-	}
 
 	os.Exit(ret)
 }

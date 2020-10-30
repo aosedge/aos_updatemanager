@@ -59,7 +59,6 @@ func createConfigFile() (err error) {
 	"ServerUrl": "localhost:8090",
 	"Cert": "crt.pem",
 	"Key": "key.pem",
-	"UpgradeDir": "/var/aos/upgrade",
 	"WorkingDir": "/var/aos/updatemanager",
 	"UpdateModules":[{
 		"ID": "id1",
@@ -163,12 +162,6 @@ func TestModules(t *testing.T) {
 
 	if cfg.UpdateModules[0].Disabled != false || cfg.UpdateModules[1].Disabled != false || cfg.UpdateModules[2].Disabled != true {
 		t.Error("Disabled value")
-	}
-}
-
-func TestGetUpgradeDir(t *testing.T) {
-	if cfg.UpgradeDir != "/var/aos/upgrade" {
-		t.Errorf("Wrong upgrade dir value: %s", cfg.UpgradeDir)
 	}
 }
 

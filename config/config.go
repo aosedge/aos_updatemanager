@@ -32,7 +32,6 @@ type Config struct {
 	ServerURL     string         `json:"serverURL"`
 	Cert          string         `json:"cert"`
 	Key           string         `json:"key"`
-	UpgradeDir    string         `json:"upgradeDir"`
 	WorkingDir    string         `json:"workingDir"`
 	UpdateModules []ModuleConfig `json:"updateModules"`
 	CrtModules    []ModuleConfig `json:"crtModules"`
