@@ -21,9 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -37,85 +34,43 @@ import (
  * Consts
  ******************************************************************************/
 
-// Operations type
-const (
-	upgradeOperation = iota
-	revertOperation
-)
-
 //
-// Upgrade state machine:
+// Update state machine:
 //
-// idleState          -> upgrade request                     -> initState
-// initState          -> unpack image                        -> upgradeState
-// upgradeState       -> upgrade modules                     -> finishState
-// finishState        -> send status                         -> idleState
+// stateIdle          -> update request                         -> stateUpdate
+// stateUpdate        -> update components                      -> stateFinish
+// stateFinish        -> send status                            -> stateIdle
 //
-// If some error happens during upgrade modules:
+// If some error happens during update components:
 //
-// upgradeState       -> upgrade modules fails               -> cancelState
-// cancelUpgradeState -> cancel upgrade modules, send status -> idleState
-//
-// Revert state machine:
-//
-// idleState          -> revert request                      -> initState
-// initState          ->                                     -> revertState
-// revertState        -> revert modules                      -> finishState
-// finishState        -> send status                         -> idleState
-//
-// If some error happens during revert modules:
-//
-// revertState        -> revert modules fails                -> cancelState
-// cancelRevertState  -> cancel revert modules, send status  -> idleState
+// stateUpdate        -> update components fail                 -> stateCancel
+// stateCancel        -> cancel update components, send status  -> stateIdle
 //
 
 const (
-	idleState = iota
-	initState
-	upgradeState
-	revertState
-	cancelState
-	finishState
+	stateIdle = iota
+	stateUpdate
+	stateCancel
+	stateFinish
 )
 
 //
-// Upgrade module state machine:
+// Update component state machine:
 //
-//                      -> upgrade request                     -> initModuleState
-// initModuleState      -> upgrade module                      -> upgradingModuleState
-// upgradingModuleState -> module upgraded                     -> upgradedModuleState
-// upgradedModuleState  -> finish upgrade module               -> finishingModuleState
-// finishingModuleState -> module upgrade finished             -> finishedModuleState
+//                         -> update request                      -> stateComponentInit
+// stateComponentInit      -> update component                    -> stateComponentUpdated
+// stateComponentUpdated   -> finish component                    -> stateComponentFinished
 //
-// Revert module state machine:
+// If some error happens during update component, cancel procedure is performed:
 //
-//                      -> revert request                      ->
-// finishedModuleState  -> revert module                       -> revertingModuleState
-// revertingModuleState -> module reverted                     -> revertedModuleState
-// revertedModuleState  -> finish revert module                -> finishingModuleState
-// finishingModuleState -> module revert finished              -> finishedModuleState
-//
-// If some error happens during upgrade/revert modules and cancel procedure is performed:
-//
-// upgradedModuleState  -> cancel upgrade module               -> cancelingModuleState
-// cancelingModuleState -> module cancel upgrade finished      -> canceledModuleState
-//
-// The same sequence is applied for revert canceling
+// stateComponentUpdated   -> cancel component                    -> stateComponentCanceled
 //
 const (
-	initModuleState = iota
-	upgradingModuleState
-	upgradedModuleState
-	revertingModuleState
-	revertedModuleState
-	cancelingModuleState
-	canceledModuleState
-	finishingModuleState
-	finishedModuleState
+	stateComponentInit = iota
+	stateComponentUpdated
+	stateComponentCanceled
+	stateComponentFinished
 )
-
-const bundleDir = "bundleDir"
-const metadataFileName = "metadata.json"
 
 const statusChannelSize = 1
 
@@ -134,97 +89,79 @@ var newPlatformController NewPlatfromContoller
 // Handler update handler
 type Handler struct {
 	sync.Mutex
+
 	platform PlatformController
 	storage  StateStorage
-	modules  map[string]UpdateModule
 
-	upgradeDir     string
-	bundleDir      string
-	state          handlerState
-	currentVersion uint64
+	components map[string]UpdateModule
+
+	state handlerState
 
 	wg sync.WaitGroup
 
-	statusChannel chan umprotocol.StatusRsp
+	statusChannel chan []umprotocol.ComponentStatus
 }
 
 // UpdateModule interface for module plugin
 type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
+	// GetVendorVersion returns vendor version
+	GetVendorVersion() (version string, err error)
 	// Init initializes module
 	Init() (err error)
-	// Upgrade upgrades module
-	Upgrade(version uint64, imagePath string) (rebootRequired bool, err error)
-	// CancelUpgrade cancels upgrade
-	CancelUpgrade(version uint64) (rebootRequired bool, err error)
-	// FinishUpgrade finished upgrade
-	FinishUpgrade(version uint64) (err error)
-	// Revert reverts module
-	Revert(version uint64) (rebootRequired bool, err error)
-	// CancelRevert cancels revert module
-	CancelRevert(version uint64) (rebootRequired bool, err error)
-	// FinishRevert finished revert
-	FinishRevert(version uint64) (err error)
+	// Update updates module
+	Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error)
+	// Cancel cancels update
+	Cancel() (rebootRequired bool, err error)
+	// Finish finished update
+	Finish() (err error)
 	// Close closes update module
 	Close() (err error)
 }
 
 // StateStorage provides API to store/retreive persistent data
 type StateStorage interface {
-	SetOperationState(jsonState []byte) (err error)
-	GetOperationState() (jsonState []byte, err error)
-	GetSystemVersion() (version uint64, err error)
-	SetSystemVersion(version uint64) (err error)
+	SetUpdateState(jsonState []byte) (err error)
+	GetUpdateState() (jsonState []byte, err error)
 	GetModuleState(id string) (state []byte, err error)
 	SetModuleState(id string, state []byte) (err error)
-	SetControllerState(controllerID string, name string, value []byte) (err error)
 	GetControllerState(controllerID string, name string) (value []byte, err error)
+	SetControllerState(controllerID string, name string, value []byte) (err error)
 }
 
 // PlatformController platform controller
 type PlatformController interface {
-	GetVersion() (version uint64, err error)
-	SetVersion(version uint64) (err error)
-	GetPlatformID() (id string, err error)
 	SystemReboot() (err error)
 	Close() (err error)
 }
 
-// NewPlugin udpate module new function
+// NewPlugin update module new function
 type NewPlugin func(id string, configJSON json.RawMessage, controller PlatformController, storage StateStorage) (module UpdateModule, err error)
 
 // NewPlatfromContoller plugin for platform Contoller
 type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
 
+type componentState struct {
+	UpdateState   updateComponentState `json:"updateState"`
+	AosVersion    uint64               `json:"aosVersion"`
+	VendorVersion string               `json:"vendorVersion"`
+	Path          string               `json:"path"`
+	Annotations   json.RawMessage      `json:"annotations"`
+	Error         string               `json:"error,omitempty"`
+}
+
 type handlerState struct {
-	OperationType    operationType          `json:"operationType"`
-	OperationState   operationState         `json:"operationState"`
-	OperationVersion uint64                 `json:"operationVersion"`
-	ImagePath        string                 `json:"imagePath"`
-	ImageMetadata    imageMetadata          `json:"imageMetadata"`
-	LastError        error                  `json:"-"`
-	ErrorMsg         string                 `json:"errorMsg"`
-	ModuleStates     map[string]moduleState `json:"moduleStates"`
+	UpdateState     updateState                `json:"updateState"`
+	ComponentStates map[string]*componentState `json:"componentStates"`
+	AosVersions     map[string]uint64          `json:"aosVersions"`
 }
 
-type itemMetadata struct {
-	Type string `json:"type"`
-	Path string `json:"path"`
-}
+type updateState int
+type updateComponentState int
 
-type imageMetadata struct {
-	PlatformID        string         `json:"platformId"`
-	BundleVersion     string         `json:"bundleVersion,omitempty"`
-	BundleDescription string         `json:"bundleDescription,omitempty"`
-	UpdateItems       []itemMetadata `json:"updateItems"`
-}
-
-type operationType int
-type operationState int
-type moduleState int
-
-type moduleOperation func(module UpdateModule) (rebootRequired bool, err error)
+type componentOperation func(component UpdateModule,
+	state *componentState) (rebootRequired bool, err error)
 
 /*******************************************************************************
  * Public
@@ -244,11 +181,11 @@ func RegisterControllerPlugin(newFunc NewPlatfromContoller) {
 
 // New returns pointer to new Handler
 func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error) {
+	log.Debug("Create update handler")
+
 	handler = &Handler{
 		storage:       storage,
-		upgradeDir:    cfg.UpgradeDir,
-		bundleDir:     path.Join(cfg.UpgradeDir, bundleDir),
-		statusChannel: make(chan umprotocol.StatusRsp, statusChannelSize),
+		statusChannel: make(chan []umprotocol.ComponentStatus, statusChannelSize),
 	}
 
 	if newPlatformController == nil {
@@ -260,23 +197,15 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 		return nil, err
 	}
 
-	if _, err := os.Stat(handler.bundleDir); os.IsNotExist(err) {
-		if errMkdir := os.MkdirAll(handler.bundleDir, 0755); errMkdir != nil {
-			return nil, errMkdir
-		}
-	}
-
-	if handler.currentVersion, err = handler.platform.GetVersion(); err != nil {
-		return nil, err
-	}
-
-	log.WithField("imageVersion", handler.currentVersion).Debug("Create update handler")
-
 	if err = handler.getState(); err != nil {
 		return nil, err
 	}
 
-	handler.modules = make(map[string]UpdateModule)
+	if handler.state.AosVersions == nil {
+		handler.state.AosVersions = make(map[string]uint64)
+	}
+
+	handler.components = make(map[string]UpdateModule)
 
 	for _, moduleCfg := range cfg.UpdateModules {
 		if moduleCfg.Disabled {
@@ -284,12 +213,12 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 			continue
 		}
 
-		module, err := handler.createModule(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
+		component, err := handler.createComponent(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
 		if err != nil {
 			return nil, err
 		}
 
-		handler.modules[moduleCfg.ID] = module
+		handler.components[moduleCfg.ID] = component
 	}
 
 	handler.wg.Add(1)
@@ -299,84 +228,117 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 }
 
 // GetStatus returns update status
-func (handler *Handler) GetStatus() (status umprotocol.StatusRsp) {
+func (handler *Handler) GetStatus() (status []umprotocol.ComponentStatus) {
 	handler.Lock()
 	defer handler.Unlock()
 
 	return handler.getStatus()
 }
 
-// Upgrade performs upgrade operation
-func (handler *Handler) Upgrade(version uint64, imageInfo umprotocol.ImageInfo) (err error) {
+// Update performs components updates
+func (handler *Handler) Update(infos []umprotocol.ComponentInfo) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	handler.wg.Wait()
-
-	log.WithField("version", version).Info("Upgrade")
-
-	if version <= handler.currentVersion {
-		return fmt.Errorf("wrong upgrade version: %d", version)
+	if handler.state.UpdateState != stateIdle {
+		log.Warn("Another update is in progress")
 	}
 
-	if handler.state.OperationState != idleState {
-		return errors.New("wrong state")
+	handler.state.ComponentStates = make(map[string]*componentState)
+
+	for _, info := range infos {
+		log.WithFields(log.Fields{
+			"ID":            info.ID,
+			"AosVersion":    info.AosVersion,
+			"VendorVersion": info.VendorVersion,
+			"Path":          info.Path}).Debug("Update component")
+
+		handler.state.ComponentStates[info.ID] = &componentState{
+			UpdateState:   stateComponentInit,
+			AosVersion:    info.AosVersion,
+			VendorVersion: info.VendorVersion,
+			Annotations:   info.Annotations,
+			Path:          info.Path,
+		}
+
+		component, ok := handler.components[info.ID]
+		if !ok {
+			err := errors.New("component not found")
+
+			handler.state.ComponentStates[info.ID].Error = err.Error()
+
+			log.WithField("id", info.ID).Errorf("Component update error: %s", err)
+
+			continue
+		}
+
+		vendorVersion, err := component.GetVendorVersion()
+		if err == nil && info.VendorVersion != "" {
+			if vendorVersion == info.VendorVersion {
+				log.WithField("id", info.ID).Warnf("Component already has required vendor version: %s", vendorVersion)
+
+				delete(handler.state.ComponentStates, info.ID)
+
+				continue
+			}
+		}
+
+		if info.AosVersion != 0 {
+			if handler.state.AosVersions[info.ID] == info.AosVersion {
+				log.WithField("id", info.ID).Warnf("Component already has required Aos version: %d", info.AosVersion)
+
+				delete(handler.state.ComponentStates, info.ID)
+
+				continue
+			}
+
+			if handler.state.AosVersions[info.ID] > info.AosVersion {
+				err := errors.New("wrong Aos version")
+
+				handler.state.ComponentStates[info.ID].Error = err.Error()
+
+				log.WithField("id", info.ID).Errorf("Component update error: %s", err)
+
+				continue
+			}
+		}
+
+		if err := image.CheckFileInfo(info.Path, image.FileInfo{
+			Sha256: info.Sha256,
+			Sha512: info.Sha512,
+			Size:   info.Size}); err != nil {
+
+			handler.state.ComponentStates[info.ID].Error = err.Error()
+
+			log.WithField("id", info.ID).Errorf("Component update error: %s", err)
+
+			continue
+		}
 	}
 
-	imagePath := path.Join(handler.upgradeDir, imageInfo.Path)
+	for _, state := range handler.state.ComponentStates {
+		if state.Error != "" {
+			handler.finishUpdate()
 
-	if err = image.CheckFileInfo(imagePath, image.FileInfo{
-		Sha256: imageInfo.Sha256,
-		Sha512: imageInfo.Sha512,
-		Size:   imageInfo.Size}); err != nil {
-		return err
+			return
+		}
 	}
 
-	handler.state = handlerState{
-		OperationState:   initState,
-		OperationVersion: version,
-		OperationType:    upgradeOperation,
-		ImagePath:        imagePath,
-		ModuleStates:     make(map[string]moduleState)}
+	handler.state.UpdateState = stateUpdate
 
-	if err = handler.setState(); err != nil {
-		return err
+	log.WithField("state", handler.state.UpdateState).Debugf("State changed")
+
+	if err := handler.setState(); err != nil {
+		log.Errorf("Can't set update handler state: %s", err)
 	}
 
-	go handler.upgrade()
+	handler.statusChannel <- handler.getStatus()
 
-	return nil
+	go handler.update()
 }
 
-// Revert performs revert operation
-func (handler *Handler) Revert(version uint64) (err error) {
-	handler.Lock()
-	defer handler.Unlock()
-
-	handler.wg.Wait()
-
-	log.WithField("version", version).Info("Revert")
-
-	if version >= handler.currentVersion {
-		return fmt.Errorf("wrong revert version: %d", version)
-	}
-
-	handler.state.OperationState = initState
-	handler.state.OperationVersion = version
-	handler.state.OperationType = revertOperation
-	handler.state.LastError = nil
-
-	if err = handler.setState(); err != nil {
-		return err
-	}
-
-	go handler.revert()
-
-	return nil
-}
-
-// StatusChannel this channel is used to notify when upgrade/revert is finished
-func (handler *Handler) StatusChannel() (statusChannel <-chan umprotocol.StatusRsp) {
+// StatusChannel this channel is used to notify about component statuses
+func (handler *Handler) StatusChannel() (statusChannel <-chan []umprotocol.ComponentStatus) {
 	return handler.statusChannel
 }
 
@@ -384,8 +346,8 @@ func (handler *Handler) StatusChannel() (statusChannel <-chan umprotocol.StatusR
 func (handler *Handler) Close() {
 	log.Debug("Close update handler")
 
-	for _, module := range handler.modules {
-		module.Close()
+	for _, component := range handler.components {
+		component.Close()
 	}
 
 	handler.platform.Close()
@@ -397,22 +359,17 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (opType operationType) String() string {
+func (state updateState) String() string {
 	return [...]string{
-		"upgrade", "revert"}[opType]
+		"idle", "update", "cancel", "finish"}[state]
 }
 
-func (state operationState) String() string {
+func (state updateComponentState) String() string {
 	return [...]string{
-		"idle", "init", "upgrade", "revert", "cancel", "finish"}[state]
+		"init", "updated", "canceled", "finished"}[state]
 }
 
-func (state moduleState) String() string {
-	return [...]string{
-		"init", "upgrading", "upgraded", "reverting", "reverted", "canceling", "canceled", "finishing", "finished"}[state]
-}
-
-func (handler *Handler) createModule(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
+func (handler *Handler) createComponent(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, fmt.Errorf("plugin %s not found", plugin)
@@ -426,37 +383,29 @@ func (handler *Handler) createModule(plugin, id string, params json.RawMessage) 
 }
 
 func (handler *Handler) getState() (err error) {
-	jsonState, err := handler.storage.GetOperationState()
+	jsonState, err := handler.storage.GetUpdateState()
 	if err != nil {
 		return err
+	}
+
+	if len(jsonState) == 0 {
+		return nil
 	}
 
 	if err = json.Unmarshal(jsonState, &handler.state); err != nil {
 		return err
 	}
 
-	if handler.state.ErrorMsg != "" {
-		handler.state.LastError = errors.New(handler.state.ErrorMsg)
-	} else {
-		handler.state.LastError = nil
-	}
-
 	return nil
 }
 
 func (handler *Handler) setState() (err error) {
-	if handler.state.LastError != nil {
-		handler.state.ErrorMsg = handler.state.LastError.Error()
-	} else {
-		handler.state.ErrorMsg = ""
-	}
-
 	jsonState, err := json.Marshal(handler.state)
 	if err != nil {
 		return err
 	}
 
-	if err = handler.storage.SetOperationState(jsonState); err != nil {
+	if err = handler.storage.SetUpdateState(jsonState); err != nil {
 		return err
 	}
 
@@ -466,7 +415,7 @@ func (handler *Handler) setState() (err error) {
 func (handler *Handler) init() {
 	defer handler.wg.Done()
 
-	for id, module := range handler.modules {
+	for id, module := range handler.components {
 		log.Debugf("Initializing module %s", id)
 
 		if err := module.Init(); err != nil {
@@ -474,78 +423,53 @@ func (handler *Handler) init() {
 		}
 	}
 
-	if handler.state.OperationState != idleState {
-		switch {
-		case handler.state.OperationType == upgradeOperation:
-			go handler.upgrade()
-
-		case handler.state.OperationType == revertOperation:
-			go handler.revert()
-		}
+	if handler.state.UpdateState != stateIdle {
+		go handler.update()
 	}
 }
 
-func (handler *Handler) finishOperation(operationError error) {
-	handler.Lock()
-	defer handler.Unlock()
+func (handler *Handler) finishUpdate() {
+	for id, componentState := range handler.state.ComponentStates {
+		if componentState.Error != "" {
+			continue
+		}
 
-	if operationError != nil {
-		log.Errorf("Operation %s failed: %s", handler.state.OperationType, operationError)
-	} else {
-		log.Infof("Operation %s successfully finished", handler.state.OperationType)
+		if componentState.UpdateState == stateComponentFinished {
+			handler.state.AosVersions[id] = componentState.AosVersion
+		}
 
-		handler.currentVersion = handler.state.OperationVersion
+		delete(handler.state.ComponentStates, id)
 	}
 
-	if err := handler.platform.SetVersion(handler.currentVersion); err != nil {
-		log.Errorf("Can't set current version: %s", err)
-	}
+	handler.state.UpdateState = stateIdle
 
-	handler.state.OperationState = idleState
-	handler.state.LastError = operationError
+	log.WithField("state", handler.state.UpdateState).Debugf("State changed")
 
 	if err := handler.setState(); err != nil {
-		log.Errorf("Can't save update handler state: %s", err)
+		log.Errorf("Can't set update handler state: %s", err)
 	}
 
 	handler.statusChannel <- handler.getStatus()
 }
 
-func (handler *Handler) upgrade() {
+func (handler *Handler) update() {
 	var (
 		rebootRequired bool
 		err            error
 	)
 
+	handler.wg.Wait()
+
 	for {
-		switch handler.state.OperationState {
-		case initState:
-			if err = handler.unpackImage(); err != nil {
-				log.Errorf("Can't unpack image: %s", err)
-
-				handler.finishOperation(err)
-
-				return
-			}
-
-			handler.switchState(upgradeState, nil)
-
-		case upgradeState:
-			rebootRequired, err = handler.moduleOperation(
-				upgradingModuleState, upgradedModuleState, []moduleState{upgradedModuleState},
-				func(module UpdateModule) (rebootRequired bool, err error) {
-					id := module.GetID()
-
-					for _, item := range handler.state.ImageMetadata.UpdateItems {
-						if id == item.Type {
-							return module.Upgrade(handler.state.OperationVersion, path.Join(handler.bundleDir, item.Path))
-						}
-					}
-
-					return false, fmt.Errorf("module %s not found", id)
+		switch handler.state.UpdateState {
+		case stateUpdate:
+			rebootRequired, err = handler.componentOperation(stateComponentUpdated,
+				func(component UpdateModule, state *componentState) (rebootRequired bool, err error) {
+					return component.Update(state.Path, state.VendorVersion, state.Annotations)
 				}, true)
 			if err != nil {
-				handler.switchState(cancelState, err)
+				handler.switchState(stateCancel)
+
 				break
 			}
 
@@ -553,35 +477,33 @@ func (handler *Handler) upgrade() {
 				break
 			}
 
-			handler.switchState(finishState, nil)
+			handler.switchState(stateFinish)
 
-		case cancelState:
-			rebootRequired, err = handler.moduleOperation(
-				cancelingModuleState, canceledModuleState, []moduleState{canceledModuleState},
-				func(module UpdateModule) (rebootRequired bool, err error) {
-					return module.CancelUpgrade(handler.state.OperationVersion)
+		case stateCancel:
+			rebootRequired, _ = handler.componentOperation(stateComponentCanceled,
+				func(component UpdateModule, state *componentState) (rebootRequired bool, err error) {
+					return component.Cancel()
 				}, false)
-			if err != nil {
-				log.Errorf("Error canceling upgrade modules: %s", err)
-			}
 
 			if rebootRequired {
 				break
 			}
 
-			handler.finishOperation(handler.state.LastError)
+			handler.Lock()
+			handler.finishUpdate()
+			handler.Unlock()
 
 			return
 
-		case finishState:
-			if _, err = handler.moduleOperation(finishingModuleState, finishedModuleState, []moduleState{finishedModuleState},
-				func(module UpdateModule) (rebootRequired bool, err error) {
-					return false, module.FinishUpgrade(handler.state.OperationVersion)
-				}, false); err != nil {
-				log.Errorf("Error finishing upgrade modules: %s", err)
-			}
+		case stateFinish:
+			handler.componentOperation(stateComponentFinished,
+				func(component UpdateModule, state *componentState) (rebootRequired bool, err error) {
+					return false, component.Finish()
+				}, false)
 
-			handler.finishOperation(err)
+			handler.Lock()
+			handler.finishUpdate()
+			handler.Unlock()
 
 			return
 		}
@@ -598,167 +520,35 @@ func (handler *Handler) upgrade() {
 	}
 }
 
-func (handler *Handler) revert() {
-	var (
-		rebootRequired bool
-		err            error
-	)
-
-	for {
-		switch handler.state.OperationState {
-		case initState:
-			handler.switchState(revertState, nil)
-
-		case revertState:
-			rebootRequired, err = handler.moduleOperation(
-				revertingModuleState, revertedModuleState, []moduleState{revertedModuleState},
-				func(module UpdateModule) (rebootRequired bool, err error) {
-					return module.Revert(handler.state.OperationVersion)
-				}, true)
-			if err != nil {
-				handler.switchState(cancelState, err)
-				break
-			}
-
-			if rebootRequired {
-				break
-			}
-
-			handler.switchState(finishState, nil)
-
-		case cancelState:
-			rebootRequired, err = handler.moduleOperation(
-				cancelingModuleState, canceledModuleState, []moduleState{finishedModuleState, canceledModuleState},
-				func(module UpdateModule) (rebootRequired bool, err error) {
-					return module.CancelRevert(handler.state.OperationVersion)
-				}, false)
-			if err != nil {
-				log.Errorf("Error canceling revert modules: %s", err)
-			}
-
-			if rebootRequired {
-				break
-			}
-
-			handler.finishOperation(handler.state.LastError)
-
-			return
-
-		case finishState:
-			var err error
-
-			if _, err = handler.moduleOperation(finishingModuleState, finishedModuleState, []moduleState{finishedModuleState},
-				func(module UpdateModule) (rebootRequired bool, err error) {
-					return false, module.FinishRevert(handler.state.OperationVersion)
-				}, false); err != nil {
-				log.Errorf("Error finishing revert modules: %s", err)
-			}
-
-			handler.finishOperation(err)
-
-			return
-		}
-
-		if rebootRequired {
-			log.Debug("System reboot is required")
-
-			if err = handler.platform.SystemReboot(); err != nil {
-				log.Errorf("Can't perform system reboot: %s", err)
-			}
-
-			return
-		}
-	}
-}
-
-func (handler *Handler) switchState(state operationState, lastError error) {
+func (handler *Handler) switchState(state updateState) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	handler.state.OperationState = state
-	handler.state.LastError = lastError
+	handler.state.UpdateState = state
 
-	log.WithFields(log.Fields{"state": handler.state.OperationState, "operation": handler.state.OperationType}).Debugf("State changed")
+	log.WithField("state", handler.state.UpdateState).Debugf("State changed")
 
 	if err := handler.setState(); err != nil {
-		if handler.state.LastError != nil {
-			handler.state.LastError = err
-		}
-
-		handler.finishOperation(handler.state.LastError)
+		log.Errorf("Can't set update handler state: %s", err)
 	}
 }
 
-func (handler *Handler) unpackImage() (err error) {
-	log.WithFields(log.Fields{"destination": handler.bundleDir, "source": handler.state.ImagePath}).Debug("Unpack image")
-
-	if err = os.RemoveAll(handler.bundleDir); err != nil {
-		return err
-	}
-
-	if err = os.MkdirAll(handler.bundleDir, 0755); err != nil {
-		return err
-	}
-
-	if err = image.UntarGZArchive(handler.state.ImagePath, handler.bundleDir); err != nil {
-		return err
-	}
-
-	if handler.state.ImageMetadata, err = handler.getImageMetadata(); err != nil {
-		return err
-	}
-
-	platformID, err := handler.platform.GetPlatformID()
-	if err != nil {
-		return err
-	}
-
-	if handler.state.ImageMetadata.PlatformID != platformID {
-		return errors.New("wrong platform ID")
-	}
-
-	for _, item := range handler.state.ImageMetadata.UpdateItems {
-		if _, ok := handler.modules[item.Type]; !ok {
-			return fmt.Errorf("module %s not found", item.Type)
-		}
-
-		handler.state.ModuleStates[item.Type] = initModuleState
-	}
-
-	return nil
-}
-
-func (handler *Handler) getImageMetadata() (metadata imageMetadata, err error) {
-	metadataJSON, err := ioutil.ReadFile(path.Join(handler.bundleDir, metadataFileName))
-	if err != nil {
-		return metadata, err
-	}
-
-	if err = json.Unmarshal(metadataJSON, &metadata); err != nil {
-		return metadata, err
-	}
-
-	return metadata, err
-}
-
-func (handler *Handler) moduleOperation(beginState, endState moduleState,
-	skipStates []moduleState, operation moduleOperation, stopOnError bool) (rebootRequired bool, operationErr error) {
-	for id, state := range handler.state.ModuleStates {
-		skip := false
-
-		for _, skipState := range skipStates {
-			if state == skipState {
-				skip = true
-			}
-		}
-
-		if skip {
+func (handler *Handler) componentOperation(newState updateComponentState,
+	operation componentOperation, stopOnError bool) (rebootRequired bool, operationErr error) {
+	for id, componentState := range handler.state.ComponentStates {
+		if componentState.UpdateState == newState {
 			continue
 		}
 
-		module, ok := handler.modules[id]
+		component, ok := handler.components[id]
 		if !ok {
-			err := fmt.Errorf("module %s not found", id)
+			err := fmt.Errorf("component %s not found", id)
+
+			log.WithField("id", id).Errorf("Component operation error: %s", err)
+
+			if componentState.Error == "" {
+				componentState.Error = err.Error()
+			}
 
 			if operationErr == nil {
 				operationErr = err
@@ -771,21 +561,13 @@ func (handler *Handler) moduleOperation(beginState, endState moduleState,
 			continue
 		}
 
-		if err := handler.setModuleState(id, beginState); err != nil {
-			log.Errorf("Can't set module state: %s", err)
-
-			if operationErr == nil {
-				operationErr = err
-			}
-
-			if stopOnError {
-				return false, operationErr
-			}
-		}
-
-		moduleRebootRequired, err := operation(module)
+		moduleRebootRequired, err := operation(component, componentState)
 		if err != nil {
-			log.Errorf("Module operation error: %s", err)
+			log.WithField("id", id).Errorf("Component operation error: %s", err)
+
+			if componentState.Error == "" {
+				componentState.Error = err.Error()
+			}
 
 			if operationErr == nil {
 				operationErr = err
@@ -797,15 +579,19 @@ func (handler *Handler) moduleOperation(beginState, endState moduleState,
 		}
 
 		if moduleRebootRequired {
-			log.WithField("id", id).Debug("Module reboot required")
+			log.WithField("id", id).Debug("Component reboot required")
 
 			rebootRequired = true
 
 			continue
 		}
 
-		if err := handler.setModuleState(id, endState); err != nil {
-			log.Errorf("Can't set module state: %s", err)
+		if err := handler.setComponentState(id, newState); err != nil {
+			log.WithField("id", id).Errorf("Can't set module state: %s", err)
+
+			if componentState.Error == "" {
+				componentState.Error = err.Error()
+			}
 
 			if operationErr == nil {
 				operationErr = err
@@ -820,13 +606,13 @@ func (handler *Handler) moduleOperation(beginState, endState moduleState,
 	return rebootRequired, operationErr
 }
 
-func (handler *Handler) setModuleState(id string, state moduleState) (err error) {
+func (handler *Handler) setComponentState(id string, state updateComponentState) (err error) {
 	handler.Lock()
 	defer handler.Unlock()
 
-	log.WithFields(log.Fields{"state": state, "id": id}).Debugf("Module state changed")
+	log.WithFields(log.Fields{"state": state, "id": id}).Debugf("Component state changed")
 
-	handler.state.ModuleStates[id] = state
+	handler.state.ComponentStates[id].UpdateState = state
 
 	if err := handler.setState(); err != nil {
 		return err
@@ -835,28 +621,39 @@ func (handler *Handler) setModuleState(id string, state moduleState) (err error)
 	return nil
 }
 
-func (handler *Handler) getStatus() (status umprotocol.StatusRsp) {
-	status.Status = umprotocol.SuccessStatus
+func (handler *Handler) getStatus() (status []umprotocol.ComponentStatus) {
+	for id, component := range handler.components {
+		componentStatus := umprotocol.ComponentStatus{ID: id, Status: umprotocol.StatusInstalled}
 
-	if handler.state.OperationState != idleState {
-		status.Status = umprotocol.InProgressStatus
+		vendorVersion, err := component.GetVendorVersion()
+		if err == nil {
+			componentStatus.VendorVersion = vendorVersion
+		}
+
+		aosVersion, ok := handler.state.AosVersions[id]
+		if ok {
+			componentStatus.AosVersion = aosVersion
+		}
+
+		status = append(status, componentStatus)
+
+		componentState, ok := handler.state.ComponentStates[id]
+		if ok {
+			componentStatus := umprotocol.ComponentStatus{
+				ID:            id,
+				AosVersion:    componentState.AosVersion,
+				VendorVersion: componentState.VendorVersion,
+				Status:        umprotocol.StatusInstalling,
+			}
+
+			if componentState.Error != "" {
+				componentStatus.Status = umprotocol.StatusError
+				componentStatus.Error = componentState.Error
+			}
+
+			status = append(status, componentStatus)
+		}
 	}
-
-	if handler.state.LastError != nil {
-		status.Status = umprotocol.FailedStatus
-	}
-
-	if handler.state.OperationType == revertOperation {
-		status.Operation = umprotocol.RevertOperation
-	}
-
-	if handler.state.OperationType == upgradeOperation {
-		status.Operation = umprotocol.UpgradeOperation
-	}
-
-	status.CurrentVersion = handler.currentVersion
-	status.RequestedVersion = handler.state.OperationVersion
-	status.Error = handler.state.ErrorMsg
 
 	return status
 }
