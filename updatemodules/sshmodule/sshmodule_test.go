@@ -97,13 +97,13 @@ func TestGetID(t *testing.T) {
 	}
 }
 
-func TestUpgrade(t *testing.T) {
+func TestUpdate(t *testing.T) {
 	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if _, err := module.Upgrade(1, "tmp/testfile"); err != nil {
-		t.Errorf("Upgrade failed: %s", err)
+	if _, err := module.Update("tmp/testfile", "", nil); err != nil {
+		t.Errorf("Update failed: %s", err)
 	}
 }
 
@@ -120,7 +120,7 @@ func TestWrongJson(t *testing.T) {
 	}
 }
 
-func TestUpgradeErrors(t *testing.T) {
+func TestUpdateErrors(t *testing.T) {
 	// NOTE: test with nonexisting host
 	configJSON := `{
 		"Host": "localhst:22",
@@ -144,12 +144,12 @@ func TestUpgradeErrors(t *testing.T) {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if _, err := module.Upgrade(1, "tmp/testfile"); err == nil {
+	if _, err := module.Update("tmp/testfile", "", nil); err == nil {
 		t.Errorf("Error expected because of wrong address")
 	}
 }
 
-func TestUpgradeWrongCommands(t *testing.T) {
+func TestUpdateWrongCommands(t *testing.T) {
 	// NOTE: test with some wrong command
 	configJSON := `{
 		"Host": "localhost:22",
@@ -174,13 +174,7 @@ func TestUpgradeWrongCommands(t *testing.T) {
 	}
 
 	//NOTE: amoi - leaving this test to be failed right now. runCommands should handle error.
-	if _, err := module.Upgrade(1, "tmp/testfile"); err == nil {
+	if _, err := module.Update("tmp/testfile", "", nil); err == nil {
 		t.Errorf("Error expected because set of commands is wrong")
-	}
-}
-
-func TestModuleRevert(t *testing.T) {
-	if _, err := module.Revert(0); err != nil {
-		t.Errorf("Revert failed %s", err)
 	}
 }

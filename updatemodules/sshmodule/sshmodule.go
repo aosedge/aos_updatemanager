@@ -18,8 +18,8 @@
 package sshmodule
 
 import (
-	"aos_updatemanager/updatehandler"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -27,6 +27,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tmc/scp"
 	"golang.org/x/crypto/ssh"
+
+	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -92,14 +94,19 @@ func (module *SSHModule) GetID() (id string) {
 	return module.id
 }
 
-// Upgrade upgrades module
-func (module *SSHModule) Upgrade(version uint64, fileName string) (rebootRequired bool, err error) {
+// GetVendorVersion returns vendor version
+func (module *SSHModule) GetVendorVersion() (version string, err error) {
+	return "", errors.New("not supported")
+}
+
+// Update updates module
+func (module *SSHModule) Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
 
 	log.WithFields(log.Fields{
 		"id":       module.id,
-		"fileName": fileName}).Info("Upgrade")
+		"fileName": imagePath}).Info("Update")
 
 	// Create SSH connection
 	config := &ssh.ClientConfig{
@@ -119,10 +126,10 @@ func (module *SSHModule) Upgrade(version uint64, fileName string) (rebootRequire
 	}
 	defer session.Close()
 
-	log.WithFields(log.Fields{"src": fileName, "dst": module.config.DestPath}).Debug("Copy file")
+	log.WithFields(log.Fields{"src": imagePath, "dst": module.config.DestPath}).Debug("Copy file")
 
 	// Copy file to the remote DestDir
-	if err = scp.CopyPath(fileName, module.config.DestPath, session); err != nil {
+	if err = scp.CopyPath(imagePath, module.config.DestPath, session); err != nil {
 		return false, err
 	}
 
@@ -133,33 +140,13 @@ func (module *SSHModule) Upgrade(version uint64, fileName string) (rebootRequire
 	return false, nil
 }
 
-// CancelUpgrade cancels upgrade
-func (module *SSHModule) CancelUpgrade(version uint64) (rebootRequired bool, err error) {
+// Cancel cancels update
+func (module *SSHModule) Cancel() (rebootRequired bool, err error) {
 	return false, nil
 }
 
-// FinishUpgrade finishes upgrade
-func (module *SSHModule) FinishUpgrade(version uint64) (err error) {
-	return nil
-}
-
-// Revert revert module
-func (module *SSHModule) Revert(version uint64) (rebootRequired bool, err error) {
-	module.Lock()
-	defer module.Unlock()
-
-	log.WithField("id", module.id).Info("Revert")
-
-	return false, nil
-}
-
-// CancelRevert cancels revert
-func (module *SSHModule) CancelRevert(version uint64) (rebootRequired bool, err error) {
-	return false, nil
-}
-
-// FinishRevert finishes revert
-func (module *SSHModule) FinishRevert(version uint64) (err error) {
+// Finish finished update
+func (module *SSHModule) Finish() (err error) {
 	return nil
 }
 
