@@ -19,6 +19,7 @@ package testmodule
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -76,44 +77,29 @@ func (module *TestModule) GetID() (id string) {
 	return module.id
 }
 
-// Upgrade upgrades module
-func (module *TestModule) Upgrade(version uint64, fileName string) (rebootRequired bool, err error) {
+// GetVendorVersion returns vendor version
+func (module *TestModule) GetVendorVersion() (version string, err error) {
+	return "", errors.New("not supported")
+}
+
+// Update updates module
+func (module *TestModule) Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
 
 	log.WithFields(log.Fields{
 		"id":       module.id,
-		"fileName": fileName}).Info("Upgrade")
+		"fileName": imagePath}).Info("Update")
 
 	return false, nil
 }
 
-// CancelUpgrade cancels upgrade
-func (module *TestModule) CancelUpgrade(version uint64) (rebootRequired bool, err error) {
+// Cancel cancels update
+func (module *TestModule) Cancel() (rebootRequired bool, err error) {
 	return false, nil
 }
 
-// FinishUpgrade finishes upgrade
-func (module *TestModule) FinishUpgrade(version uint64) (err error) {
-	return nil
-}
-
-// Revert revert module
-func (module *TestModule) Revert(version uint64) (rebootRequired bool, err error) {
-	module.Lock()
-	defer module.Unlock()
-
-	log.WithField("id", module.id).Info("Revert")
-
-	return false, nil
-}
-
-// CancelRevert cancels revert
-func (module *TestModule) CancelRevert(version uint64) (rebootRequired bool, err error) {
-	return false, nil
-}
-
-// FinishRevert finishes revert
-func (module *TestModule) FinishRevert(version uint64) (err error) {
+// Finish finished update
+func (module *TestModule) Finish() (err error) {
 	return nil
 }
