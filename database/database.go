@@ -35,7 +35,7 @@ import (
  ******************************************************************************/
 
 const (
-	dbVersion   = 4
+	dbVersion   = 5
 	busyTimeout = 60000
 	journalMode = "WAL"
 	syncMode    = "NORMAL"
@@ -121,9 +121,9 @@ func New(name string) (db *Database, err error) {
 	return db, nil
 }
 
-// SetOperationState stores operation state
-func (db *Database) SetOperationState(state []byte) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET operationState = ?", state)
+// SetUpdateState stores update state
+func (db *Database) SetUpdateState(state []byte) (err error) {
+	result, err := db.sql.Exec("UPDATE config SET updateState = ?", state)
 	if err != nil {
 		return err
 	}
@@ -140,9 +140,9 @@ func (db *Database) SetOperationState(state []byte) (err error) {
 	return nil
 }
 
-// GetOperationState returns operation state
-func (db *Database) GetOperationState() (state []byte, err error) {
-	stmt, err := db.sql.Prepare("SELECT operationState FROM config")
+// GetUpdateState returns update state
+func (db *Database) GetUpdateState() (state []byte, err error) {
+	stmt, err := db.sql.Prepare("SELECT updateState FROM config")
 	if err != nil {
 		return nil, err
 	}
@@ -158,45 +158,6 @@ func (db *Database) GetOperationState() (state []byte, err error) {
 	}
 
 	return state, nil
-}
-
-// GetSystemVersion returns system version
-func (db *Database) GetSystemVersion() (version uint64, err error) {
-	stmt, err := db.sql.Prepare("SELECT systemVersion FROM config")
-	if err != nil {
-		return version, err
-	}
-	defer stmt.Close()
-
-	err = stmt.QueryRow().Scan(&version)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return version, ErrNotExist
-		}
-
-		return version, err
-	}
-
-	return version, nil
-}
-
-// SetSystemVersion sets system version
-func (db *Database) SetSystemVersion(version uint64) (err error) {
-	result, err := db.sql.Exec("UPDATE config SET systemVersion = ?", version)
-	if err != nil {
-		return err
-	}
-
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return ErrNotExist
-	}
-
-	return nil
 }
 
 // GetModuleState returns module state
@@ -237,6 +198,25 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
+// GetControllerState returns controller state
+func (db *Database) GetControllerState(controllerID string, name string) (value []byte, err error) {
+	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if err = rows.Scan(&value); err != nil {
+			return nil, err
+		}
+
+		return value, nil
+	}
+
+	return nil, ErrNotExist
+}
+
 // SetControllerState sets controller state
 func (db *Database) SetControllerState(controllerID string, name string, value []byte) (err error) {
 	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerID,
@@ -255,25 +235,6 @@ func (db *Database) SetControllerState(controllerID string, name string, value [
 	}
 
 	return nil
-}
-
-// GetControllerState returns controller state
-func (db *Database) GetControllerState(controllerID string, name string) (value []byte, err error) {
-	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerID, name)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		if err = rows.Scan(&value); err != nil {
-			return nil, err
-		}
-
-		return value, nil
-	}
-
-	return nil, ErrNotExist
 }
 
 // AddCertificate adds new certificate to database
@@ -409,16 +370,14 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE config (
 			version INTEGER,
-			systemVersion INTEGER,
-			operationState TEXT)`); err != nil {
+			updateState TEXT)`); err != nil {
 		return err
 	}
 
 	if _, err = db.sql.Exec(
 		`INSERT INTO config (
 			version,
-			systemVersion,
-			operationState) values(?, ?, ?)`, dbVersion, 0, "{}"); err != nil {
+			updateState) values(?, ?)`, dbVersion, ""); err != nil {
 		return err
 	}
 

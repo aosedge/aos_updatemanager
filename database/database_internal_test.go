@@ -108,7 +108,7 @@ func TestNewErrors(t *testing.T) {
 	}
 }
 
-func TestOperationState(t *testing.T) {
+func TestUpdateState(t *testing.T) {
 	db, err := New(dbPath)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
@@ -117,40 +117,17 @@ func TestOperationState(t *testing.T) {
 
 	setState := []byte("{This is test}")
 
-	if err := db.SetOperationState(setState); err != nil {
+	if err := db.SetUpdateState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
 
-	getState, err := db.GetOperationState()
+	getState, err := db.GetUpdateState()
 	if err != nil {
 		t.Fatalf("Can't get state: %s", err)
 	}
 
 	if !reflect.DeepEqual(setState, getState) {
 		t.Fatalf("Wrong state value: %v", getState)
-	}
-}
-
-func TestSystemVersion(t *testing.T) {
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
-	var setVersion uint64 = 32
-
-	if err := db.SetSystemVersion(setVersion); err != nil {
-		t.Fatalf("Can't set system version: %s", err)
-	}
-
-	getVersion, err := db.GetSystemVersion()
-	if err != nil {
-		t.Fatalf("Can't get system version: %s", err)
-	}
-
-	if setVersion != getVersion {
-		t.Fatalf("Wrong system version value: %d", getVersion)
 	}
 }
 
@@ -248,31 +225,13 @@ func TestMultiThread(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(4)
+	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
 
 		for i := 0; i < numIterations; i++ {
-			if err := db.SetSystemVersion(uint64(i)); err != nil {
-				t.Fatalf("Can't set system version: %s", err)
-			}
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		if _, err := db.GetSystemVersion(); err != nil {
-			t.Fatalf("Can't get system version: %s", err)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		for i := 0; i < numIterations; i++ {
-			if err := db.SetOperationState([]byte(strconv.Itoa(i))); err != nil {
+			if err := db.SetUpdateState([]byte(strconv.Itoa(i))); err != nil {
 				t.Fatalf("Can't set state: %s", err)
 			}
 		}
@@ -282,7 +241,7 @@ func TestMultiThread(t *testing.T) {
 		defer wg.Done()
 
 		for i := 0; i < numIterations; i++ {
-			if _, err := db.GetOperationState(); err != nil {
+			if _, err := db.GetUpdateState(); err != nil {
 				t.Fatalf("Can't get state: %s", err)
 			}
 		}
