@@ -30,6 +30,6 @@ func init() {
 	updatehandler.RegisterControllerPlugin(
 		func(storage updatehandler.StateStorage,
 			modules []config.ModuleConfig) (controller updatehandler.PlatformController, err error) {
-			return New(storage, modelFileName)
+			return New()
 		})
 }
