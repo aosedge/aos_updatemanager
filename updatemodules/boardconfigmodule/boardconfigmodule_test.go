@@ -18,8 +18,11 @@
 package boardconfigmodule_test
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -114,5 +117,74 @@ func TestGetVersion(t *testing.T) {
 
 	if version != "V1.0" {
 		t.Errorf("Wrong board config version: %s", version)
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	board_file := `
+	{
+		"vendorVersion": "V1.0",
+		"resources": [{
+			"id": "testConfig",
+			"resource": "some_old_resources"
+		}]
+	}
+	`
+	if err := ioutil.WriteFile(boardFileName, []byte(board_file), 0644); err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	tmpDir, err := ioutil.TempDir("", "um_")
+	if err != nil {
+		log.Fatalf("Error creating tmp dir: %s", err)
+	}
+	defer os.Remove(tmpDir)
+
+	new_boardConfig := `
+	{
+		"vendorVersion": "V2.0",
+		"componentType": "TestFileUpdate",
+		"resources": [{
+			"id": "testConfig",
+			"resource": "some_new_rources"
+		}]
+	}
+	`
+
+	file, err := os.Create(path.Join(tmpDir, "testConfig.gz"))
+	if err != nil {
+		log.Fatalf("Can't write test file: %s", err)
+	}
+
+	zw := gzip.NewWriter(file)
+	zw.Write([]byte(new_boardConfig))
+	zw.Close()
+
+	file.Close()
+
+	if _, err := module.Update(path.Join(tmpDir, "testConfig.gz"), "V2.0", json.RawMessage{}); err != nil {
+		t.Errorf("Upgrade failed: %s", err)
+	}
+
+	version, err := module.GetVendorVersion()
+	if err != nil {
+		log.Fatalf("Can't get board vendor version: %s", err)
+	}
+
+	if version != "V2.0" {
+		t.Errorf("Wrong board config version after update: %s", version)
+	}
+
+	resultData, err := ioutil.ReadFile("tmp/test_configuration.cfg")
+	if err != nil {
+		t.Error("Can't read tmp/test_configuration.cfg ", err)
+	}
+
+	if string(resultData) != new_boardConfig {
+		t.Error("Incorrect update content")
+	}
+
+	if _, err := module.Update(path.Join(tmpDir, "testConfig.gz"), "V3.0", json.RawMessage{}); err == nil {
+		t.Errorf("Update should fail with error: vendorVersion missmatch")
 	}
 }

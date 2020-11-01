@@ -18,8 +18,12 @@
 package boardconfigmodule
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"errors"
+	"io"
 	"io/ioutil"
+	"os"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -30,6 +34,13 @@ import (
 /*******************************************************************************
  * Consts
  ******************************************************************************/
+
+const ioBufferSize = 1024 * 1024
+
+const (
+	newPostfix      = "_new"
+	originalPostfix = "_orig"
+)
 
 /*******************************************************************************
  * Types
@@ -97,20 +108,60 @@ func (module *BoardCfgModule) Update(imagePath string, vendorVersion string, ann
 	module.Lock()
 	defer module.Unlock()
 
+	currentVersion, err := module.getVendorVersionFromFile(module.config.Path)
+	if err == nil {
+		if currentVersion == vendorVersion {
+			log.Debug("Board configuration already up to date, version = ", vendorVersion)
+			return false, nil
+		}
+	} else {
+		log.Warn("Board configuration doesn't contain version, try to update")
+	}
+
 	log.WithFields(log.Fields{
 		"id":       module.id,
 		"fileName": imagePath}).Info("Update")
 
-	return false, nil
+	newBoardConfig := module.config.Path + newPostfix
+	if err := extractFileFromGz(newBoardConfig, imagePath); err != nil {
+		return false, err
+	}
+
+	newVersion, err := module.getVendorVersionFromFile(newBoardConfig)
+	if err != nil {
+		return false, err
+	}
+
+	if newVersion != vendorVersion {
+		os.RemoveAll(newBoardConfig)
+		return false, errors.New("vendorVersion missmatch")
+	}
+
+	// save original file
+	if err := os.Rename(module.config.Path, module.config.Path+originalPostfix); err != nil {
+		return false, err
+	}
+
+	if err := os.Rename(newBoardConfig, module.config.Path); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // Cancel cancels update
 func (module *BoardCfgModule) Cancel() (rebootRequired bool, err error) {
+	if err := os.Rename(module.config.Path+originalPostfix, module.config.Path); err != nil {
+		return false, err
+	}
+
 	return false, nil
 }
 
 // Finish finished update
 func (module *BoardCfgModule) Finish() (err error) {
+	os.RemoveAll(module.config.Path + originalPostfix)
+
 	return nil
 }
 
@@ -131,4 +182,50 @@ func (module *BoardCfgModule) getVendorVersionFromFile(path string) (version str
 	}
 
 	return boardFile.VendorVersion, nil
+}
+
+func extractFileFromGz(destination, source string) (err error) {
+	log.WithFields(log.Fields{"src": destination, "dst": source}).Debug("Extract file from archive")
+
+	srcFile, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(destination, os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	gz, err := gzip.NewReader(srcFile)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	err = copyData(dstFile, gz)
+
+	return err
+}
+
+func copyData(dst io.Writer, src io.Reader) (err error) {
+	buf := make([]byte, ioBufferSize)
+
+	for err != io.EOF {
+		var readCount int
+
+		if readCount, err = src.Read(buf); err != nil && err != io.EOF {
+			return err
+		}
+
+		if readCount > 0 {
+			if _, err = dst.Write(buf[:readCount]); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
