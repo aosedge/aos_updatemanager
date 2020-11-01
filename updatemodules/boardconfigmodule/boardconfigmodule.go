@@ -19,6 +19,7 @@ package boardconfigmodule
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -36,8 +37,17 @@ import (
 
 // BoardCfgModule board configuration update module
 type BoardCfgModule struct {
-	id string
+	id     string
+	config moduleConfig
 	sync.Mutex
+}
+
+type boardConfigVersion struct {
+	VendorVersion string `json:"vendorVersion"`
+}
+
+type moduleConfig struct {
+	Path string `json:"path"`
 }
 
 /*******************************************************************************
@@ -50,6 +60,10 @@ func New(id string, configJSON json.RawMessage,
 	log.WithField("id", id).Info("Create boardconfig module")
 
 	boardModule := &BoardCfgModule{id: id}
+
+	if err = json.Unmarshal(configJSON, &boardModule.config); err != nil {
+		return nil, err
+	}
 
 	return boardModule, nil
 }
@@ -75,7 +89,7 @@ func (module *BoardCfgModule) GetID() (id string) {
 
 // GetVendorVersion returns vendor version
 func (module *BoardCfgModule) GetVendorVersion() (version string, err error) {
-	return "", nil
+	return module.getVendorVersionFromFile(module.config.Path)
 }
 
 // Update updates module
@@ -98,4 +112,23 @@ func (module *BoardCfgModule) Cancel() (rebootRequired bool, err error) {
 // Finish finished update
 func (module *BoardCfgModule) Finish() (err error) {
 	return nil
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func (module *BoardCfgModule) getVendorVersionFromFile(path string) (version string, err error) {
+	boardFile := boardConfigVersion{}
+
+	byteValue, err := ioutil.ReadFile(path)
+	if err != nil {
+		return version, err
+	}
+
+	if err = json.Unmarshal(byteValue, &boardFile); err != nil {
+		return version, err
+	}
+
+	return boardFile.VendorVersion, nil
 }
