@@ -15,11 +15,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package plugins
+package boardconfigmodule
 
 import (
-	// include all supported plugins
-	_ "aos_updatemanager/updatemodules/boardconfigmodule"
-	_ "aos_updatemanager/updatemodules/sshmodule"
-	_ "aos_updatemanager/updatemodules/testmodule"
+	"encoding/json"
+
+	"aos_updatemanager/updatehandler"
 )
+
+/*******************************************************************************
+ * Init
+ ******************************************************************************/
+
+func init() {
+	updatehandler.RegisterPlugin("boardconfigmodule",
+		func(id string, configJSON json.RawMessage, controller updatehandler.PlatformController,
+			storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
+			return New(id, configJSON, storage)
+		})
+}
