@@ -283,26 +283,6 @@ func (handler *Handler) Update(infos []umprotocol.ComponentInfo) {
 			}
 		}
 
-		if info.AosVersion != 0 {
-			if handler.state.AosVersions[info.ID] == info.AosVersion {
-				log.WithField("id", info.ID).Warnf("Component already has required Aos version: %d", info.AosVersion)
-
-				delete(handler.state.ComponentStates, info.ID)
-
-				continue
-			}
-
-			if handler.state.AosVersions[info.ID] > info.AosVersion {
-				err := errors.New("wrong Aos version")
-
-				handler.state.ComponentStates[info.ID].Error = err.Error()
-
-				log.WithField("id", info.ID).Errorf("Component update error: %s", err)
-
-				continue
-			}
-		}
-
 		if err := image.CheckFileInfo(info.Path, image.FileInfo{
 			Sha256: info.Sha256,
 			Sha512: info.Sha512,

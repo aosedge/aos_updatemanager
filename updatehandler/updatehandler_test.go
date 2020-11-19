@@ -317,60 +317,6 @@ func TestUpdateWrongVersion(t *testing.T) {
 	}
 
 	sameVersionComponent.vendorVersion = ""
-
-	// Test same Aos version
-
-	sameVersionComponent = components[1]
-
-	currentStatus = updater.GetStatus()
-
-	if infos, err = createUpdateInfos(currentStatus); err != nil {
-		t.Fatalf("Can't create update infos: %s", err)
-	}
-
-	newStatus = nil
-
-	for i, info := range infos {
-		if info.ID == sameVersionComponent.id {
-			infos[i].AosVersion = infos[i].AosVersion - 1
-		} else {
-			newStatus = append(newStatus, umprotocol.ComponentStatus{
-				ID:            info.ID,
-				AosVersion:    info.AosVersion,
-				VendorVersion: info.VendorVersion,
-				Status:        umprotocol.StatusInstalling,
-			})
-		}
-	}
-
-	// Update
-
-	updater.Update(infos)
-
-	// Wait for initial status
-
-	if err = waitForStatus(updater, append(currentStatus, newStatus...)); err != nil {
-		t.Errorf("Wait for status failed: %s", err)
-	}
-
-	// Wait for final status
-
-	finalStatus = nil
-
-	for _, info := range infos {
-		status := umprotocol.ComponentStatus{
-			ID:            info.ID,
-			AosVersion:    info.AosVersion,
-			VendorVersion: info.VendorVersion,
-			Status:        umprotocol.StatusInstalled,
-		}
-
-		finalStatus = append(finalStatus, status)
-	}
-
-	if err = waitForStatus(updater, finalStatus); err != nil {
-		t.Errorf("Wait for status failed: %s", err)
-	}
 }
 
 func TestUpdateWithReboot(t *testing.T) {
