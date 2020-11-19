@@ -31,11 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/config"
-	"aos_updatemanager/crthandler"
-	_ "aos_updatemanager/crtmodules"
 	"aos_updatemanager/database"
-	_ "aos_updatemanager/platform"
-	"aos_updatemanager/umserver"
+	"aos_updatemanager/umclient"
 	"aos_updatemanager/updatehandler"
 	_ "aos_updatemanager/updatemodules"
 )
@@ -190,23 +187,17 @@ func main() {
 	}
 	defer db.Close()
 
-	updater, err := updatehandler.New(cfg, db)
+	updater, err := updatehandler.New(cfg, db, db)
 	if err != nil {
 		log.Fatalf("Can't create updater: %s", err)
 	}
 	defer updater.Close()
 
-	crtHandler, err := crthandler.New(cfg, db)
+	client, err := umclient.New(cfg, updater, true)
 	if err != nil {
-		log.Fatalf("Can't create crt handler: %s", err)
+		log.Fatalf("Can't create UM client: %s", err)
 	}
-	defer crtHandler.Close()
-
-	server, err := umserver.New(cfg, updater, crtHandler)
-	if err != nil {
-		log.Fatalf("Can't create UM server: %s", err)
-	}
-	defer server.Close()
+	defer client.Close()
 
 	// Handle SIGTERM
 	terminateChannel := make(chan os.Signal, 1)
