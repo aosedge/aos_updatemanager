@@ -20,11 +20,11 @@ package sshmodule_test
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/sshmodule"
 )
 
@@ -32,7 +32,7 @@ import (
  * Var
  ******************************************************************************/
 
-var module updatehandler.UpdateModule
+var tmpDir string
 
 /*******************************************************************************
  * Init
@@ -54,10 +54,37 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if err = os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Error creating tmp dir %s", err)
+	tmpDir, err = ioutil.TempDir("", "um_")
+	if err != nil {
+		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
+	ret := m.Run()
+
+	if err := os.RemoveAll(tmpDir); err != nil {
+		log.Fatalf("Error removing tmp dir: %s", err)
+	}
+
+	os.Exit(ret)
+}
+
+/*******************************************************************************
+ * Tests
+ ******************************************************************************/
+
+func TestGetID(t *testing.T) {
+	module, err := sshmodule.New("TestComponent", nil, nil)
+	if err != nil {
+		t.Fatalf("Can't create ssh module: %s", err)
+	}
+	defer module.Close()
+
+	if module.GetID() != "TestComponent" {
+		t.Errorf("Wrong module ID: %s", module.GetID())
+	}
+}
+
+func TestUpdate(t *testing.T) {
 	configJSON := `{
 		"Host": "localhost:22",
 		"User": "test",
@@ -70,40 +97,28 @@ func TestMain(m *testing.M) {
 		]
 	}`
 
-	module, err = sshmodule.New("TestComponent", []byte(configJSON), nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
 	if err != nil {
-		log.Fatalf("Can't create SSH module: %s", err)
+		log.Fatalf("Can't create ssh module: %s", err)
 	}
+	defer module.Close()
 
-	ret := m.Run()
+	imagePath := path.Join(tmpDir, "testfile")
 
-	module.Close()
-
-	if err = os.RemoveAll("tmp"); err != nil {
-		log.Fatalf("Error deleting tmp dir: %s", err)
-	}
-
-	os.Exit(ret)
-}
-
-/*******************************************************************************
- * Tests
- ******************************************************************************/
-
-func TestGetID(t *testing.T) {
-	id := module.GetID()
-	if id != "TestComponent" {
-		t.Errorf("Wrong module ID: %s", id)
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if _, err := module.Update("tmp/testfile", "", nil); err != nil {
+	if err := module.Prepare(imagePath, "", nil); err != nil {
+		t.Errorf("Prepare failed: %s", err)
+	}
+
+	if _, err := module.Update(); err != nil {
 		t.Errorf("Update failed: %s", err)
+	}
+
+	if _, err := module.Apply(); err != nil {
+		t.Errorf("Apply failed: %s", err)
 	}
 }
 
@@ -140,12 +155,22 @@ func TestUpdateErrors(t *testing.T) {
 	}
 	defer module.Close()
 
-	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
+	imagePath := path.Join(tmpDir, "testfile")
+
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if _, err := module.Update("tmp/testfile", "", nil); err == nil {
+	if err := module.Prepare(imagePath, "", nil); err != nil {
+		t.Errorf("Prepare failed: %s", err)
+	}
+
+	if _, err := module.Update(); err == nil {
 		t.Errorf("Error expected because of wrong address")
+	}
+
+	if _, err := module.Revert(); err != nil {
+		t.Errorf("Reverts failed: %s", err)
 	}
 }
 
@@ -169,12 +194,22 @@ func TestUpdateWrongCommands(t *testing.T) {
 	}
 	defer module.Close()
 
-	if err := ioutil.WriteFile("tmp/testfile", []byte("This is test file"), 0644); err != nil {
+	imagePath := path.Join(tmpDir, "testfile")
+
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	//NOTE: amoi - leaving this test to be failed right now. runCommands should handle error.
-	if _, err := module.Update("tmp/testfile", "", nil); err == nil {
-		t.Errorf("Error expected because set of commands is wrong")
+	if err := module.Prepare(imagePath, "", nil); err != nil {
+		t.Errorf("Prepare failed: %s", err)
+	}
+
+	// NOTE: amoi - leaving this test to be failed right now. runCommands should handle error.
+	if _, err := module.Update(); err == nil {
+		t.Errorf("Error expected because command set is wrong")
+	}
+
+	if _, err := module.Revert(); err != nil {
+		t.Errorf("Reverts failed: %s", err)
 	}
 }

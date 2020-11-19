@@ -46,7 +46,8 @@ const Name = "ssh"
 type SSHModule struct {
 	id string
 	sync.Mutex
-	config moduleConfig
+	config   moduleConfig
+	filePath string
 }
 
 type moduleConfig struct {
@@ -63,13 +64,15 @@ type moduleConfig struct {
 
 // New creates ssh module instance
 func New(id string, configJSON json.RawMessage,
-	storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
-	log.WithField("id", id).Info("Create SSH module")
+	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+	log.WithField("id", id).Debug("Create SSH module")
 
 	sshModule := &SSHModule{id: id}
 
-	if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
-		return nil, err
+	if configJSON != nil {
+		if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
+			return nil, err
+		}
 	}
 
 	return sshModule, nil
@@ -77,12 +80,25 @@ func New(id string, configJSON json.RawMessage,
 
 // Close closes ssh module
 func (module *SSHModule) Close() (err error) {
-	log.WithField("id", module.id).Info("Close SSH module")
+	log.WithField("id", module.id).Debug("Close SSH module")
 	return nil
 }
 
 // Init initializes module
 func (module *SSHModule) Init() (err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Init test module")
+
+	return nil
+}
+
+// Prepare prepares module update
+func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+	log.WithFields(log.Fields{
+		"id":        module.id,
+		"imagePath": imagePath}).Debug("Prepare SSH module")
+
+	module.filePath = imagePath
+
 	return nil
 }
 
@@ -99,14 +115,12 @@ func (module *SSHModule) GetVendorVersion() (version string, err error) {
 	return "", errors.New("not supported")
 }
 
-// Update updates module
-func (module *SSHModule) Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error) {
+// Update performs module update
+func (module *SSHModule) Update() (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
 
-	log.WithFields(log.Fields{
-		"id":       module.id,
-		"fileName": imagePath}).Info("Update")
+	log.WithFields(log.Fields{"id": module.id}).Debug("Update SSH module")
 
 	// Create SSH connection
 	config := &ssh.ClientConfig{
@@ -126,10 +140,10 @@ func (module *SSHModule) Update(imagePath string, vendorVersion string, annotati
 	}
 	defer session.Close()
 
-	log.WithFields(log.Fields{"src": imagePath, "dst": module.config.DestPath}).Debug("Copy file")
+	log.WithFields(log.Fields{"src": module.filePath, "dst": module.config.DestPath}).Debug("Copy file")
 
 	// Copy file to the remote DestDir
-	if err = scp.CopyPath(imagePath, module.config.DestPath, session); err != nil {
+	if err = scp.CopyPath(module.filePath, module.config.DestPath, session); err != nil {
 		return false, err
 	}
 
@@ -140,13 +154,24 @@ func (module *SSHModule) Update(imagePath string, vendorVersion string, annotati
 	return false, nil
 }
 
-// Cancel cancels update
-func (module *SSHModule) Cancel() (rebootRequired bool, err error) {
+// Apply applies current update
+func (module *SSHModule) Apply() (rebootRequired bool, err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Apply SSH module")
+
 	return false, nil
 }
 
-// Finish finished update
-func (module *SSHModule) Finish() (err error) {
+// Revert reverts current update
+func (module *SSHModule) Revert() (rebootRequired bool, err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Revert SSH module")
+
+	return false, nil
+}
+
+// Reboot performs module reboot
+func (module *SSHModule) Reboot() (err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot SSH module")
+
 	return nil
 }
 

@@ -19,7 +19,6 @@ package sshmodule
 
 import (
 	"aos_updatemanager/updatehandler"
-	"encoding/json"
 )
 
 /*******************************************************************************
@@ -27,9 +26,5 @@ import (
  ******************************************************************************/
 
 func init() {
-	updatehandler.RegisterPlugin("sshmodule",
-		func(id string, configJSON json.RawMessage, controller updatehandler.PlatformController,
-			storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
-			return New(id, configJSON, storage)
-		})
+	updatehandler.RegisterPlugin("sshmodule", New)
 }
