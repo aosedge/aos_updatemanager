@@ -19,7 +19,7 @@ package boardconfigmodule_test
 
 import (
 	"compress/gzip"
-	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -32,16 +32,34 @@ import (
 )
 
 /*******************************************************************************
- * Types
+ * Consts
  ******************************************************************************/
 
-const boardFileName = "tmp/test_configuration.cfg"
+const configTemplate = `
+ {
+	 "vendorVersion": "%s",
+	 "resources": [{
+		 "id": "testConfig",
+		 "resource": "some_old_resources"
+	 }]
+ }
+ `
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+type testStorage struct {
+	state []byte
+}
 
 /*******************************************************************************
  * Var
  ******************************************************************************/
 
 var module updatehandler.UpdateModule
+
+var boardFileName string
+var tmpDir string
 
 /*******************************************************************************
  * Init
@@ -63,23 +81,24 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	if err = os.MkdirAll("tmp", 0755); err != nil {
-		log.Fatalf("Error creating tmp dir %s", err)
-	}
-
-	configJSON := `{"path": "tmp/test_configuration.cfg"}`
-
-	module, err = boardconfigmodule.New("boardConfig", []byte(configJSON), nil)
+	tmpDir, err = ioutil.TempDir("", "um_")
 	if err != nil {
-		log.Fatalf("Can't create file update module module: %s", err)
+		log.Fatalf("Error create temporary dir: %s", err)
 	}
+
+	boardFileName = path.Join(tmpDir, "test_configuration.cfg")
+
+	module, err = boardconfigmodule.New("boardConfig",
+		[]byte(fmt.Sprintf(`{"path": "%s"}`, boardFileName)), &testStorage{}, nil)
+	if err != nil {
+		log.Fatalf("Can't create module: %s", err)
+	}
+	module.Close()
 
 	ret := m.Run()
 
-	module.Close()
-
-	if err = os.RemoveAll("tmp"); err != nil {
-		log.Fatalf("Error deleting tmp dir: %s", err)
+	if err = os.RemoveAll(tmpDir); err != nil {
+		log.Fatalf("Error deleting temporary dir: %s", err)
 	}
 
 	os.Exit(ret)
@@ -97,73 +116,63 @@ func TestGetID(t *testing.T) {
 }
 
 func TestGetVersion(t *testing.T) {
-	board_file := `
-	{
-		"vendorVersion": "V1.0",
-		"resources": [{
-			"id": "testConfig",
-			"resource": "testConfig.gz"
-		}]
+	if _, err := createBoardConfig("v1.0"); err != nil {
+		t.Fatalf("Can't create board config: %s", err)
 	}
-	`
-	if err := ioutil.WriteFile(boardFileName, []byte(board_file), 0644); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+
+	if err := module.Init(); err != nil {
+		t.Errorf("Init failed: %s", err)
 	}
 
 	version, err := module.GetVendorVersion()
 	if err != nil {
-		log.Fatalf("Can't get board vendor version: %s", err)
+		log.Fatalf("Can't get board config vendor version: %s", err)
 	}
 
-	if version != "V1.0" {
-		t.Errorf("Wrong board config version: %s", version)
+	if version != "v1.0" {
+		t.Errorf("Wrong board config vendor version: %s", version)
 	}
 }
 
 func TestUpdate(t *testing.T) {
-	board_file := `
-	{
-		"vendorVersion": "V1.0",
-		"resources": [{
-			"id": "testConfig",
-			"resource": "some_old_resources"
-		}]
-	}
-	`
-	if err := ioutil.WriteFile(boardFileName, []byte(board_file), 0644); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+	if _, err := createBoardConfig("v1.0"); err != nil {
+		t.Fatalf("Can't create board config: %s", err)
 	}
 
-	tmpDir, err := ioutil.TempDir("", "um_")
+	imagePath := path.Join(tmpDir, "image.gz")
+
+	configPayload, err := createBoardImage(imagePath, "v2.0")
 	if err != nil {
-		log.Fatalf("Error creating tmp dir: %s", err)
+		t.Fatalf("Can't create board image: %s", err)
 	}
-	defer os.Remove(tmpDir)
 
-	new_boardConfig := `
-	{
-		"vendorVersion": "V2.0",
-		"componentType": "TestFileUpdate",
-		"resources": [{
-			"id": "testConfig",
-			"resource": "some_new_rources"
-		}]
+	if err := module.Init(); err != nil {
+		t.Errorf("Init failed: %s", err)
 	}
-	`
 
-	file, err := os.Create(path.Join(tmpDir, "testConfig.gz"))
+	if err := module.Prepare(imagePath, "v2.0", nil); err != nil {
+		t.Errorf("Prepare failed: %s", err)
+	}
+
+	rebootRequired, err := module.Update()
 	if err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+		t.Errorf("Update failed: %s", err)
 	}
 
-	zw := gzip.NewWriter(file)
-	zw.Write([]byte(new_boardConfig))
-	zw.Close()
+	if !rebootRequired {
+		t.Error("Reboot is required")
+	}
 
-	file.Close()
+	if err = module.Init(); err != nil {
+		t.Errorf("Init failed: %s", err)
+	}
 
-	if _, err := module.Update(path.Join(tmpDir, "testConfig.gz"), "V2.0", json.RawMessage{}); err != nil {
-		t.Errorf("Upgrade failed: %s", err)
+	if rebootRequired, err = module.Apply(); err != nil {
+		t.Errorf("Apply failed: %s", err)
+	}
+
+	if rebootRequired {
+		t.Error("Reboot is not required")
 	}
 
 	version, err := module.GetVendorVersion()
@@ -171,33 +180,121 @@ func TestUpdate(t *testing.T) {
 		log.Fatalf("Can't get board vendor version: %s", err)
 	}
 
-	if version != "V1.0" {
-		t.Errorf("Wrong board config version after before finish: %s", version)
-	}
-
-	if err := module.Finish(); err != nil {
-		t.Error("Error finish update: ", err)
-	}
-
-	version, err = module.GetVendorVersion()
-	if err != nil {
-		log.Fatalf("Can't get board vendor version: %s", err)
-	}
-
-	if version != "V2.0" {
+	if version != "v2.0" {
 		t.Errorf("Wrong board config version after update: %s", version)
 	}
 
-	resultData, err := ioutil.ReadFile("tmp/test_configuration.cfg")
+	currentPayload, err := ioutil.ReadFile(boardFileName)
 	if err != nil {
 		t.Error("Can't read tmp/test_configuration.cfg ", err)
 	}
 
-	if string(resultData) != new_boardConfig {
+	if string(currentPayload) != configPayload {
 		t.Error("Incorrect update content")
 	}
+}
 
-	if _, err := module.Update(path.Join(tmpDir, "testConfig.gz"), "V3.0", json.RawMessage{}); err == nil {
-		t.Errorf("Update should fail with error: vendorVersion missmatch")
+func TestRevert(t *testing.T) {
+	configPayload, err := createBoardConfig("v2.0")
+	if err != nil {
+		t.Fatalf("Can't create board config: %s", err)
 	}
+
+	imagePath := path.Join(tmpDir, "image.gz")
+
+	if _, err := createBoardImage(imagePath, "v3.0"); err != nil {
+		t.Fatalf("Can't create board image: %s", err)
+	}
+
+	if err := module.Init(); err != nil {
+		t.Errorf("Init failed: %s", err)
+	}
+
+	if err := module.Prepare(imagePath, "v3.0", nil); err != nil {
+		t.Errorf("Prepare failed: %s", err)
+	}
+
+	rebootRequired, err := module.Update()
+	if err != nil {
+		t.Errorf("Update failed: %s", err)
+	}
+
+	if !rebootRequired {
+		t.Error("Reboot is required")
+	}
+
+	if err = module.Init(); err != nil {
+		t.Errorf("Init failed: %s", err)
+	}
+
+	if rebootRequired, err = module.Revert(); err != nil {
+		t.Errorf("Apply failed: %s", err)
+	}
+
+	if !rebootRequired {
+		t.Error("Reboot is required")
+	}
+
+	if err := module.Init(); err != nil {
+		t.Errorf("Init failed: %s", err)
+	}
+
+	version, err := module.GetVendorVersion()
+	if err != nil {
+		log.Fatalf("Can't get board vendor version: %s", err)
+	}
+
+	if version != "v2.0" {
+		t.Errorf("Wrong board config version after update: %s", version)
+	}
+
+	currentPayload, err := ioutil.ReadFile(boardFileName)
+	if err != nil {
+		t.Error("Can't read tmp/test_configuration.cfg ", err)
+	}
+
+	if string(currentPayload) != configPayload {
+		t.Error("Incorrect update content")
+	}
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
+	return storage.state, nil
+}
+
+func (storage *testStorage) SetModuleState(id string, state []byte) (err error) {
+	storage.state = state
+
+	return nil
+}
+
+func createBoardConfig(version string) (payload string, err error) {
+	payload = fmt.Sprintf(configTemplate, version)
+
+	if err = ioutil.WriteFile(boardFileName, []byte(payload), 0644); err != nil {
+		return "", err
+	}
+
+	return payload, nil
+}
+
+func createBoardImage(imagePath string, version string) (payload string, err error) {
+	file, err := os.Create(imagePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	zw := gzip.NewWriter(file)
+	defer zw.Close()
+
+	payload = fmt.Sprintf(configTemplate, version)
+
+	zw.Write([]byte(payload))
+
+	return payload, nil
 }

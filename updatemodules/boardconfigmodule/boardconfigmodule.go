@@ -21,10 +21,10 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -38,8 +38,14 @@ import (
 const ioBufferSize = 1024 * 1024
 
 const (
-	newPostfix      = "_new"
-	originalPostfix = "_orig"
+	newPostfix      = ".new"
+	originalPostfix = ".orig"
+)
+
+const (
+	stateIdle = iota
+	statePrepared
+	stateUpdated
 )
 
 /*******************************************************************************
@@ -48,9 +54,17 @@ const (
 
 // BoardCfgModule board configuration update module
 type BoardCfgModule struct {
-	id     string
-	config moduleConfig
-	sync.Mutex
+	id             string
+	currentVersion string
+	config         moduleConfig
+	storage        updatehandler.ModuleStorage
+	state          moduleState
+	rebooter       Rebooter
+}
+
+// Rebooter provides API to perform module reboot
+type Rebooter interface {
+	Reboot() (err error)
 }
 
 type boardConfigVersion struct {
@@ -61,16 +75,23 @@ type moduleConfig struct {
 	Path string `json:"path"`
 }
 
+type moduleState struct {
+	State          updateState `json:"state"`
+	RebootRequired bool        `json:"rebootRequired"`
+}
+
+type updateState int
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // New creates boardconfig module instance
 func New(id string, configJSON json.RawMessage,
-	storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
-	log.WithField("id", id).Info("Create boardconfig module")
+	storage updatehandler.ModuleStorage, rebooter Rebooter) (module updatehandler.UpdateModule, err error) {
+	log.WithField("id", id).Debug("Create boardconfig module")
 
-	boardModule := &BoardCfgModule{id: id}
+	boardModule := &BoardCfgModule{id: id, storage: storage, rebooter: rebooter}
 
 	if err = json.Unmarshal(configJSON, &boardModule.config); err != nil {
 		return nil, err
@@ -81,94 +102,179 @@ func New(id string, configJSON json.RawMessage,
 
 // Close closes boardconfig module
 func (module *BoardCfgModule) Close() (err error) {
-	log.WithField("id", module.id).Info("Close boardconfig module")
+	log.WithField("id", module.id).Debug("Close boardconfig module")
 	return nil
 }
 
 // Init initializes module
 func (module *BoardCfgModule) Init() (err error) {
+	if module.getState(); err != nil {
+		return err
+	}
+
+	if module.state.RebootRequired {
+		module.state.RebootRequired = false
+	}
+
+	if module.currentVersion, err = module.getVendorVersionFromFile(module.config.Path); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // GetID returns module ID
 func (module *BoardCfgModule) GetID() (id string) {
-	module.Lock()
-	defer module.Unlock()
-
 	return module.id
 }
 
 // GetVendorVersion returns vendor version
 func (module *BoardCfgModule) GetVendorVersion() (version string, err error) {
-	if _, err = os.Stat(module.config.Path + originalPostfix); err == nil {
-		return module.getVendorVersionFromFile(module.config.Path + originalPostfix)
-	}
-
-	return module.getVendorVersionFromFile(module.config.Path)
+	return module.currentVersion, nil
 }
 
-// Update updates module
-func (module *BoardCfgModule) Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error) {
-	module.Lock()
-	defer module.Unlock()
+// Prepare prepares module
+func (module *BoardCfgModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+	log.WithFields(log.Fields{"id": module.id, "fileName": imagePath}).Debug("Prepare")
 
-	currentVersion, err := module.getVendorVersionFromFile(module.config.Path)
-	if err == nil {
-		if currentVersion == vendorVersion {
-			log.Debug("Board configuration already up to date, version = ", vendorVersion)
-			return false, nil
-		}
-	} else {
-		log.Warn("Board configuration doesn't contain version, try to update")
+	switch {
+	case module.state.State == statePrepared:
+		return nil
+
+	case module.state.State != stateIdle:
+		return fmt.Errorf("invalid state: %s", module.state.State)
 	}
 
-	log.WithFields(log.Fields{
-		"id":       module.id,
-		"fileName": imagePath}).Info("Update")
-
 	newBoardConfig := module.config.Path + newPostfix
+
 	if err := extractFileFromGz(newBoardConfig, imagePath); err != nil {
-		return false, err
+		return err
 	}
 
 	newVersion, err := module.getVendorVersionFromFile(newBoardConfig)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if newVersion != vendorVersion {
 		os.RemoveAll(newBoardConfig)
-		return false, errors.New("vendorVersion missmatch")
+
+		return errors.New("vendor version missmatch")
 	}
+
+	if err = module.setState(statePrepared); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Update updates module
+func (module *BoardCfgModule) Update() (rebootRequired bool, err error) {
+	switch {
+	case module.state.State == stateUpdated:
+		return module.state.RebootRequired, nil
+
+	case module.state.State != statePrepared:
+		return false, fmt.Errorf("invalid state: %s", module.state.State)
+	}
+
+	log.WithFields(log.Fields{"id": module.id}).Debug("Update")
 
 	// save original file
 	if err := os.Rename(module.config.Path, module.config.Path+originalPostfix); err != nil {
 		log.Warn("Original file does not exist: ", err)
 	}
 
-	if err := os.Rename(newBoardConfig, module.config.Path); err != nil {
+	// copy new to original
+	if err := os.Rename(module.config.Path+newPostfix, module.config.Path); err != nil {
 		return false, err
 	}
 
-	return true, nil
-}
+	module.state.RebootRequired = true
 
-// Cancel cancels update
-func (module *BoardCfgModule) Cancel() (rebootRequired bool, err error) {
-	if err := os.Rename(module.config.Path+originalPostfix, module.config.Path); err != nil {
-		log.Warn("Original file was not present before update")
+	if err = module.setState(stateUpdated); err != nil {
+		return false, err
 	}
 
-	os.RemoveAll(module.config.Path + originalPostfix)
-	os.RemoveAll(module.config.Path + newPostfix)
-
-	return false, nil
+	return module.state.RebootRequired, nil
 }
 
-// Finish finished update
-func (module *BoardCfgModule) Finish() (err error) {
-	os.RemoveAll(module.config.Path + originalPostfix)
-	os.RemoveAll(module.config.Path + newPostfix)
+// Apply applies update
+func (module *BoardCfgModule) Apply() (rebootRequired bool, err error) {
+	switch {
+	case module.state.State == stateIdle:
+		return module.state.RebootRequired, nil
+
+	case module.state.State != stateUpdated:
+		return false, fmt.Errorf("invalid state: %s", module.state.State)
+	}
+
+	log.WithFields(log.Fields{"id": module.id}).Debug("Apply")
+
+	if err = os.RemoveAll(module.config.Path + newPostfix); err != nil {
+		log.Errorf("Can't remove file: %s", module.config.Path+newPostfix)
+	}
+
+	if err = os.RemoveAll(module.config.Path + originalPostfix); err != nil {
+		log.Errorf("Can't remove file: %s", module.config.Path+originalPostfix)
+	}
+
+	if err = module.setState(stateIdle); err != nil {
+		return false, err
+	}
+
+	if module.currentVersion, err = module.getVendorVersionFromFile(module.config.Path); err != nil {
+		return false, err
+	}
+
+	return module.state.RebootRequired, nil
+}
+
+// Revert reverts update
+func (module *BoardCfgModule) Revert() (rebootRequired bool, err error) {
+	switch {
+	case module.state.State == stateIdle:
+		return module.state.RebootRequired, nil
+
+	case module.state.State == stateUpdated:
+		if err := os.Rename(module.config.Path+originalPostfix, module.config.Path); err != nil {
+			return false, err
+		}
+	}
+
+	if err = os.RemoveAll(module.config.Path + newPostfix); err != nil {
+		log.Errorf("Can't remove file: %s", module.config.Path+newPostfix)
+	}
+
+	if err = os.RemoveAll(module.config.Path + originalPostfix); err != nil {
+		log.Errorf("Can't remove file: %s", module.config.Path+originalPostfix)
+	}
+
+	if module.state.State == stateUpdated && module.state.RebootRequired {
+		module.state.RebootRequired = false
+	} else {
+		module.state.RebootRequired = true
+	}
+
+	if err = module.setState(stateIdle); err != nil {
+		return false, err
+	}
+
+	if module.currentVersion, err = module.getVendorVersionFromFile(module.config.Path); err != nil {
+		return false, err
+	}
+
+	return module.state.RebootRequired, nil
+}
+
+// Reboot performs module reboot
+func (module *BoardCfgModule) Reboot() (err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot")
+
+	if module.rebooter != nil {
+		return module.rebooter.Reboot()
+	}
 
 	return nil
 }
@@ -176,6 +282,44 @@ func (module *BoardCfgModule) Finish() (err error) {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func (state updateState) String() string {
+	return [...]string{"idle", "prepared", "updated"}[state]
+}
+
+func (module *BoardCfgModule) getState() (err error) {
+	stateJSON, err := module.storage.GetModuleState(module.id)
+	if err != nil {
+		return err
+	}
+
+	if len(stateJSON) == 0 {
+		return nil
+	}
+
+	if err = json.Unmarshal(stateJSON, &module.state); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (module *BoardCfgModule) setState(state updateState) (err error) {
+	log.WithFields(log.Fields{"id": module.id, "state": state}).Debug("State changed")
+
+	module.state.State = state
+
+	stateJSON, err := json.Marshal(module.state)
+	if err != nil {
+		return err
+	}
+
+	if err = module.storage.SetModuleState(module.id, stateJSON); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (module *BoardCfgModule) getVendorVersionFromFile(path string) (version string, err error) {
 	boardFile := boardConfigVersion{}
@@ -193,7 +337,7 @@ func (module *BoardCfgModule) getVendorVersionFromFile(path string) (version str
 }
 
 func extractFileFromGz(destination, source string) (err error) {
-	log.WithFields(log.Fields{"src": destination, "dst": source}).Debug("Extract file from archive")
+	log.WithFields(log.Fields{"src": source, "dst": destination}).Debug("Extract file from archive")
 
 	srcFile, err := os.Open(source)
 	if err != nil {

@@ -19,9 +19,17 @@ package boardconfigmodule
 
 import (
 	"encoding/json"
+	"syscall"
 
 	"aos_updatemanager/updatehandler"
 )
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+type rebooter struct {
+}
 
 /*******************************************************************************
  * Init
@@ -29,8 +37,22 @@ import (
 
 func init() {
 	updatehandler.RegisterPlugin("boardconfigmodule",
-		func(id string, configJSON json.RawMessage, controller updatehandler.PlatformController,
-			storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
-			return New(id, configJSON, storage)
+		func(id string, configJSON json.RawMessage,
+			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+			return New(id, configJSON, storage, &rebooter{})
 		})
+}
+
+/*******************************************************************************
+ * Interfaces
+ ******************************************************************************/
+
+func (rebooter *rebooter) Reboot() (err error) {
+	syscall.Sync()
+
+	if err = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
+		return err
+	}
+
+	return nil
 }
