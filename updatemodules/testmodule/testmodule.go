@@ -20,7 +20,6 @@ package testmodule
 import (
 	"encoding/json"
 	"errors"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -41,7 +40,6 @@ const Name = "test"
 // TestModule test module
 type TestModule struct {
 	id string
-	sync.Mutex
 }
 
 /*******************************************************************************
@@ -50,8 +48,8 @@ type TestModule struct {
 
 // New creates test module instance
 func New(id string, configJSON json.RawMessage,
-	storage updatehandler.StateStorage) (module updatehandler.UpdateModule, err error) {
-	log.WithField("id", id).Info("Create test module")
+	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+	log.WithField("id", id).Debug("Create test module")
 
 	testModule := &TestModule{id: id}
 
@@ -60,20 +58,19 @@ func New(id string, configJSON json.RawMessage,
 
 // Close closes test module
 func (module *TestModule) Close() (err error) {
-	log.WithField("id", module.id).Info("Close test module")
+	log.WithField("id", module.id).Debug("Close test module")
 	return nil
 }
 
 // Init initializes module
 func (module *TestModule) Init() (err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Init test module")
+
 	return nil
 }
 
 // GetID returns module ID
 func (module *TestModule) GetID() (id string) {
-	module.Lock()
-	defer module.Unlock()
-
 	return module.id
 }
 
@@ -82,24 +79,39 @@ func (module *TestModule) GetVendorVersion() (version string, err error) {
 	return "", errors.New("not supported")
 }
 
-// Update updates module
-func (module *TestModule) Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error) {
-	module.Lock()
-	defer module.Unlock()
-
+// Prepare prepares module update
+func (module *TestModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
-		"id":       module.id,
-		"fileName": imagePath}).Info("Update")
+		"id":        module.id,
+		"imagePath": imagePath}).Debug("Prepare test module")
+
+	return nil
+}
+
+// Update performs module update
+func (module *TestModule) Update() (rebootRequired bool, err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Update test module")
 
 	return false, nil
 }
 
-// Cancel cancels update
-func (module *TestModule) Cancel() (rebootRequired bool, err error) {
+// Apply applies current update
+func (module *TestModule) Apply() (rebootRequired bool, err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Apply test module")
+
 	return false, nil
 }
 
-// Finish finished update
-func (module *TestModule) Finish() (err error) {
+// Revert reverts current update
+func (module *TestModule) Revert() (rebootRequired bool, err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Revert test module")
+
+	return false, nil
+}
+
+// Reboot performs module reboot
+func (module *TestModule) Reboot() (err error) {
+	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot test module")
+
 	return nil
 }
