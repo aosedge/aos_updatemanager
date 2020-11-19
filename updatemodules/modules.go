@@ -15,11 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package plugins
+package updatemodules
 
 import (
 	// include all supported plugins
 	_ "aos_updatemanager/updatemodules/boardconfigmodule"
+	_ "aos_updatemanager/updatemodules/efidualpart"
+	_ "aos_updatemanager/updatemodules/overlaymodule"
 	_ "aos_updatemanager/updatemodules/sshmodule"
 	_ "aos_updatemanager/updatemodules/testmodule"
+	_ "aos_updatemanager/updatemodules/ubootdualpart"
 )
