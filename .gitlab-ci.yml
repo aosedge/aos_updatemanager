@@ -1,5 +1,9 @@
 image: golang:1.14
 
+before_script:
+  - apt update -y
+  - apt install -y libefivar-dev libefiboot-dev libblkid-dev
+
 stages:
   - build
   - test
@@ -17,11 +21,9 @@ test:
     - um_ci
   stage: test
   script:
-    - apt update
-    - apt install libssl-dev -y
-    - cp ./data/crt.pem  /etc/ssl/certs/
-    - echo "-------   Run Unit tests   -------"
-    - go test $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
+    - apt update -y
+    - apt install -y parted dosfstools
+    - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
 dependency:
