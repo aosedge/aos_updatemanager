@@ -21,66 +21,45 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"sort"
 	"sync"
 
+	"github.com/cavaliercoder/grab"
+	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/image"
-	"gitpct.epam.com/epmd-aepr/aos_common/umprotocol"
 
 	"aos_updatemanager/config"
+	"aos_updatemanager/umclient"
 )
 
 /*******************************************************************************
  * Consts
  ******************************************************************************/
 
-//
-// Update state machine:
-//
-// stateIdle          -> update request                         -> stateUpdate
-// stateUpdate        -> update components                      -> stateFinish
-// stateFinish        -> send status                            -> stateIdle
-//
-// If some error happens during update components:
-//
-// stateUpdate        -> update components fail                 -> stateCancel
-// stateCancel        -> cancel update components, send status  -> stateIdle
-//
-
-const (
-	stateIdle = iota
-	stateUpdate
-	stateCancel
-	stateFinish
-)
-
-//
-// Update component state machine:
-//
-//                         -> update request                      -> stateComponentInit
-// stateComponentInit      -> update component                    -> stateComponentUpdated
-// stateComponentUpdated   -> finish component                    -> stateComponentFinished
-//
-// If some error happens during update component, cancel procedure is performed:
-//
-// stateComponentUpdated   -> cancel component                    -> stateComponentCanceled
-//
-const (
-	stateComponentInit = iota
-	stateComponentUpdated
-	stateComponentCanceled
-	stateComponentFinished
-)
-
 const statusChannelSize = 1
+
+const (
+	eventPrepare = "prepare"
+	eventUpdate  = "update"
+	eventApply   = "apply"
+	eventRevert  = "revert"
+)
+
+const (
+	stateIdle     = "idle"
+	statePrepared = "prepared"
+	stateUpdated  = "updated"
+	stateFailed   = "failed"
+)
 
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
 var plugins = make(map[string]NewPlugin)
-
-var newPlatformController NewPlatfromContoller
 
 /*******************************************************************************
  * Types
@@ -90,16 +69,15 @@ var newPlatformController NewPlatfromContoller
 type Handler struct {
 	sync.Mutex
 
-	platform PlatformController
-	storage  StateStorage
+	storage           StateStorage
+	components        map[string]componentData
+	componentStatuses map[string]*umclient.ComponentStatusInfo
+	state             handlerState
+	initWG            sync.WaitGroup
+	fsm               *fsm.FSM
+	downloadDir       string
 
-	components map[string]UpdateModule
-
-	state handlerState
-
-	wg sync.WaitGroup
-
-	statusChannel chan []umprotocol.ComponentStatus
+	statusChannel chan umclient.Status
 }
 
 // UpdateModule interface for module plugin
@@ -110,58 +88,55 @@ type UpdateModule interface {
 	GetVendorVersion() (version string, err error)
 	// Init initializes module
 	Init() (err error)
+	// Prepare prepares module
+	Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error)
 	// Update updates module
-	Update(imagePath string, vendorVersion string, annotations json.RawMessage) (rebootRequired bool, err error)
-	// Cancel cancels update
-	Cancel() (rebootRequired bool, err error)
-	// Finish finished update
-	Finish() (err error)
+	Update() (rebootRequired bool, err error)
+	// Apply applies update
+	Apply() (rebootRequired bool, err error)
+	// Revert reverts update
+	Revert() (rebootRequired bool, err error)
+	// Reboot performs module reboot
+	Reboot() (err error)
 	// Close closes update module
 	Close() (err error)
 }
 
 // StateStorage provides API to store/retreive persistent data
 type StateStorage interface {
-	SetUpdateState(jsonState []byte) (err error)
-	GetUpdateState() (jsonState []byte, err error)
-	GetModuleState(id string) (state []byte, err error)
-	SetModuleState(id string, state []byte) (err error)
-	GetControllerState(controllerID string, name string) (value []byte, err error)
-	SetControllerState(controllerID string, name string, value []byte) (err error)
+	SetUpdateState(state []byte) (err error)
+	GetUpdateState() (state []byte, err error)
+	SetAosVersion(id string, version uint64) (err error)
+	GetAosVersion(id string) (version uint64, err error)
 }
 
-// PlatformController platform controller
-type PlatformController interface {
-	SystemReboot() (err error)
-	Close() (err error)
+// ModuleStorage provides API store/retrive module persistent data
+type ModuleStorage interface {
+	SetModuleState(id string, state []byte) (err error)
+	GetModuleState(id string) (state []byte, err error)
 }
 
 // NewPlugin update module new function
-type NewPlugin func(id string, configJSON json.RawMessage, controller PlatformController, storage StateStorage) (module UpdateModule, err error)
-
-// NewPlatfromContoller plugin for platform Contoller
-type NewPlatfromContoller func(storage StateStorage, modules []config.ModuleConfig) (controller PlatformController, err error)
-
-type componentState struct {
-	UpdateState   updateComponentState `json:"updateState"`
-	AosVersion    uint64               `json:"aosVersion"`
-	VendorVersion string               `json:"vendorVersion"`
-	Path          string               `json:"path"`
-	Annotations   json.RawMessage      `json:"annotations"`
-	Error         string               `json:"error,omitempty"`
-}
+type NewPlugin func(id string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
 
 type handlerState struct {
-	UpdateState     updateState                `json:"updateState"`
-	ComponentStates map[string]*componentState `json:"componentStates"`
-	AosVersions     map[string]uint64          `json:"aosVersions"`
+	UpdateState       string                                   `json:"updateState"`
+	Error             string                                   `json:"error"`
+	ComponentStatuses map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
 }
 
-type updateState int
-type updateComponentState int
+type componentData struct {
+	module         UpdateModule
+	updatePriority uint32
+	rebootPriority uint32
+}
 
-type componentOperation func(component UpdateModule,
-	state *componentState) (rebootRequired bool, err error)
+type componentOperation func(module UpdateModule) (rebootRequired bool, err error)
+
+type priorityOperation struct {
+	priority  uint32
+	operation func() (err error)
+}
 
 /*******************************************************************************
  * Public
@@ -174,38 +149,42 @@ func RegisterPlugin(plugin string, newFunc NewPlugin) {
 	plugins[plugin] = newFunc
 }
 
-//RegisterControllerPlugin  registers platfrom controller plugin
-func RegisterControllerPlugin(newFunc NewPlatfromContoller) {
-	newPlatformController = newFunc
-}
-
 // New returns pointer to new Handler
-func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error) {
+func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) (handler *Handler, err error) {
 	log.Debug("Create update handler")
 
 	handler = &Handler{
-		storage:       storage,
-		statusChannel: make(chan []umprotocol.ComponentStatus, statusChannelSize),
-	}
-
-	if newPlatformController == nil {
-		return nil, errors.New("controller plugin should be registered")
-	}
-
-	handler.platform, err = newPlatformController(storage, cfg.UpdateModules)
-	if err != nil {
-		return nil, err
+		componentStatuses: make(map[string]*umclient.ComponentStatusInfo),
+		storage:           storage,
+		statusChannel:     make(chan umclient.Status, statusChannelSize),
+		downloadDir:       cfg.DownloadDir,
 	}
 
 	if err = handler.getState(); err != nil {
 		return nil, err
 	}
 
-	if handler.state.AosVersions == nil {
-		handler.state.AosVersions = make(map[string]uint64)
+	if handler.state.UpdateState == "" {
+		handler.state.UpdateState = stateIdle
 	}
 
-	handler.components = make(map[string]UpdateModule)
+	handler.fsm = fsm.NewFSM(handler.state.UpdateState, fsm.Events{
+		{Name: eventPrepare, Src: []string{stateIdle}, Dst: statePrepared},
+		{Name: eventUpdate, Src: []string{statePrepared}, Dst: stateUpdated},
+		{Name: eventApply, Src: []string{stateUpdated}, Dst: stateIdle},
+		{Name: eventRevert, Src: []string{statePrepared, stateUpdated, stateFailed}, Dst: stateIdle},
+	},
+		fsm.Callbacks{
+			"after_event":           handler.onStateChanged,
+			"leave_state":           func(e *fsm.Event) { e.Async() },
+			"after_" + eventPrepare: handler.onPrepareState,
+			"after_" + eventUpdate:  handler.onUpdateState,
+			"after_" + eventApply:   handler.onApplyState,
+			"after_" + eventRevert:  handler.onRevertState,
+		},
+	)
+
+	handler.components = make(map[string]componentData)
 
 	for _, moduleCfg := range cfg.UpdateModules {
 		if moduleCfg.Disabled {
@@ -213,112 +192,71 @@ func New(cfg *config.Config, storage StateStorage) (handler *Handler, err error)
 			continue
 		}
 
-		component, err := handler.createComponent(moduleCfg.Plugin, moduleCfg.ID, moduleCfg.Params)
-		if err != nil {
+		component := componentData{updatePriority: moduleCfg.UpdatePriority, rebootPriority: moduleCfg.RebootPriority}
+
+		if component.module, err = handler.createComponent(moduleCfg.Plugin, moduleCfg.ID,
+			moduleCfg.Params, moduleStorage); err != nil {
 			return nil, err
 		}
 
 		handler.components[moduleCfg.ID] = component
 	}
 
-	handler.wg.Add(1)
+	handler.initWG.Add(1)
 	go handler.init()
 
 	return handler, nil
 }
 
-// GetStatus returns update status
-func (handler *Handler) GetStatus() (status []umprotocol.ComponentStatus) {
-	handler.Lock()
-	defer handler.Unlock()
+// Registered indicates the client registed to the server
+func (handler *Handler) Registered() {
+	go func() {
+		// Wait for all modules are initialized before sending status
+		handler.initWG.Wait()
 
-	return handler.getStatus()
+		handler.sendStatus()
+	}()
+
 }
 
-// Update performs components updates
-func (handler *Handler) Update(infos []umprotocol.ComponentInfo) {
-	handler.Lock()
-	defer handler.Unlock()
+// PrepareUpdate prepares update
+func (handler *Handler) PrepareUpdate(components []umclient.ComponentUpdateInfo) {
+	log.Info("Prepare update")
 
-	if handler.state.UpdateState != stateIdle {
-		log.Warn("Another update is in progress")
+	if err := handler.sendEvent(eventPrepare, components); err != nil {
+		log.Errorf("Can't send prepare event: %s", err)
 	}
-
-	handler.state.ComponentStates = make(map[string]*componentState)
-
-	for _, info := range infos {
-		log.WithFields(log.Fields{
-			"ID":            info.ID,
-			"AosVersion":    info.AosVersion,
-			"VendorVersion": info.VendorVersion,
-			"Path":          info.Path}).Debug("Update component")
-
-		handler.state.ComponentStates[info.ID] = &componentState{
-			UpdateState:   stateComponentInit,
-			AosVersion:    info.AosVersion,
-			VendorVersion: info.VendorVersion,
-			Annotations:   info.Annotations,
-			Path:          info.Path,
-		}
-
-		component, ok := handler.components[info.ID]
-		if !ok {
-			err := errors.New("component not found")
-
-			handler.state.ComponentStates[info.ID].Error = err.Error()
-
-			log.WithField("id", info.ID).Errorf("Component update error: %s", err)
-
-			continue
-		}
-
-		vendorVersion, err := component.GetVendorVersion()
-		if err == nil && info.VendorVersion != "" {
-			if vendorVersion == info.VendorVersion {
-				log.WithField("id", info.ID).Warnf("Component already has required vendor version: %s", vendorVersion)
-
-				delete(handler.state.ComponentStates, info.ID)
-
-				continue
-			}
-		}
-
-		if err := image.CheckFileInfo(info.Path, image.FileInfo{
-			Sha256: info.Sha256,
-			Sha512: info.Sha512,
-			Size:   info.Size}); err != nil {
-
-			handler.state.ComponentStates[info.ID].Error = err.Error()
-
-			log.WithField("id", info.ID).Errorf("Component update error: %s", err)
-
-			continue
-		}
-	}
-
-	for _, state := range handler.state.ComponentStates {
-		if state.Error != "" {
-			handler.finishUpdate()
-
-			return
-		}
-	}
-
-	handler.state.UpdateState = stateUpdate
-
-	log.WithField("state", handler.state.UpdateState).Debugf("State changed")
-
-	if err := handler.setState(); err != nil {
-		log.Errorf("Can't set update handler state: %s", err)
-	}
-
-	handler.statusChannel <- handler.getStatus()
-
-	go handler.update()
 }
 
-// StatusChannel this channel is used to notify about component statuses
-func (handler *Handler) StatusChannel() (statusChannel <-chan []umprotocol.ComponentStatus) {
+// StartUpdate starts update
+func (handler *Handler) StartUpdate() {
+	log.Info("Start update")
+
+	if err := handler.sendEvent(eventUpdate); err != nil {
+		log.Errorf("Can't send update event: %s", err)
+	}
+}
+
+// ApplyUpdate applies update
+func (handler *Handler) ApplyUpdate() {
+	log.Info("Apply update")
+
+	if err := handler.sendEvent(eventApply); err != nil {
+		log.Errorf("Can't send apply event: %s", err)
+	}
+}
+
+// RevertUpdate reverts update
+func (handler *Handler) RevertUpdate() {
+	log.Info("Revert update")
+
+	if err := handler.sendEvent(eventRevert); err != nil {
+		log.Errorf("Can't send revert event: %s", err)
+	}
+}
+
+// StatusChannel returns status channel
+func (handler *Handler) StatusChannel() (status <-chan umclient.Status) {
 	return handler.statusChannel
 }
 
@@ -327,35 +265,21 @@ func (handler *Handler) Close() {
 	log.Debug("Close update handler")
 
 	for _, component := range handler.components {
-		component.Close()
+		component.module.Close()
 	}
-
-	handler.platform.Close()
-
-	close(handler.statusChannel)
 }
 
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
-func (state updateState) String() string {
-	return [...]string{
-		"idle", "update", "cancel", "finish"}[state]
-}
-
-func (state updateComponentState) String() string {
-	return [...]string{
-		"init", "updated", "canceled", "finished"}[state]
-}
-
-func (handler *Handler) createComponent(plugin, id string, params json.RawMessage) (module UpdateModule, err error) {
+func (handler *Handler) createComponent(plugin, id string, params json.RawMessage, storage ModuleStorage) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, fmt.Errorf("plugin %s not found", plugin)
 	}
 
-	if module, err = newFunc(id, params, handler.platform, handler.storage); err != nil {
+	if module, err = newFunc(id, params, storage); err != nil {
 		return nil, err
 	}
 
@@ -379,7 +303,11 @@ func (handler *Handler) getState() (err error) {
 	return nil
 }
 
-func (handler *Handler) setState() (err error) {
+func (handler *Handler) setState(state string) (err error) {
+	log.WithField("state", state).Debugf("State changed")
+
+	handler.state.UpdateState = state
+
 	jsonState, err := json.Marshal(handler.state)
 	if err != nil {
 		return err
@@ -393,247 +321,518 @@ func (handler *Handler) setState() (err error) {
 }
 
 func (handler *Handler) init() {
-	defer handler.wg.Done()
+	defer handler.initWG.Done()
 
-	for id, module := range handler.components {
-		log.Debugf("Initializing module %s", id)
+	var operations []priorityOperation
 
-		if err := module.Init(); err != nil {
-			log.Errorf("Can't initialize module %s: %s", id, err)
+	for id, component := range handler.components {
+		handler.componentStatuses[id] = &umclient.ComponentStatusInfo{
+			ID:     id,
+			Status: umclient.StatusInstalled,
 		}
+
+		module := component.module
+		id := id
+
+		operations = append(operations, priorityOperation{
+			priority: component.updatePriority,
+			operation: func() (err error) {
+				log.WithField("id", id).Debug("Init component")
+
+				if err := module.Init(); err != nil {
+					log.Errorf("Can't initialize module %s: %s", id, err)
+
+					handler.componentStatuses[id].Status = umclient.StatusError
+					handler.componentStatuses[id].Error = err.Error()
+				}
+
+				return nil
+			},
+		})
 	}
 
-	if handler.state.UpdateState != stateIdle {
-		go handler.update()
-	}
+	doPriorityOperations(operations, false)
+
+	handler.getVersions()
 }
 
-func (handler *Handler) finishUpdate() {
-	for id, componentState := range handler.state.ComponentStates {
-		if componentState.Error != "" {
-			continue
+func (handler *Handler) getVersions() {
+	log.Debug("Update component versions")
+
+	for id, component := range handler.components {
+		vendorVersion, err := component.module.GetVendorVersion()
+		if err == nil {
+			handler.componentStatuses[id].VendorVersion = vendorVersion
 		}
 
-		if componentState.UpdateState == stateComponentFinished {
-			handler.state.AosVersions[id] = componentState.AosVersion
-		}
-
-		delete(handler.state.ComponentStates, id)
-	}
-
-	handler.state.UpdateState = stateIdle
-
-	log.WithField("state", handler.state.UpdateState).Debugf("State changed")
-
-	if err := handler.setState(); err != nil {
-		log.Errorf("Can't set update handler state: %s", err)
-	}
-
-	handler.statusChannel <- handler.getStatus()
-}
-
-func (handler *Handler) update() {
-	var (
-		rebootRequired bool
-		err            error
-	)
-
-	handler.wg.Wait()
-
-	for {
-		switch handler.state.UpdateState {
-		case stateUpdate:
-			rebootRequired, err = handler.componentOperation(stateComponentUpdated,
-				func(component UpdateModule, state *componentState) (rebootRequired bool, err error) {
-					return component.Update(state.Path, state.VendorVersion, state.Annotations)
-				}, true)
-			if err != nil {
-				handler.switchState(stateCancel)
-
-				break
-			}
-
-			if rebootRequired {
-				break
-			}
-
-			handler.switchState(stateFinish)
-
-		case stateCancel:
-			rebootRequired, _ = handler.componentOperation(stateComponentCanceled,
-				func(component UpdateModule, state *componentState) (rebootRequired bool, err error) {
-					return component.Cancel()
-				}, false)
-
-			if rebootRequired {
-				break
-			}
-
-			handler.Lock()
-			handler.finishUpdate()
-			handler.Unlock()
-
-			return
-
-		case stateFinish:
-			handler.componentOperation(stateComponentFinished,
-				func(component UpdateModule, state *componentState) (rebootRequired bool, err error) {
-					return false, component.Finish()
-				}, false)
-
-			handler.Lock()
-			handler.finishUpdate()
-			handler.Unlock()
-
-			return
-		}
-
-		if rebootRequired {
-			log.Debug("System reboot is required")
-
-			if err = handler.platform.SystemReboot(); err != nil {
-				log.Errorf("Can't perform system reboot: %s", err)
-			}
-
-			return
+		aosVersion, err := handler.storage.GetAosVersion(id)
+		if err == nil {
+			handler.componentStatuses[id].AosVersion = aosVersion
 		}
 	}
 }
 
-func (handler *Handler) switchState(state updateState) {
-	handler.Lock()
-	defer handler.Unlock()
+func (handler *Handler) sendStatus() {
+	log.WithFields(log.Fields{"state": handler.state.UpdateState, "error": handler.state.Error}).Debug("Send status")
 
-	handler.state.UpdateState = state
-
-	log.WithField("state", handler.state.UpdateState).Debugf("State changed")
-
-	if err := handler.setState(); err != nil {
-		log.Errorf("Can't set update handler state: %s", err)
+	status := umclient.Status{
+		State: toUMState(handler.state.UpdateState),
+		Error: handler.state.Error,
 	}
+
+	for id, componentStatus := range handler.componentStatuses {
+		status.Components = append(status.Components, *componentStatus)
+
+		log.WithFields(log.Fields{
+			"id":            componentStatus.ID,
+			"vendorVersion": componentStatus.VendorVersion,
+			"aosVersion":    componentStatus.AosVersion,
+			"status":        componentStatus.Status,
+			"error":         componentStatus.Error}).Debug("Component status")
+
+		updateStatus, ok := handler.state.ComponentStatuses[id]
+		if ok {
+			status.Components = append(status.Components, *updateStatus)
+
+			log.WithFields(log.Fields{
+				"id":            updateStatus.ID,
+				"vendorVersion": updateStatus.VendorVersion,
+				"aosVersion":    updateStatus.AosVersion,
+				"status":        updateStatus.Status,
+				"error":         updateStatus.Error}).Debug("Component status")
+		}
+	}
+
+	handler.statusChannel <- status
 }
 
-func (handler *Handler) componentOperation(newState updateComponentState,
-	operation componentOperation, stopOnError bool) (rebootRequired bool, operationErr error) {
-	for id, componentState := range handler.state.ComponentStates {
-		if componentState.UpdateState == newState {
-			continue
+func (handler *Handler) onStateChanged(event *fsm.Event) {
+	if handler.fsm.Current() == stateIdle {
+		handler.getVersions()
+
+		for id, componentStatus := range handler.state.ComponentStatuses {
+			if componentStatus.Status != umclient.StatusError {
+				delete(handler.state.ComponentStatuses, id)
+			}
 		}
 
-		component, ok := handler.components[id]
+		if handler.downloadDir != "" {
+			if err := os.RemoveAll(handler.downloadDir); err != nil {
+				log.Errorf("Can't remove download dir: %s", handler.downloadDir)
+			}
+
+			if err := os.MkdirAll(handler.downloadDir, 0755); err != nil {
+				log.Errorf("Can't create download dir: %s", handler.downloadDir)
+			}
+		}
+	}
+
+	if err := handler.setState(handler.fsm.Current()); err != nil {
+		log.Errorf("Can't set update state: %s", err)
+
+		if handler.state.Error == "" {
+			handler.state.Error = err.Error()
+		}
+
+		handler.state.UpdateState = stateFailed
+		handler.fsm.SetState(handler.state.UpdateState)
+	}
+
+	handler.sendStatus()
+}
+
+func componentError(componentStatus *umclient.ComponentStatusInfo, err error) {
+	log.WithField("id", componentStatus.ID).Errorf("Component error: %s", err)
+
+	componentStatus.Status = umclient.StatusError
+	componentStatus.Error = err.Error()
+}
+
+func doPriorityOperations(operations []priorityOperation, stopOnError bool) (err error) {
+	if len(operations) == 0 {
+		return nil
+	}
+
+	sort.Slice(operations, func(i, j int) bool { return operations[i].priority > operations[j].priority })
+
+	var wg sync.WaitGroup
+	var groupErr error
+	priority := operations[0].priority
+
+	for _, item := range operations {
+		if item.priority != priority {
+			wg.Wait()
+
+			if groupErr != nil {
+				if stopOnError {
+					return groupErr
+				}
+
+				if err == nil {
+					err = groupErr
+				}
+
+				groupErr = nil
+			}
+
+			priority = item.priority
+		}
+
+		operation := item.operation
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			if err := operation(); err != nil {
+				if groupErr == nil {
+					groupErr = err
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if groupErr != nil {
+		if err == nil {
+			err = groupErr
+		}
+	}
+
+	return err
+}
+
+func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatusInfo,
+	operation componentOperation, stopOnError bool) (rebootStatuses []*umclient.ComponentStatusInfo, err error) {
+	var operations []priorityOperation
+
+	for _, componentStatus := range componentStatuses {
+		component, ok := handler.components[componentStatus.ID]
 		if !ok {
-			err := fmt.Errorf("component %s not found", id)
-
-			log.WithField("id", id).Errorf("Component operation error: %s", err)
-
-			if componentState.Error == "" {
-				componentState.Error = err.Error()
-			}
-
-			if operationErr == nil {
-				operationErr = err
-			}
+			notFoundErr := fmt.Errorf("component %s not found", componentStatus.ID)
+			componentError(componentStatus, notFoundErr)
 
 			if stopOnError {
-				return false, operationErr
+				return nil, notFoundErr
+			}
+
+			if err == nil {
+				err = notFoundErr
 			}
 
 			continue
 		}
 
-		moduleRebootRequired, err := operation(component, componentState)
-		if err != nil {
-			log.WithField("id", id).Errorf("Component operation error: %s", err)
+		module := component.module
+		status := componentStatus
 
-			if componentState.Error == "" {
-				componentState.Error = err.Error()
-			}
+		operations = append(operations, priorityOperation{
+			priority: component.updatePriority,
+			operation: func() (err error) {
+				rebootRequired, err := operation(module)
+				if err != nil {
+					componentError(status, err)
+					return err
+				}
 
-			if operationErr == nil {
-				operationErr = err
-			}
+				if rebootRequired {
+					log.WithField("id", module.GetID()).Debug("Reboot required")
+
+					rebootStatuses = append(rebootStatuses, status)
+				}
+
+				return nil
+			},
+		})
+	}
+
+	err = doPriorityOperations(operations, stopOnError)
+
+	return rebootStatuses, err
+}
+
+func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusInfo, stopOnError bool) (err error) {
+	var operations []priorityOperation
+
+	for _, componentStatus := range componentStatuses {
+		component, ok := handler.components[componentStatus.ID]
+		if !ok {
+			notFoundErr := fmt.Errorf("component %s not found", componentStatus.ID)
+			componentError(componentStatus, notFoundErr)
 
 			if stopOnError {
-				return false, operationErr
+				return notFoundErr
 			}
-		}
 
-		if moduleRebootRequired {
-			log.WithField("id", id).Debug("Component reboot required")
-
-			rebootRequired = true
+			if err == nil {
+				err = notFoundErr
+			}
 
 			continue
 		}
 
-		if err := handler.setComponentState(id, newState); err != nil {
-			log.WithField("id", id).Errorf("Can't set module state: %s", err)
+		module := component.module
 
-			if componentState.Error == "" {
-				componentState.Error = err.Error()
-			}
+		operations = append(operations, priorityOperation{
+			priority: component.rebootPriority,
+			operation: func() (err error) {
+				log.WithField("id", module.GetID()).Debug("Reboot component")
 
-			if operationErr == nil {
-				operationErr = err
-			}
+				if err := module.Reboot(); err != nil {
+					componentError(componentStatus, err)
+					return err
+				}
 
+				return nil
+			},
+		})
+	}
+
+	return doPriorityOperations(operations, stopOnError)
+}
+
+func (handler *Handler) componentOperation(operation componentOperation, stopOnError bool) (err error) {
+	var operationStatuses []*umclient.ComponentStatusInfo
+
+	for _, operationStatus := range handler.state.ComponentStatuses {
+		operationStatuses = append(operationStatuses, operationStatus)
+	}
+
+	for len(operationStatuses) != 0 {
+		rebootStatuses, opError := handler.doOperation(operationStatuses, operation, stopOnError)
+		if opError != nil {
 			if stopOnError {
-				return false, operationErr
+				return opError
+			}
+
+			if err == nil {
+				err = opError
+			}
+		}
+
+		if len(rebootStatuses) == 0 {
+			return err
+		}
+
+		if rebootError := handler.doReboot(rebootStatuses, stopOnError); rebootError != nil {
+			if stopOnError {
+				return rebootError
+			}
+
+			if err == nil {
+				err = rebootError
+			}
+		}
+
+		operationStatuses = rebootStatuses
+	}
+
+	return err
+}
+
+func downloadImage(downloadDir, urlStr string) (filePath string, err error) {
+	var urlVal *url.URL
+
+	if urlVal, err = url.Parse(urlStr); err != nil {
+		return "", err
+	}
+
+	if urlVal.Scheme == "file" {
+		return urlVal.Path, nil
+	}
+
+	grabClient := grab.NewClient()
+
+	log.WithField("url", urlStr).Debug("Start downloading file")
+
+	req, err := grab.NewRequest(downloadDir, urlStr)
+	if err != nil {
+		return "", err
+	}
+
+	resp := grabClient.Do(req)
+
+	<-resp.Done
+
+	if err = resp.Err(); err != nil {
+		return "", err
+	}
+
+	log.WithField("file", resp.Filename).Debug("Download complete")
+
+	return resp.Filename, nil
+}
+
+func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
+	vendorVersion, err := module.GetVendorVersion()
+	if err == nil && updateInfo.VendorVersion != "" {
+		if vendorVersion == updateInfo.VendorVersion {
+			log.WithField("id", updateInfo.ID).Warnf("Component already has required vendor version: %s", vendorVersion)
+
+			delete(handler.state.ComponentStatuses, updateInfo.ID)
+
+			return nil
+		}
+	}
+
+	if updateInfo.AosVersion != 0 {
+		aosVersion, err := handler.storage.GetAosVersion(updateInfo.ID)
+
+		if err == nil {
+			if aosVersion == updateInfo.AosVersion {
+				log.WithField("id", updateInfo.ID).Warnf("Component already has required Aos version: %d", updateInfo.AosVersion)
+
+				delete(handler.state.ComponentStatuses, updateInfo.ID)
+
+				return nil
+			}
+
+			if aosVersion > updateInfo.AosVersion {
+				return errors.New("wrong Aos version")
 			}
 		}
 	}
 
-	return rebootRequired, operationErr
-}
+	filePath, err := downloadImage(handler.downloadDir, updateInfo.URL)
+	if err != nil {
+		return err
+	}
 
-func (handler *Handler) setComponentState(id string, state updateComponentState) (err error) {
-	handler.Lock()
-	defer handler.Unlock()
+	if err = image.CheckFileInfo(filePath, image.FileInfo{
+		Sha256: updateInfo.Sha256,
+		Sha512: updateInfo.Sha512,
+		Size:   updateInfo.Size}); err != nil {
+		return err
+	}
 
-	log.WithFields(log.Fields{"state": state, "id": id}).Debugf("Component state changed")
-
-	handler.state.ComponentStates[id].UpdateState = state
-
-	if err := handler.setState(); err != nil {
+	if err = module.Prepare(filePath, updateInfo.VendorVersion, updateInfo.Annotations); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (handler *Handler) getStatus() (status []umprotocol.ComponentStatus) {
-	for id, component := range handler.components {
-		componentStatus := umprotocol.ComponentStatus{ID: id, Status: umprotocol.StatusInstalled}
+func (handler *Handler) onPrepareState(event *fsm.Event) {
+	componentsInfo := make(map[string]*umclient.ComponentUpdateInfo)
 
-		vendorVersion, err := component.GetVendorVersion()
-		if err == nil {
-			componentStatus.VendorVersion = vendorVersion
-		}
+	handler.state.Error = ""
+	handler.state.ComponentStatuses = make(map[string]*umclient.ComponentStatusInfo)
 
-		aosVersion, ok := handler.state.AosVersions[id]
-		if ok {
-			componentStatus.AosVersion = aosVersion
-		}
+	infos := event.Args[0].([]umclient.ComponentUpdateInfo)
 
-		status = append(status, componentStatus)
+	for i, info := range infos {
+		componentsInfo[info.ID] = &infos[i]
 
-		componentState, ok := handler.state.ComponentStates[id]
-		if ok {
-			componentStatus := umprotocol.ComponentStatus{
-				ID:            id,
-				AosVersion:    componentState.AosVersion,
-				VendorVersion: componentState.VendorVersion,
-				Status:        umprotocol.StatusInstalling,
-			}
-
-			if componentState.Error != "" {
-				componentStatus.Status = umprotocol.StatusError
-				componentStatus.Error = componentState.Error
-			}
-
-			status = append(status, componentStatus)
+		handler.state.ComponentStatuses[info.ID] = &umclient.ComponentStatusInfo{
+			ID:            info.ID,
+			VendorVersion: info.VendorVersion,
+			AosVersion:    info.AosVersion,
+			Status:        umclient.StatusInstalling,
 		}
 	}
 
-	return status
+	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
+		updateInfo, ok := componentsInfo[module.GetID()]
+		if !ok {
+			return false, fmt.Errorf("update info for %s component not found", module.GetID())
+		}
+
+		log.WithFields(log.Fields{
+			"id":            updateInfo.ID,
+			"vendorVersion": updateInfo.VendorVersion,
+			"aosVersion":    updateInfo.AosVersion,
+			"url":           updateInfo.URL}).Debug("Prepare component")
+
+		return false, handler.prepareComponent(module, updateInfo)
+	}, true); err != nil {
+		handler.state.Error = err.Error()
+		handler.fsm.SetState(stateFailed)
+	}
+
+	if len(handler.state.ComponentStatuses) == 0 {
+		handler.fsm.SetState(stateIdle)
+	}
+}
+
+func (handler *Handler) onUpdateState(event *fsm.Event) {
+	handler.state.Error = ""
+
+	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
+		log.WithFields(log.Fields{"id": module.GetID()}).Debug("Update component")
+
+		return module.Update()
+	}, true); err != nil {
+		handler.state.Error = err.Error()
+		handler.fsm.SetState(stateFailed)
+	}
+}
+
+func (handler *Handler) onApplyState(event *fsm.Event) {
+	handler.state.Error = ""
+
+	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
+		log.WithFields(log.Fields{"id": module.GetID()}).Debug("Apply component")
+
+		if rebootRequired, err = module.Apply(); err != nil {
+			return rebootRequired, err
+		}
+
+		componentStatus, ok := handler.state.ComponentStatuses[module.GetID()]
+		if !ok {
+			return rebootRequired, fmt.Errorf("component %s status not found", module.GetID())
+		}
+
+		if err = handler.storage.SetAosVersion(componentStatus.ID, componentStatus.AosVersion); err != nil {
+			return rebootRequired, err
+		}
+
+		return rebootRequired, nil
+	}, false); err != nil {
+		log.Errorf("Can't apply update: %s", err)
+		handler.state.Error = err.Error()
+	}
+}
+
+func (handler *Handler) onRevertState(event *fsm.Event) {
+	handler.state.Error = ""
+
+	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
+		log.WithFields(log.Fields{"id": module.GetID()}).Debug("Revert component")
+
+		return module.Revert()
+	}, false); err != nil {
+		log.Errorf("Can't revert update: %s", err)
+		handler.state.Error = err.Error()
+	}
+}
+
+func (handler *Handler) sendEvent(event string, args ...interface{}) (err error) {
+	if handler.fsm.Cannot(event) {
+		return fmt.Errorf("error sending event %s in state: %s", event, handler.fsm.Current())
+	}
+
+	if err = handler.fsm.Event(event, args...); err != nil {
+		if _, ok := err.(fsm.AsyncError); !ok {
+			return err
+		}
+
+		go func() {
+			if err := handler.fsm.Transition(); err != nil {
+				log.Errorf("Error transition event %s: %s", event, err)
+			}
+		}()
+	}
+
+	return nil
+}
+
+func toUMState(state string) (umState umclient.UMState) {
+	return map[string]umclient.UMState{
+		stateIdle:     umclient.StateIdle,
+		statePrepared: umclient.StatePrepared,
+		stateUpdated:  umclient.StateUpdated,
+		stateFailed:   umclient.StateFailed,
+	}[state]
 }
