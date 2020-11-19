@@ -36,20 +36,23 @@ type Migration struct {
 // Config instance
 type Config struct {
 	ServerURL     string         `json:"serverURL"`
+	ID            string         `json:"id"`
 	Cert          string         `json:"cert"`
 	Key           string         `json:"key"`
 	WorkingDir    string         `json:"workingDir"`
+	DownloadDir   string         `json:"downloadDir"`
 	UpdateModules []ModuleConfig `json:"updateModules"`
-	CrtModules    []ModuleConfig `json:"crtModules"`
 	Migration     Migration      `json:"migration"`
 }
 
 // ModuleConfig module configuration
 type ModuleConfig struct {
-	ID       string
-	Plugin   string
-	Disabled bool
-	Params   json.RawMessage
+	ID             string `json:"id"`
+	Plugin         string `json:"plugin"`
+	Disabled       bool   `json:"disabled"`
+	UpdatePriority uint32 `json:"updatePriority"`
+	RebootPriority uint32 `json:"rebootPriority"`
+	Params         json.RawMessage
 }
 
 /*******************************************************************************

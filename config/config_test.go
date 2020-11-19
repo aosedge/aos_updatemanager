@@ -57,12 +57,16 @@ func createWrongConfigFile() (err error) {
 func createConfigFile() (err error) {
 	configContent := `{
 	"ServerUrl": "localhost:8090",
+	"ID": "um01",
 	"Cert": "crt.pem",
 	"Key": "key.pem",
 	"WorkingDir": "/var/aos/updatemanager",
+	"DownloadDir": "/var/aos/updatemanager/download",
 	"UpdateModules":[{
 		"ID": "id1",
 		"Plugin": "test1",
+		"UpdatePriority": 1,
+		"RebootPriority": 1,
 		"Params": {
 			"Param1" :"value1",
 			"Param2" : 2
@@ -70,6 +74,8 @@ func createConfigFile() (err error) {
 	}, {
 		"ID": "id2",
 		"Plugin": "test2",
+		"UpdatePriority": 2,
+		"RebootPriority": 2,
 		"Params": {
 			"Param1" :"value1",
 			"Param2" : 2
@@ -77,6 +83,8 @@ func createConfigFile() (err error) {
 	}, {
 		"ID": "id3",
 		"Plugin": "test3",
+		"UpdatePriority": 3,
+		"RebootPriority": 3,
 		"Disabled": true,
 		"Params": {
 			"Param1" :"value1",
@@ -138,6 +146,12 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
+func TestGetID(t *testing.T) {
+	if cfg.ID != "um01" {
+		t.Errorf("Wrong ID value: %s", cfg.ID)
+	}
+}
+
 func TestGetCredentials(t *testing.T) {
 	if cfg.ServerURL != "localhost:8090" {
 		t.Errorf("Wrong ServerURL value: %s", cfg.ServerURL)
@@ -151,6 +165,7 @@ func TestGetCredentials(t *testing.T) {
 		t.Errorf("Wrong key value: %s", cfg.Key)
 	}
 }
+
 func TestModules(t *testing.T) {
 	if len(cfg.UpdateModules) != 3 {
 		t.Fatalf("Wrong modules len: %d", len(cfg.UpdateModules))
@@ -163,6 +178,13 @@ func TestModules(t *testing.T) {
 	if cfg.UpdateModules[0].Plugin != "test1" || cfg.UpdateModules[1].Plugin != "test2" || cfg.UpdateModules[2].Plugin != "test3" {
 		t.Error("Wrong plugin value")
 	}
+	if cfg.UpdateModules[0].UpdatePriority != 1 || cfg.UpdateModules[1].UpdatePriority != 2 || cfg.UpdateModules[2].UpdatePriority != 3 {
+		t.Error("Wrong update priority value")
+	}
+
+	if cfg.UpdateModules[0].RebootPriority != 1 || cfg.UpdateModules[1].RebootPriority != 2 || cfg.UpdateModules[2].RebootPriority != 3 {
+		t.Error("Wrong reboot priority value")
+	}
 
 	if cfg.UpdateModules[0].Disabled != false || cfg.UpdateModules[1].Disabled != false || cfg.UpdateModules[2].Disabled != true {
 		t.Error("Disabled value")
@@ -172,6 +194,12 @@ func TestModules(t *testing.T) {
 func TestGetWorkingDir(t *testing.T) {
 	if cfg.WorkingDir != "/var/aos/updatemanager" {
 		t.Errorf("Wrong working dir value: %s", cfg.WorkingDir)
+	}
+}
+
+func TestGetDownloadDir(t *testing.T) {
+	if cfg.DownloadDir != "/var/aos/updatemanager/download" {
+		t.Errorf("Wrong download dir value: %s", cfg.DownloadDir)
 	}
 }
 
