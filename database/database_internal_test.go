@@ -27,11 +27,8 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/crthandler"
 )
 
 /*******************************************************************************
@@ -119,6 +116,23 @@ func TestUpdateState(t *testing.T) {
 	}
 }
 
+func TestAosVersion(t *testing.T) {
+	var setAosVersion uint64 = 53
+
+	if err := db.SetAosVersion("id0", setAosVersion); err != nil {
+		t.Fatalf("Can't set Aos version: %s", err)
+	}
+
+	getAosVersion, err := db.GetAosVersion("id0")
+	if err != nil {
+		t.Fatalf("Can't get Aos version: %s", err)
+	}
+
+	if setAosVersion != getAosVersion {
+		t.Fatalf("Wrong Aos version: %v", getAosVersion)
+	}
+}
+
 func TestModuleState(t *testing.T) {
 	type testItem struct {
 		id    string
@@ -152,44 +166,6 @@ func TestModuleState(t *testing.T) {
 	}
 }
 
-func TestControllerState(t *testing.T) {
-	type testItem struct {
-		id    string
-		name  string
-		value string
-	}
-
-	testData := []testItem{
-		{"id0", "name00", "state00"},
-		{"id0", "name01", "state00"},
-		{"id1", "name01", "state01"},
-		{"id1", "name02", "state01"},
-		{"id2", "name02", "state02"},
-		{"id2", "name03", "state02"},
-		{"id3", "name03", "state03"},
-		{"id0", "name10", "state10"},
-		{"id0", "name10", "state11"},
-		{"id1", "name11", "state11"},
-		{"id2", "name12", "state12"},
-		{"id3", "name13", "state13"},
-	}
-
-	for i, item := range testData {
-		if err := db.SetControllerState(item.id, item.name, []byte(item.value)); err != nil {
-			t.Errorf("Index: %d, can't set module state: %s", i, err)
-		}
-
-		value, err := db.GetControllerState(item.id, item.name)
-		if err != nil {
-			t.Errorf("Index: %d, can't get module state: %s", i, err)
-		}
-
-		if string(value) != item.value {
-			t.Errorf("Index: %d, wrong module state: %s", i, string(value))
-		}
-	}
-}
-
 func TestMultiThread(t *testing.T) {
 	const numIterations = 1000
 
@@ -197,12 +173,18 @@ func TestMultiThread(t *testing.T) {
 
 	wg.Add(2)
 
+	var testErr error
+
 	go func() {
 		defer wg.Done()
 
 		for i := 0; i < numIterations; i++ {
 			if err := db.SetUpdateState([]byte(strconv.Itoa(i))); err != nil {
-				t.Fatalf("Can't set state: %s", err)
+				if testErr == nil {
+					testErr = err
+				}
+
+				return
 			}
 		}
 	}()
@@ -212,111 +194,16 @@ func TestMultiThread(t *testing.T) {
 
 		for i := 0; i < numIterations; i++ {
 			if _, err := db.GetUpdateState(); err != nil {
-				t.Fatalf("Can't get state: %s", err)
+				if testErr == nil {
+					testErr = err
+				}
+
+				return
 			}
 		}
 	}()
 
 	wg.Wait()
-}
-
-func TestAddRemoveCertificate(t *testing.T) {
-	type testData struct {
-		crtType       string
-		crt           crthandler.CrtInfo
-		errorExpected bool
-	}
-
-	data := []testData{
-		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()}, errorExpected: false},
-		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()}, errorExpected: true},
-		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer1", "s0", "crtURL1", "keyURL1", time.Now().UTC()}, errorExpected: false},
-		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer1", "s0", "crtURL1", "keyURL1", time.Now().UTC()}, errorExpected: true},
-		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer2", "s0", "crtURL2", "keyURL2", time.Now().UTC()}, errorExpected: false}}
-
-	// Add certificates
-	for _, item := range data {
-		if err := db.AddCertificate(item.crtType, item.crt); err != nil && !item.errorExpected {
-			t.Errorf("Can't add certificate: %s", err)
-		}
-	}
-
-	// Get certificates
-
-	for _, item := range data {
-		crt, err := db.GetCertificate(item.crt.Issuer, item.crt.Serial)
-		if err != nil && !item.errorExpected {
-			t.Errorf("Can't get certificate: %s", err)
-
-			continue
-		}
-
-		if item.errorExpected {
-			continue
-		}
-
-		if !reflect.DeepEqual(crt, item.crt) {
-			t.Errorf("Wrong crt info: %v", crt)
-		}
-	}
-
-	// Remove certificates
-
-	for _, item := range data {
-		if err := db.RemoveCertificate(item.crtType, item.crt.CrtURL); err != nil && !item.errorExpected {
-			t.Errorf("Can't remove certificate: %s", err)
-		}
-
-		if _, err := db.GetCertificate(item.crtType, item.crt.CrtURL); err == nil {
-			t.Error("Certificate should be removed")
-		}
-	}
-}
-
-func TestGetCertificates(t *testing.T) {
-	data := [][]crthandler.CrtInfo{
-		[]crthandler.CrtInfo{
-			crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer0", "s1", "crtURL1", "keyURL1", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer0", "s2", "crtURL2", "keyURL2", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer0", "s3", "crtURL3", "keyURL3", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer0", "s4", "crtURL4", "keyURL4", time.Now().UTC()},
-		},
-		[]crthandler.CrtInfo{
-			crthandler.CrtInfo{"issuer1", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer1", "s1", "crtURL1", "keyURL1", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer1", "s2", "crtURL2", "keyURL2", time.Now().UTC()},
-		},
-		[]crthandler.CrtInfo{
-			crthandler.CrtInfo{"issuer2", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer2", "s1", "crtURL1", "keyURL1", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer2", "s2", "crtURL2", "keyURL2", time.Now().UTC()},
-			crthandler.CrtInfo{"issuer2", "s3", "crtURL3", "keyURL3", time.Now().UTC()},
-		},
-	}
-
-	for i, items := range data {
-		for _, crt := range items {
-			if err := db.AddCertificate("crt"+strconv.Itoa(i), crt); err != nil {
-				t.Errorf("Can't add certificate: %s", err)
-			}
-		}
-	}
-
-	for i, items := range data {
-		crts, err := db.GetCertificates("crt" + strconv.Itoa(i))
-		if err != nil {
-			t.Errorf("Can't get certificates: %s", err)
-
-			continue
-		}
-
-		if !reflect.DeepEqual(crts, items) {
-			t.Error("Wrong crts data")
-
-			continue
-		}
-	}
 }
 
 func TestMigrationToV1(t *testing.T) {

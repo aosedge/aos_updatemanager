@@ -27,8 +27,6 @@ import (
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/migration"
-
-	"aos_updatemanager/crthandler"
 )
 
 /*******************************************************************************
@@ -48,7 +46,7 @@ const dbVersion = 1
  ******************************************************************************/
 
 // ErrNotExist is returned when requested entry not exist in DB
-var ErrNotExist = errors.New("entry doesn't not exist")
+var ErrNotExist = errors.New("entry doesn't exist")
 
 // ErrMigrationFailed is returned if migration was failed and db returned to the previous state
 var ErrMigrationFailed = errors.New("database migration failed")
@@ -148,29 +146,28 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
-// GetControllerState returns controller state
-func (db *Database) GetControllerState(controllerID string, name string) (value []byte, err error) {
-	rows, err := db.sql.Query("SELECT value FROM modules_data WHERE id = ? and name = ?", controllerID, name)
+// GetAosVersion returns module Aos version
+func (db *Database) GetAosVersion(id string) (version uint64, err error) {
+	rows, err := db.sql.Query("SELECT aosVersion FROM modules WHERE id = ?", id)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		if err = rows.Scan(&value); err != nil {
-			return nil, err
+		if err = rows.Scan(&version); err != nil {
+			return 0, err
 		}
 
-		return value, nil
+		return version, nil
 	}
 
-	return nil, ErrNotExist
+	return 0, ErrNotExist
 }
 
-// SetControllerState sets controller state
-func (db *Database) SetControllerState(controllerID string, name string, value []byte) (err error) {
-	result, err := db.sql.Exec("REPLACE INTO modules_data (id, name, value) VALUES(?, ?, ?)", controllerID,
-		name, value)
+// SetAosVersion sets module Aos version
+func (db *Database) SetAosVersion(id string, version uint64) (err error) {
+	result, err := db.sql.Exec("REPLACE INTO modules (id, aosVersion) VALUES(?, ?)", id, version)
 	if err != nil {
 		return err
 	}
@@ -182,66 +179,6 @@ func (db *Database) SetControllerState(controllerID string, name string, value [
 
 	if count == 0 {
 		return ErrNotExist
-	}
-
-	return nil
-}
-
-// AddCertificate adds new certificate to database
-func (db *Database) AddCertificate(crtType string, crt crthandler.CrtInfo) (err error) {
-	if _, err = db.sql.Exec("INSERT INTO certificates values(?, ?, ?, ?, ?, ?)",
-		crtType, crt.Issuer, crt.Serial, crt.CrtURL, crt.KeyURL, crt.NotAfter); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// GetCertificate returns certificate by issuer and serial
-func (db *Database) GetCertificate(issuer, serial string) (crt crthandler.CrtInfo, err error) {
-	rows, err := db.sql.Query("SELECT issuer, serial, crtURL, keyURL, notAfter FROM certificates WHERE issuer = ? AND serial = ?",
-		issuer, serial)
-	if err != nil {
-		return crt, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		if err = rows.Scan(&crt.Issuer, &crt.Serial, &crt.CrtURL, &crt.KeyURL, &crt.NotAfter); err != nil {
-			return crt, err
-		}
-
-		return crt, nil
-	}
-
-	return crt, ErrNotExist
-}
-
-// GetCertificates returns certificates of selected type
-func (db *Database) GetCertificates(crtType string) (crts []crthandler.CrtInfo, err error) {
-	rows, err := db.sql.Query("SELECT issuer, serial, crtURL, keyURL, notAfter FROM certificates WHERE type = ?", crtType)
-	if err != nil {
-		return crts, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var crt crthandler.CrtInfo
-
-		if err = rows.Scan(&crt.Issuer, &crt.Serial, &crt.CrtURL, &crt.KeyURL, &crt.NotAfter); err != nil {
-			return crts, err
-		}
-
-		crts = append(crts, crt)
-	}
-
-	return crts, nil
-}
-
-// RemoveCertificate removes certificate from database
-func (db *Database) RemoveCertificate(crtType, crtURL string) (err error) {
-	if _, err = db.sql.Exec("DELETE FROM certificates WHERE type = ? AND crtURL = ?", crtType, crtURL); err != nil {
-		return err
 	}
 
 	return nil
@@ -312,14 +249,6 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 		return db, err
 	}
 
-	if err := db.createModulesDataTable(); err != nil {
-		return db, err
-	}
-
-	if err := db.createCertTable(); err != nil {
-		return db, err
-	}
-
 	return db, nil
 
 }
@@ -366,34 +295,11 @@ func (db *Database) createConfigTable() (err error) {
 func (db *Database) createModuleTable() (err error) {
 	log.Info("Create module table")
 
-	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (db *Database) createModulesDataTable() (err error) {
-	log.Info("Create modules_data table")
-
-	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS modules_data (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, value TEXT)`); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (db *Database) createCertTable() (err error) {
-	log.Info("Create cert table")
-
-	if _, err = db.sql.Exec(`CREATE TABLE IF NOT EXISTS certificates (
-		type TEXT NOT NULL,
-		issuer TEXT NOT NULL,
-		serial TEXT NOT NULL,
-		crtURL TEXT,
-		keyURL TEXT,
-		notAfter TIMESTAMP,
-		PRIMARY KEY (issuer, serial))`); err != nil {
+	if _, err = db.sql.Exec(
+		`CREATE TABLE IF NOT EXISTS modules (
+			id TEXT NOT NULL PRIMARY KEY,
+			aosVersion INTEGER,
+			state TEXT)`); err != nil {
 		return err
 	}
 
