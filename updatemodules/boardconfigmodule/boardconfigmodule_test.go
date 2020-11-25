@@ -171,6 +171,19 @@ func TestUpdate(t *testing.T) {
 		log.Fatalf("Can't get board vendor version: %s", err)
 	}
 
+	if version != "V1.0" {
+		t.Errorf("Wrong board config version after before finish: %s", version)
+	}
+
+	if err := module.Finish(); err != nil {
+		t.Error("Error finish update: ", err)
+	}
+
+	version, err = module.GetVendorVersion()
+	if err != nil {
+		log.Fatalf("Can't get board vendor version: %s", err)
+	}
+
 	if version != "V2.0" {
 		t.Errorf("Wrong board config version after update: %s", version)
 	}

@@ -100,6 +100,10 @@ func (module *BoardCfgModule) GetID() (id string) {
 
 // GetVendorVersion returns vendor version
 func (module *BoardCfgModule) GetVendorVersion() (version string, err error) {
+	if _, err = os.Stat(module.config.Path + originalPostfix); err == nil {
+		return module.getVendorVersionFromFile(module.config.Path + originalPostfix)
+	}
+
 	return module.getVendorVersionFromFile(module.config.Path)
 }
 
@@ -152,9 +156,11 @@ func (module *BoardCfgModule) Update(imagePath string, vendorVersion string, ann
 // Cancel cancels update
 func (module *BoardCfgModule) Cancel() (rebootRequired bool, err error) {
 	if err := os.Rename(module.config.Path+originalPostfix, module.config.Path); err != nil {
-		os.RemoveAll(module.config.Path)
 		log.Warn("Original file was not present before update")
 	}
+
+	os.RemoveAll(module.config.Path + originalPostfix)
+	os.RemoveAll(module.config.Path + newPostfix)
 
 	return false, nil
 }
@@ -162,6 +168,7 @@ func (module *BoardCfgModule) Cancel() (rebootRequired bool, err error) {
 // Finish finished update
 func (module *BoardCfgModule) Finish() (err error) {
 	os.RemoveAll(module.config.Path + originalPostfix)
+	os.RemoveAll(module.config.Path + newPostfix)
 
 	return nil
 }
