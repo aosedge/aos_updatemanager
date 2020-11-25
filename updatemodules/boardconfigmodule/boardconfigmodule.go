@@ -139,7 +139,7 @@ func (module *BoardCfgModule) Update(imagePath string, vendorVersion string, ann
 
 	// save original file
 	if err := os.Rename(module.config.Path, module.config.Path+originalPostfix); err != nil {
-		return false, err
+		log.Warn("Original file does not exist: ", err)
 	}
 
 	if err := os.Rename(newBoardConfig, module.config.Path); err != nil {
@@ -152,7 +152,8 @@ func (module *BoardCfgModule) Update(imagePath string, vendorVersion string, ann
 // Cancel cancels update
 func (module *BoardCfgModule) Cancel() (rebootRequired bool, err error) {
 	if err := os.Rename(module.config.Path+originalPostfix, module.config.Path); err != nil {
-		return false, err
+		os.RemoveAll(module.config.Path)
+		log.Warn("Original file was not present before update")
 	}
 
 	return false, nil
