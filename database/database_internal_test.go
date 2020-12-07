@@ -64,33 +64,6 @@ func TestMain(m *testing.M) {
 /*******************************************************************************
  * Tests
  ******************************************************************************/
-
-func TestDBVersion(t *testing.T) {
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-
-	if err = db.setVersion(dbVersion - 1); err != nil {
-		t.Errorf("Can't set database version: %s", err)
-	}
-
-	db.Close()
-
-	db, err = New(dbPath)
-	if err == nil {
-		t.Error("Expect version mismatch error")
-	} else if err != ErrVersionMismatch {
-		t.Errorf("Can't create database: %s", err)
-	}
-
-	if err := os.RemoveAll(dbPath); err != nil {
-		t.Fatalf("Can't remove database: %s", err)
-	}
-
-	db.Close()
-}
-
 func TestNewErrors(t *testing.T) {
 	// Check MkdirAll in New statement
 	db, err := New("/sys/rooooot/test.db")
