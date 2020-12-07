@@ -18,6 +18,8 @@
 package database
 
 import (
+	"database/sql"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -36,7 +38,21 @@ import (
  * Variables
  ******************************************************************************/
 
-var dbPath string
+var tmpDir string
+var db *Database
+
+/*******************************************************************************
+ * Init
+ ******************************************************************************/
+
+func init() {
+	log.SetFormatter(&log.TextFormatter{
+		DisableTimestamp: false,
+		TimestampFormat:  "2006-01-02 15:04:05.000",
+		FullTimestamp:    true})
+	log.SetLevel(log.DebugLevel)
+	log.SetOutput(os.Stdout)
+}
 
 /*******************************************************************************
  * Main
@@ -45,14 +61,20 @@ var dbPath string
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err := ioutil.TempDir("", "um_")
+	tmpDir, err = ioutil.TempDir("", "um_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
 
-	dbPath = path.Join(tmpDir, "test.db")
+	dbPath := path.Join(tmpDir, "test.db")
+	db, err = New(dbPath, tmpDir, tmpDir)
+	if err != nil {
+		log.Fatalf("Can't create database: %s", err)
+	}
 
 	ret := m.Run()
+
+	db.Close()
 
 	if err = os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error deleting tmp dir: %s", err)
@@ -66,34 +88,27 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 func TestNewErrors(t *testing.T) {
 	// Check MkdirAll in New statement
-	db, err := New("/sys/rooooot/test.db")
+	dbLocal, err := New("/sys/rooooot/test.db", tmpDir, tmpDir)
 	if err == nil {
-		db.Close()
+		dbLocal.Close()
 		t.Fatal("expecting error with no access rights")
 	}
 
 	//Trying to create test.db with no access rights
 	//Check fail of the createConfigTable
-	db, err = New("/sys/test.db")
+	dbLocal, err = New("/sys/test.db", tmpDir, tmpDir)
 	if err == nil {
-		db.Close()
+		dbLocal.Close()
 		t.Fatal("Expecting error with no access rights")
 	}
 }
 
 func TestUpdateState(t *testing.T) {
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
 	setState := []byte("{This is test}")
 
 	if err := db.SetUpdateState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
-
 	getState, err := db.GetUpdateState()
 	if err != nil {
 		t.Fatalf("Can't get state: %s", err)
@@ -121,14 +136,8 @@ func TestModuleState(t *testing.T) {
 		{"id3", "state13"},
 	}
 
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
 	for i, item := range testData {
-		if err = db.SetModuleState(item.id, []byte(item.state)); err != nil {
+		if err := db.SetModuleState(item.id, []byte(item.state)); err != nil {
 			t.Errorf("Index: %d, can't set module state: %s", i, err)
 		}
 
@@ -165,14 +174,8 @@ func TestControllerState(t *testing.T) {
 		{"id3", "name13", "state13"},
 	}
 
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
 	for i, item := range testData {
-		if err = db.SetControllerState(item.id, item.name, []byte(item.value)); err != nil {
+		if err := db.SetControllerState(item.id, item.name, []byte(item.value)); err != nil {
 			t.Errorf("Index: %d, can't set module state: %s", i, err)
 		}
 
@@ -188,12 +191,6 @@ func TestControllerState(t *testing.T) {
 }
 
 func TestMultiThread(t *testing.T) {
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
 	const numIterations = 1000
 
 	var wg sync.WaitGroup
@@ -224,12 +221,6 @@ func TestMultiThread(t *testing.T) {
 }
 
 func TestAddRemoveCertificate(t *testing.T) {
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
 	type testData struct {
 		crtType       string
 		crt           crthandler.CrtInfo
@@ -244,9 +235,8 @@ func TestAddRemoveCertificate(t *testing.T) {
 		testData{crtType: "online", crt: crthandler.CrtInfo{"issuer2", "s0", "crtURL2", "keyURL2", time.Now().UTC()}, errorExpected: false}}
 
 	// Add certificates
-
 	for _, item := range data {
-		if err = db.AddCertificate(item.crtType, item.crt); err != nil && !item.errorExpected {
+		if err := db.AddCertificate(item.crtType, item.crt); err != nil && !item.errorExpected {
 			t.Errorf("Can't add certificate: %s", err)
 		}
 	}
@@ -273,23 +263,17 @@ func TestAddRemoveCertificate(t *testing.T) {
 	// Remove certificates
 
 	for _, item := range data {
-		if err = db.RemoveCertificate(item.crtType, item.crt.CrtURL); err != nil && !item.errorExpected {
+		if err := db.RemoveCertificate(item.crtType, item.crt.CrtURL); err != nil && !item.errorExpected {
 			t.Errorf("Can't remove certificate: %s", err)
 		}
 
-		if _, err = db.GetCertificate(item.crtType, item.crt.CrtURL); err == nil {
+		if _, err := db.GetCertificate(item.crtType, item.crt.CrtURL); err == nil {
 			t.Error("Certificate should be removed")
 		}
 	}
 }
 
 func TestGetCertificates(t *testing.T) {
-	db, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("Can't create database: %s", err)
-	}
-	defer db.Close()
-
 	data := [][]crthandler.CrtInfo{
 		[]crthandler.CrtInfo{
 			crthandler.CrtInfo{"issuer0", "s0", "crtURL0", "keyURL0", time.Now().UTC()},
@@ -313,7 +297,7 @@ func TestGetCertificates(t *testing.T) {
 
 	for i, items := range data {
 		for _, crt := range items {
-			if err = db.AddCertificate("crt"+strconv.Itoa(i), crt); err != nil {
+			if err := db.AddCertificate("crt"+strconv.Itoa(i), crt); err != nil {
 				t.Errorf("Can't add certificate: %s", err)
 			}
 		}
@@ -333,4 +317,156 @@ func TestGetCertificates(t *testing.T) {
 			continue
 		}
 	}
+}
+
+func TestMigrationToV1(t *testing.T) {
+	migrationDb := path.Join(tmpDir, "test_migration.db")
+
+	if err := os.MkdirAll("mergedMigration", 0755); err != nil {
+		t.Fatalf("Error creating service images: %s", err)
+	}
+	defer func() {
+		if err := os.RemoveAll("mergedMigration"); err != nil {
+			log.Fatalf("Error deleting tmp dir: %s", err)
+		}
+	}()
+
+	if err := createDatabaseV0(migrationDb); err != nil {
+		t.Fatalf("Can't create initial database %s", err)
+	}
+
+	// Migration upward
+	db, err := newDatabase(migrationDb, "migration", "mergedMigration", 1)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+
+	if err = isDatabaseVer1(db.sql); err != nil {
+		t.Fatalf("Error checking db version: %s", err)
+	}
+
+	db.Close()
+
+	// Migration downward
+	db, err = newDatabase(migrationDb, "migration", "mergedMigration", 0)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+
+	if err = isDatabaseVer0(db.sql); err != nil {
+		t.Fatalf("Error checking db version: %s", err)
+	}
+
+	db.Close()
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func createDatabaseV0(name string) (err error) {
+	sqlite, err := sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
+		name, busyTimeout, journalMode, syncMode))
+	if err != nil {
+		return err
+	}
+	defer sqlite.Close()
+
+	if _, err = sqlite.Exec(
+		`CREATE TABLE config (
+			updateState TEXT, version INTEGER)`); err != nil {
+		return err
+	}
+
+	if _, err = sqlite.Exec(
+		`INSERT INTO config (
+			updateState, version) values(?, ?)`, "", 0); err != nil {
+		return err
+	}
+
+	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
+		return err
+	}
+
+	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules_data (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, value TEXT)`); err != nil {
+		return err
+	}
+
+	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS certificates (
+		type TEXT NOT NULL,
+		issuer TEXT NOT NULL,
+		serial TEXT NOT NULL,
+		crtURL TEXT,
+		keyURL TEXT,
+		notAfter TIMESTAMP,
+		PRIMARY KEY (issuer, serial))`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func isDatabaseVer0(sqlite *sql.DB) (err error) {
+	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info('config') WHERE name='version'")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		if err = rows.Scan(&count); err != nil {
+			return err
+		}
+
+		if count == 0 {
+			return ErrNotExist
+		}
+
+		verRows, err := sqlite.Query("SELECT version FROM config")
+		if err != nil {
+			return err
+		}
+		defer verRows.Close()
+
+		var version int
+		for verRows.Next() {
+			if err = verRows.Scan(&version); err != nil {
+				return err
+			}
+
+			if version != 5 {
+				return fmt.Errorf("wrong version in database: expected 5, got %d", version)
+			}
+
+			return nil
+		}
+
+		break
+	}
+
+	return ErrNotExist
+}
+
+func isDatabaseVer1(sqlite *sql.DB) (err error) {
+	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info('config') WHERE name='version'")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		if err = rows.Scan(&count); err != nil {
+			return err
+		}
+
+		if count != 0 {
+			return ErrNotExist
+		}
+
+		return nil
+	}
+
+	return ErrNotExist
 }
