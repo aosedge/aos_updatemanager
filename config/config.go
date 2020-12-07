@@ -21,11 +21,17 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path"
 )
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
+//Migration struct represents path for db migration
+type Migration struct {
+	MigrationPath       string `json:"migrationPath"`
+	MergedMigrationPath string `json:"mergedMigrationPath"`
+}
 
 // Config instance
 type Config struct {
@@ -35,6 +41,7 @@ type Config struct {
 	WorkingDir    string         `json:"workingDir"`
 	UpdateModules []ModuleConfig `json:"updateModules"`
 	CrtModules    []ModuleConfig `json:"crtModules"`
+	Migration     Migration      `json:"migration"`
 }
 
 // ModuleConfig module configuration
@@ -61,6 +68,14 @@ func New(fileName string) (config *Config, err error) {
 	decoder := json.NewDecoder(file)
 	if err = decoder.Decode(config); err != nil {
 		return config, err
+	}
+
+	if config.Migration.MigrationPath == "" {
+		config.Migration.MigrationPath = "/usr/share/aos/updatemanager/migration"
+	}
+
+	if config.Migration.MergedMigrationPath == "" {
+		config.Migration.MergedMigrationPath = path.Join(config.WorkingDir, "mergedMigration")
 	}
 
 	return config, nil

@@ -83,7 +83,7 @@ func init() {
  * Private
  ******************************************************************************/
 
-func cleanup(workingDir, dbFile string) {
+func cleanup(dbFile string) {
 	log.Debug("System cleanup")
 
 	log.WithField("file", dbFile).Debug("Delete DB file")
@@ -133,8 +133,7 @@ func (hook *journalHook) Levels() []log.Level {
 }
 
 /*******************************************************************************
- * Main
- ******************************************************************************/
+ * ******************************************************************************/
 
 func main() {
 	// Initialize command line flags
@@ -175,17 +174,19 @@ func main() {
 	// Create DB
 	dbFile := path.Join(cfg.WorkingDir, dbFileName)
 
-	db, err := database.New(dbFile)
-	if err != nil {
-		if err == database.ErrVersionMismatch {
-			log.Warning("Unsupported database version")
-			cleanup(cfg.WorkingDir, dbFile)
-			db, err = database.New(dbFile)
-		}
+	db, err := database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
+	if err == database.ErrMigrationFailed {
+		log.Warning("Unable to perform db migration")
 
+		cleanup(dbFile)
+
+		db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
 		if err != nil {
 			log.Fatalf("Can't create database: %s", err)
 		}
+
+	} else if err != nil {
+		log.Fatalf("Can't create database: %s", err)
 	}
 	defer db.Close()
 

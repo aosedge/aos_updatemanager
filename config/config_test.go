@@ -82,7 +82,11 @@ func createConfigFile() (err error) {
 			"Param1" :"value1",
 			"Param2" : 2
 		}
-	}]
+	}],
+	"migration": {
+		"migrationPath" : "/usr/share/aos_updatemanager/migration",
+		"mergedMigrationPath" : "/var/aos/updatemanager/mergedMigrationPath"
+	}
 }`
 
 	return saveConfigFile("aos_updatemanager.cfg", configContent)
@@ -185,5 +189,15 @@ func TestNewErrors(t *testing.T) {
 	// Testing with wrong json format
 	if _, err := config.New(path.Join("tmp", wrongConfigName)); err == nil {
 		t.Errorf("No error was returned for config with wrong format")
+	}
+}
+
+func TestDatabaseMigration(t *testing.T) {
+	if cfg.Migration.MigrationPath != "/usr/share/aos_updatemanager/migration" {
+		t.Errorf("Wrong migrationPath /usr/share/aos_updatemanager/migration, != %s", cfg.Migration.MigrationPath)
+	}
+
+	if cfg.Migration.MergedMigrationPath != "/var/aos/updatemanager/mergedMigrationPath" {
+		t.Errorf("Wrong migrationPath /var/aos/updatemanager/mergedMigrationPath, != %s", cfg.Migration.MergedMigrationPath)
 	}
 }

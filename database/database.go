@@ -26,6 +26,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/migration"
 
 	"aos_updatemanager/crthandler"
 )
@@ -40,12 +41,17 @@ const (
 	syncMode    = "NORMAL"
 )
 
+const dbVersion = 1
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
 // ErrNotExist is returned when requested entry not exist in DB
 var ErrNotExist = errors.New("entry doesn't not exist")
+
+// ErrMigrationFailed is returned if migration was failed and db returned to the previous state
+var ErrMigrationFailed = errors.New("database migration failed")
 
 /*******************************************************************************
  * Types
@@ -61,51 +67,8 @@ type Database struct {
  ******************************************************************************/
 
 // New creates new database handle
-func New(name string) (db *Database, err error) {
-	log.WithField("name", name).Debug("Open database")
-
-	// Check and create db path
-	if _, err = os.Stat(filepath.Dir(name)); err != nil {
-		if !os.IsNotExist(err) {
-			return db, err
-		}
-		if err = os.MkdirAll(filepath.Dir(name), 0755); err != nil {
-			return db, err
-		}
-	}
-
-	var sqlite *sql.DB
-
-	if sqlite, err = sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
-		name, busyTimeout, journalMode, syncMode)); err != nil {
-		return db, err
-	}
-
-	defer func() {
-		if err != nil {
-			sqlite.Close()
-		}
-	}()
-
-	db = &Database{sqlite}
-
-	if err = db.createConfigTable(); err != nil {
-		return db, err
-	}
-
-	if err := db.createModuleTable(); err != nil {
-		return db, err
-	}
-
-	if err := db.createModulesDataTable(); err != nil {
-		return db, err
-	}
-
-	if err := db.createCertTable(); err != nil {
-		return db, err
-	}
-
-	return db, nil
+func New(name string, migrationPath string, mergedMigrationPath string) (db *Database, err error) {
+	return newDatabase(name, migrationPath, mergedMigrationPath, dbVersion)
 }
 
 // SetUpdateState stores update state
@@ -292,6 +255,75 @@ func (db *Database) Close() {
 /*******************************************************************************
  * Private
  ******************************************************************************/
+
+func newDatabase(name string, migrationPath string, mergedMigrationPath string, version uint) (db *Database, err error) {
+	log.WithField("name", name).Debug("Open database")
+
+	// Check and create db path
+	if _, err = os.Stat(filepath.Dir(name)); err != nil {
+		if !os.IsNotExist(err) {
+			return db, err
+		}
+		if err = os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+			return db, err
+		}
+	}
+
+	sqlite, err := sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
+		name, busyTimeout, journalMode, syncMode))
+	if err != nil {
+		return db, err
+	}
+
+	db = &Database{sqlite}
+	defer func() {
+		if err != nil {
+			db.Close()
+		}
+	}()
+
+	if err = migration.MergeMigrationFiles(migrationPath, mergedMigrationPath); err != nil {
+		return db, err
+	}
+
+	exists, err := db.isTableExist("config")
+	if err != nil {
+		return db, err
+	}
+
+	if !exists {
+		// Set database version if database not exist
+		if err = migration.SetDatabaseVersion(sqlite, migrationPath, version); err != nil {
+			log.Debugf("Error forcing database version. Err: %s", err)
+			return db, ErrMigrationFailed
+		}
+	} else {
+		if err = migration.DoMigrate(db.sql, mergedMigrationPath, version); err != nil {
+			log.Debugf("Error during database migration. Err: %s", err)
+			return db, ErrMigrationFailed
+		}
+	}
+
+	if err = db.createConfigTable(); err != nil {
+		return db, err
+	}
+
+	if err := db.createModuleTable(); err != nil {
+		return db, err
+	}
+
+	if err := db.createModulesDataTable(); err != nil {
+		return db, err
+	}
+
+	if err := db.createCertTable(); err != nil {
+		return db, err
+	}
+
+	return db, nil
+
+}
+
 func (db *Database) isTableExist(name string) (result bool, err error) {
 	rows, err := db.sql.Query("SELECT * FROM sqlite_master WHERE name = ? and type='table'", name)
 	if err != nil {
