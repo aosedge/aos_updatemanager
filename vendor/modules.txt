@@ -3,6 +3,14 @@ github.com/cavaliercoder/grab
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/journal
+# github.com/golang-migrate/migrate/v4 v4.14.1
+github.com/golang-migrate/migrate/v4
+github.com/golang-migrate/migrate/v4/database
+github.com/golang-migrate/migrate/v4/database/sqlite3
+github.com/golang-migrate/migrate/v4/internal/url
+github.com/golang-migrate/migrate/v4/source
+github.com/golang-migrate/migrate/v4/source/file
+github.com/golang-migrate/migrate/v4/source/httpfs
 # github.com/google/go-tpm v0.2.1-0.20200701210658-e06fe77d4428
 ## explicit
 github.com/google/go-tpm/tpm2
@@ -12,36 +20,43 @@ github.com/google/go-tpm/tpmutil/tbs
 ## explicit
 github.com/google/go-tpm-tools/simulator
 github.com/google/go-tpm-tools/simulator/internal
-# github.com/google/uuid v1.1.1
+# github.com/google/uuid v1.1.2
 ## explicit
 github.com/google/uuid
 # github.com/gorilla/websocket v1.4.2
 ## explicit
 github.com/gorilla/websocket
+# github.com/hashicorp/errwrap v1.0.0
+github.com/hashicorp/errwrap
+# github.com/hashicorp/go-multierror v1.1.0
+github.com/hashicorp/go-multierror
 # github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 ## explicit
 github.com/kballard/go-shellquote
-# github.com/konsorten/go-windows-terminal-sequences v1.0.1
-github.com/konsorten/go-windows-terminal-sequences
+# github.com/lib/pq v1.8.0
+github.com/lib/pq
+github.com/lib/pq/oid
+github.com/lib/pq/scram
 # github.com/mattn/go-sqlite3 v2.0.3+incompatible
 ## explicit
 github.com/mattn/go-sqlite3
-# github.com/sirupsen/logrus v1.5.0
+# github.com/sirupsen/logrus v1.7.0
 ## explicit
 github.com/sirupsen/logrus
 # github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 ## explicit
 github.com/tmc/scp
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20201106094923-1348fd104338
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210105102527-589ead2f596e
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/fs
 gitpct.epam.com/epmd-aepr/aos_common/image
+gitpct.epam.com/epmd-aepr/aos_common/migration
 gitpct.epam.com/epmd-aepr/aos_common/partition
 gitpct.epam.com/epmd-aepr/aos_common/umprotocol
 gitpct.epam.com/epmd-aepr/aos_common/utils/testtools
 gitpct.epam.com/epmd-aepr/aos_common/wsclient
 gitpct.epam.com/epmd-aepr/aos_common/wsserver
-# golang.org/x/crypto v0.0.0-20200414173820-0848c9571904
+# golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 ## explicit
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
@@ -53,7 +68,8 @@ golang.org/x/crypto/poly1305
 golang.org/x/crypto/sha3
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
-# golang.org/x/sys v0.0.0-20200413165638-669c56c373c4
-## explicit
+# golang.org/x/sys v0.0.0-20201029080932-201ba4db2418
 golang.org/x/sys/cpu
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
+golang.org/x/sys/windows
