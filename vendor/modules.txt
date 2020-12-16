@@ -4,6 +4,11 @@ github.com/cavaliercoder/grab
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/journal
+# github.com/coreos/go-systemd/v22 v22.0.0
+## explicit
+github.com/coreos/go-systemd/v22/dbus
+# github.com/godbus/dbus/v5 v5.0.3
+github.com/godbus/dbus/v5
 # github.com/golang-migrate/migrate/v4 v4.14.1
 github.com/golang-migrate/migrate/v4
 github.com/golang-migrate/migrate/v4/database
