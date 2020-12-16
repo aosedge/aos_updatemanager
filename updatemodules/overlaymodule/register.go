@@ -19,17 +19,10 @@ package overlaymodule
 
 import (
 	"encoding/json"
-	"syscall"
 
 	"aos_updatemanager/updatehandler"
+	"aos_updatemanager/updatemodules/partitions/controllers/rebootcontroller"
 )
-
-/*******************************************************************************
- * Types
- ******************************************************************************/
-
-type systemRebooter struct {
-}
 
 /*******************************************************************************
  * Init
@@ -39,20 +32,6 @@ func init() {
 	updatehandler.RegisterPlugin("overlaymodule",
 		func(id string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
-			return New(id, configJSON, storage, &systemRebooter{})
+			return New(id, configJSON, storage, &rebootcontroller.RebootController{})
 		})
-}
-
-/*******************************************************************************
- * Private
- ******************************************************************************/
-
-func (rebooter *systemRebooter) Reboot() (err error) {
-	syscall.Sync()
-
-	if err = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		return err
-	}
-
-	return nil
 }

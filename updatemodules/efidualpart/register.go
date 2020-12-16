@@ -20,19 +20,16 @@ package efidualpart
 import (
 	"encoding/json"
 	"fmt"
-	"syscall"
 
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/eficontroller"
+	"aos_updatemanager/updatemodules/partitions/controllers/rebootcontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 )
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
-
-type rebootController struct {
-}
 
 type moduleConfig struct {
 	Loader      string   `json:"loader"`
@@ -64,21 +61,7 @@ func init() {
 			}
 
 			return dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &rebootController{})
+				controller, storage, &rebootcontroller.RebootController{})
 		},
 	)
-}
-
-/*******************************************************************************
- * Interfaces
- ******************************************************************************/
-
-func (reboot *rebootController) Reboot() (err error) {
-	syscall.Sync()
-
-	if err = syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		return err
-	}
-
-	return nil
 }
