@@ -3,6 +3,7 @@ image: golang:1.14
 stages:
   - build
   - test
+  - cyclonedx
 
 build:
   tags:
@@ -23,3 +24,14 @@ test:
     - go test $(go list ./... | grep -v "/vendor\|ssh*") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
+dependency:
+  only:
+    refs: 
+     - master
+  tags:
+    - cyclonedx_ci
+  stage: cyclonedx
+  script:
+    - sed -i '/aos_common/d' ./go.mod
+    - cyclonedx-go -o /tmp/um_bom.xml
+    - curl -X 'POST' 'https://aos-dependency.westeurope.cloudapp.azure.com/api/v1/bom' -H "X-Api-Key:$DEP_API_KEY" -F 'projectName=aos-updatemanager' -F 'autoCreate=true' -F 'bom=@/tmp/um_bom.xml'
