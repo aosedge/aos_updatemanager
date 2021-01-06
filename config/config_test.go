@@ -58,8 +58,8 @@ func createConfigFile() (err error) {
 	configContent := `{
 	"ServerUrl": "localhost:8090",
 	"ID": "um01",
-	"Cert": "crt.pem",
-	"Key": "key.pem",
+	"CACert": "/etc/ssl/certs/rootCA.crt",
+	"CertStorage": "/var/aos/crypt/um/",
 	"WorkingDir": "/var/aos/updatemanager",
 	"DownloadDir": "/var/aos/updatemanager/download",
 	"UpdateModules":[{
@@ -157,12 +157,12 @@ func TestGetCredentials(t *testing.T) {
 		t.Errorf("Wrong ServerURL value: %s", cfg.ServerURL)
 	}
 
-	if cfg.Cert != "crt.pem" {
-		t.Errorf("Wrong cert value: %s", cfg.Cert)
+	if cfg.CACert != "/etc/ssl/certs/rootCA.crt" {
+		t.Errorf("Wrong caCert value: %s", cfg.CACert)
 	}
 
-	if cfg.Key != "key.pem" {
-		t.Errorf("Wrong key value: %s", cfg.Key)
+	if cfg.CertStorage != "/var/aos/crypt/um/" {
+		t.Errorf("Wrong certStorage value: %s", cfg.CertStorage)
 	}
 }
 
