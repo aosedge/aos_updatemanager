@@ -193,7 +193,7 @@ func main() {
 	}
 	defer updater.Close()
 
-	client, err := umclient.New(cfg, updater, true)
+	client, err := umclient.New(cfg, updater, false)
 	if err != nil {
 		log.Fatalf("Can't create UM client: %s", err)
 	}

@@ -19,7 +19,6 @@ package umclient
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -28,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -167,7 +167,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 					}
 				}
 
-				if err = client.createConnection(config.ServerURL, insecure); err == nil {
+				if err = client.createConnection(config, insecure); err == nil {
 					err = client.processMessages()
 				}
 			}
@@ -236,7 +236,7 @@ func (status ComponentStatus) String() string {
  * Private
  ******************************************************************************/
 
-func (client *Client) createConnection(url string, insecure bool) (err error) {
+func (client *Client) createConnection(config *config.Config, insecure bool) (err error) {
 	client.Lock()
 
 	log.Debug("Connecting to SM...")
@@ -246,7 +246,12 @@ func (client *Client) createConnection(url string, insecure bool) (err error) {
 	if insecure {
 		secureOpt = grpc.WithInsecure()
 	} else {
-		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: false}))
+		tlsConfig, err := cryptutils.GetClientTLSConfig(config.CACert, config.CertStorage)
+		if err != nil {
+			return err
+		}
+
+		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
@@ -256,7 +261,7 @@ func (client *Client) createConnection(url string, insecure bool) (err error) {
 
 	client.Unlock()
 
-	connection, err := grpc.DialContext(ctx, url, secureOpt, grpc.WithBlock())
+	connection, err := grpc.DialContext(ctx, config.ServerURL, secureOpt, grpc.WithBlock())
 	if err != nil {
 		return err
 	}
