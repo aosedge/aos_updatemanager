@@ -1,0 +1,21 @@
+go:
+- 1.11.x
+go_import_path: github.com/joelnb/xenstore-go
+language: go
+script:
+- go test -v .
+- diff -u <(echo -n) <(gofmt -d *.go ./cmd)
+- gox -ldflags "-X main.GitCommit='$(git rev-parse HEAD)'" -arch "amd64 386" -os "linux" ./cmd/xenstore
+before_install:
+- go get github.com/mitchellh/gox
+deploy:
+  provider: releases
+  skip_cleanup: true
+  api_key:
+    secure: iFLd4y9wLu2PfIZtdMzWiCJPEW2+vzLM3mDxsUzEfc9iRjj/KQGxicn3OwWhTWZ5EGgnKKm+WfF6k7pbnHcWR499XfIQWUIj7xRpOlMMX1N6JffOAvuQPGBtndeJwjDH5i/Kpls+JRSdpB6gfK9HudMuP4atRixmYbWHHHlqD9Jtg4svHi/AFbVuI/UI4Agt1VRpmbkyyg3e3Owt+qFrm/A/pVLlz8+xYPh1AmuUdfanDrkCOzOxhgRYjwAUPtiwrMgJJrRjjppSlGhCUEIIyDmd0esI7vsTn7WJOJsAhGYDe7MjfFL+2u6YsQ8Pr61xZ6vVZnx/+qqIVksXeAyp8+SWxd835Qs8Gg87whXA6aAzL5iIFsvhkKezF1N3HjTLp3KiQmLKUe4LEdFJn178Vj67yM0LFbnEJBZywdwGd0fDqdQ6whH1X2pbM854twmTGzoyjXtfarAHSCgnzUuqwa8CnEoSAo6Us8GFUCyyGVGKH0YNpj2JsVUyxxdh+YB+Ke1ZZbamGLruHO3ZBeoOF0YDag/z/pCgiT4MMiqi0DbKtG0TGlDoFbzydko6dk5s0hO0EjDZCP52hjXJlllBw8rk6TkgBbXiptW7L1YDS4VDpku6F/374hiyclchphUhqTmJchk0yWpfkF9dITI9LDhe0Yje4gXyQj79DBbodJA=
+  file:
+  - xenstore_linux_amd64
+  - xenstore_linux_386
+  on:
+    repo: joelnb/xenstore-go
+    tags: true
