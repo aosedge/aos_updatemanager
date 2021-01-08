@@ -370,6 +370,8 @@ gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210105102527-589ead2f596e h1:0nuLl
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210105102527-589ead2f596e/go.mod h1:h8bGe2l0Lm6ONSMnwsx1Y2I55V/ZTSYvxXzdVse7oh4=
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210106092107-c4c20ded8b4a h1:pKLVtVzZC/l9rfzz97pdyR/okTAHVnHrUX/Pxxp62To=
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210106092107-c4c20ded8b4a/go.mod h1:h8bGe2l0Lm6ONSMnwsx1Y2I55V/ZTSYvxXzdVse7oh4=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210108153826-cb6205c6845f h1:/9X5iy1BtHJo26KPjavHZHtFNZd/n+7LAmyr+Su6Rgc=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210108153826-cb6205c6845f/go.mod h1:h8bGe2l0Lm6ONSMnwsx1Y2I55V/ZTSYvxXzdVse7oh4=
 gitpct.epam.com/epmd-aepr/aos_common v1.0.0 h1:4FftftJxMM5GuvZt135NVgy26K1UWQTgqDsbhwBWznM=
 gitpct.epam.com/epmd-aepr/aos_common v1.0.0/go.mod h1:9M0Ym70G7m2r6uWqYCp3N1RKLPtRmba+Zml6oiJXy94=
 go.mongodb.org/mongo-driver v1.1.0/go.mod h1:u7ryQJ+DOzQmeO7zB6MHyr8jkEQvC8vH7qLUO4lqsUM=

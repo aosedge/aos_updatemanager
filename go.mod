@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/sirupsen/logrus v1.7.0
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
-	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210106092107-c4c20ded8b4a
+	gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210108153826-cb6205c6845f
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	google.golang.org/grpc v1.33.1
 	gopkg.in/ini.v1 v1.62.0
