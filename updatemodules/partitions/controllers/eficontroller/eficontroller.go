@@ -91,10 +91,12 @@ func (controller *Controller) GetCurrentBoot() (index int, err error) {
 		if bootCurrent == bootItem {
 			return i, nil
 		}
-
 	}
 
-	return 0, errors.New("boot from unknown partition")
+	// if we boot from unknown entry, treat it as boot from part 0
+	log.Warn("Boot from unknown partition")
+
+	return 0, nil
 }
 
 // GetMainBoot returns boot main part index
@@ -155,7 +157,8 @@ func (controller *Controller) SetBootOK() (err error) {
 	}
 
 	if !found {
-		return errors.New("boot from unknown partition")
+		// if we boot from unknown entry, treat it as boot from part 0
+		return nil
 	}
 
 	currentIndex := 0
