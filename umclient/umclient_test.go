@@ -39,7 +39,7 @@ import (
  * Consts
  ******************************************************************************/
 
-const serverURL = "localhost:8089"
+const serverURL = "localhost:8091"
 
 const (
 	prepareUpdateMessage = "prepare"

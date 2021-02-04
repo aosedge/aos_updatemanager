@@ -39,7 +39,8 @@ import (
  ******************************************************************************/
 
 const (
-	connectTimeout = 10 * time.Second
+	connectTimeout   = 10 * time.Second
+	reconnectTimeout = 10 * time.Second
 )
 
 // UM states
@@ -64,13 +65,10 @@ const (
 // Client UM client instance
 type Client struct {
 	sync.Mutex
-
 	connection     *grpc.ClientConn
 	stream         pb.UpdateController_RegisterUMClient
 	messageHandler MessageHandler
 	umID           string
-	cancelContext  context.CancelFunc
-	closeWG        *sync.WaitGroup
 	closeChannel   chan struct{}
 }
 
@@ -139,46 +137,13 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 	client = &Client{
 		messageHandler: messageHandler,
 		umID:           config.ID,
-		closeWG:        &sync.WaitGroup{},
 		closeChannel:   make(chan struct{})}
 
-	client.closeWG.Add(1)
+	if err = client.createConnection(config, insecure); err != nil {
+		return nil, err
+	}
 
 	go func() {
-		defer client.closeWG.Done()
-
-		var err error
-
-		for {
-			select {
-			case <-client.closeChannel:
-				return
-
-			default:
-				if err != nil {
-					if client.connection != nil {
-						client.connection.Close()
-					}
-
-					if err == io.EOF {
-						log.Debug("Connection is closed")
-					} else {
-						log.Errorf("Connection error: %s", err)
-					}
-				}
-
-				if err = client.createConnection(config, insecure); err == nil {
-					err = client.processMessages()
-				}
-			}
-		}
-	}()
-
-	client.closeWG.Add(1)
-
-	go func() {
-		defer client.closeWG.Done()
-
 		for {
 			select {
 			case <-client.closeChannel:
@@ -197,13 +162,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 
 // Close closes UM client
 func (client *Client) Close() (err error) {
-	client.Lock()
-
 	log.Debug("Close UM client")
-
-	if client.cancelContext != nil {
-		client.cancelContext()
-	}
 
 	if client.stream != nil {
 		client.stream.CloseSend()
@@ -213,11 +172,7 @@ func (client *Client) Close() (err error) {
 		client.connection.Close()
 	}
 
-	client.Unlock()
-
 	close(client.closeChannel)
-
-	client.closeWG.Wait()
 
 	return nil
 }
@@ -237,8 +192,6 @@ func (status ComponentStatus) String() string {
  ******************************************************************************/
 
 func (client *Client) createConnection(config *config.Config, insecure bool) (err error) {
-	client.Lock()
-
 	log.Debug("Connecting to SM...")
 
 	var secureOpt grpc.DialOption
@@ -257,39 +210,60 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 
-	client.cancelContext = cancel
-
-	client.Unlock()
-
-	connection, err := grpc.DialContext(ctx, config.ServerURL, secureOpt, grpc.WithBlock())
-	if err != nil {
+	if client.connection, err = grpc.DialContext(ctx, config.ServerURL, secureOpt, grpc.WithBlock()); err != nil {
 		return err
 	}
 
-	client.Lock()
-
-	client.connection = connection
-
 	log.Debug("Connected to SM")
+
+	go func() {
+		for {
+			err := client.register()
+
+			for {
+				if err != nil && len(client.closeChannel) == 0 {
+					log.Errorf("Error register to SM: %s", err)
+				} else {
+					client.messageHandler.Registered()
+
+					if err = client.processMessages(); err != nil {
+						if err == io.EOF {
+							log.Debug("Connection is closed")
+						} else {
+							log.Errorf("Connection error: %s", err)
+						}
+					}
+				}
+
+				log.Debugf("Reconnect to SM in %v...", reconnectTimeout)
+
+				select {
+				case <-client.closeChannel:
+					log.Debugf("Disconnected from SM")
+
+					return
+
+				case <-time.After(reconnectTimeout):
+					err = client.register()
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (client *Client) register() (err error) {
+	client.Lock()
+	defer client.Unlock()
 
 	log.Debug("Registering to SM...")
 
-	client.Unlock()
-
-	stream, err := pb.NewUpdateControllerClient(client.connection).RegisterUM(context.Background())
-	if err != nil {
+	if client.stream, err = pb.NewUpdateControllerClient(client.connection).RegisterUM(context.Background()); err != nil {
 		return err
 	}
 
 	log.Debug("Registered to SM")
-
-	client.messageHandler.Registered()
-
-	client.Lock()
-
-	client.stream = stream
-
-	client.Unlock()
 
 	return nil
 }
