@@ -179,7 +179,7 @@ func (module *DualPartModule) Init() (err error) {
 	}
 
 	if module.currentPartition, err = module.controller.GetCurrentBoot(); err != nil {
-		log.Warnf("Can't determine current boot entry: %s. Use default one.", err)
+		return err
 	}
 
 	primaryPartition, err := module.controller.GetMainBoot()
