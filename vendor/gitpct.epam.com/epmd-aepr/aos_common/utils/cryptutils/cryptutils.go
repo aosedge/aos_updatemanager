@@ -18,44 +18,80 @@
 package cryptutils
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
-	"path/filepath"
+	"reflect"
 )
+
+/*******************************************************************************
+ * Consts
+ ******************************************************************************/
 
 const (
-	crtExt = ".crt"
-	keyExt = ".key"
+	// PEMExt PEM format extension
+	PEMExt = "pem"
 )
 
-// GetCertFileFromDir returns first certificate file from directory
-func GetCertFileFromDir(storageDir string) (crtFile string, err error) {
-	return getFileByExtension(storageDir, crtExt)
-}
+// PEM block types
+const (
+	PEMBlockRSAPrivateKey      = "RSA PRIVATE KEY"
+	PEMBlockECPrivateKey       = "EC PRIVATE KEY"
+	PEMBlockCertificate        = "CERTIFICATE"
+	PEMBlockCertificateRequest = "CERTIFICATE REQUEST"
+)
 
-// GetKeyFileFromDir returns first key file from directory
-func GetKeyFileFromDir(storageDir string) (keyFile string, err error) {
-	return getFileByExtension(storageDir, keyExt)
+// Crypto algorithm
+const (
+	AlgRSA = "rsa"
+	AlgECC = "ecc"
+)
+
+// URL schemes
+const (
+	SchemeFile = "file"
+	SchemeTPM  = "tpm"
+)
+
+/*******************************************************************************
+ * Public
+ ******************************************************************************/
+
+// GetCaCertPool returns CA cert pool
+func GetCaCertPool(rootCaFilePath string) (caCertPool *x509.CertPool, err error) {
+	pemCA, err := ioutil.ReadFile(rootCaFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	caCertPool = x509.NewCertPool()
+
+	if !caCertPool.AppendCertsFromPEM(pemCA) {
+		return nil, fmt.Errorf("failed to add CA's certificate")
+	}
+
+	return caCertPool, nil
 }
 
 // GetClientTLSConfig returns client TLS configuration
 func GetClientTLSConfig(CACert, certStorageDir string) (config *tls.Config, err error) {
-	pemCA, err := ioutil.ReadFile(CACert)
+	certPool, err := GetCaCertPool(CACert)
 	if err != nil {
-		return config, err
-	}
-
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(pemCA) {
-		return config, fmt.Errorf("failed to add CA's certificate")
+		return nil, err
 	}
 
 	clientCert, err := getKeyPairFromDir(certStorageDir)
 	if err != nil {
-		return config, err
+		return nil, err
 	}
 
 	config = &tls.Config{
@@ -68,19 +104,14 @@ func GetClientTLSConfig(CACert, certStorageDir string) (config *tls.Config, err 
 
 // GetServerTLSConfig returns server TLS configuration
 func GetServerTLSConfig(CACert, certStorageDir string) (config *tls.Config, err error) {
-	pemCA, err := ioutil.ReadFile(CACert)
+	certPool, err := GetCaCertPool(CACert)
 	if err != nil {
-		return config, err
-	}
-
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(pemCA) {
-		return config, fmt.Errorf("failed to add CA's certificate")
+		return nil, err
 	}
 
 	serverCert, err := getKeyPairFromDir(certStorageDir)
 	if err != nil {
-		return config, err
+		return nil, err
 	}
 
 	config = &tls.Config{
@@ -92,39 +123,222 @@ func GetServerTLSConfig(CACert, certStorageDir string) (config *tls.Config, err 
 	return config, nil
 }
 
+// LoadKey loads key from file
+func LoadKey(fileName string) (key crypto.PrivateKey, err error) {
+	data, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	block, _ := pem.Decode(data)
+	if err != nil {
+		return nil, err
+	}
+
+	if block != nil {
+		data = block.Bytes
+	}
+
+	switch {
+	case block == nil:
+		if key, err = parseKey(data); err != nil {
+			return nil, err
+		}
+
+	case block.Type == PEMBlockRSAPrivateKey:
+		if key, err = x509.ParsePKCS1PrivateKey(data); err != nil {
+			return nil, err
+		}
+
+	case block.Type == PEMBlockECPrivateKey:
+		if key, err = x509.ParseECPrivateKey(data); err != nil {
+			return nil, err
+		}
+
+	default:
+		if key, err = parseKey(data); err != nil {
+			return nil, err
+		}
+	}
+
+	return key, nil
+}
+
+// SaveKey saves key to file
+func SaveKey(fileName string, key crypto.PrivateKey) (err error) {
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	switch privateKey := key.(type) {
+	case *rsa.PrivateKey:
+		if err = pem.Encode(file, &pem.Block{Type: PEMBlockRSAPrivateKey, Bytes: x509.MarshalPKCS1PrivateKey(privateKey)}); err != nil {
+			return err
+		}
+
+	case *ecdsa.PrivateKey:
+		data, err := x509.MarshalECPrivateKey(privateKey)
+		if err != nil {
+			return err
+		}
+
+		if err = pem.Encode(file, &pem.Block{Type: PEMBlockECPrivateKey, Bytes: data}); err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf("unsupported key type: %v", reflect.TypeOf(privateKey))
+	}
+
+	return nil
+}
+
+// PEMToX509Cert parses PEM data to x509 certificate structures
+func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
+	var block *pem.Block
+
+	for {
+		block, data = pem.Decode(data)
+		if block == nil {
+			break
+		}
+
+		if block.Type == PEMBlockCertificate {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, err
+			}
+
+			certs = append(certs, cert)
+		}
+	}
+
+	if len(certs) == 0 {
+		return nil, fmt.Errorf("wrong certificate PEM format")
+	}
+
+	return certs, nil
+}
+
+// LoadCertificate loads certificate from file
+func LoadCertificate(fileName string) (certs []*x509.Certificate, err error) {
+	data, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	if certs, err = PEMToX509Cert(data); err != nil {
+		return nil, err
+	}
+
+	return certs, nil
+}
+
+// SaveCertificate saves certificate to file
+func SaveCertificate(fileName string, certs []*x509.Certificate) (err error) {
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, cert := range certs {
+		if err = pem.Encode(file, &pem.Block{Type: PEMBlockCertificate, Bytes: cert.Raw}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// CheckCertificate checks if certificate matches key
+func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) (err error) {
+	signer, ok := key.(crypto.Signer)
+	if !ok {
+		return errors.New("private key does not implement public key interface")
+	}
+
+	pub, err := x509.MarshalPKIXPublicKey(signer.Public())
+	if err != nil {
+		return err
+	}
+
+	if !bytes.Equal(pub, cert.RawSubjectPublicKeyInfo) {
+		return errors.New("certificate verification error")
+	}
+
+	return nil
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
-func getFileByExtension(dir, ext string) (resultFile string, err error) {
-	files, err := ioutil.ReadDir(dir)
+func getKeyPairFromDir(dir string) (cert tls.Certificate, err error) {
+	content, err := ioutil.ReadDir(dir)
 	if err != nil {
-		return "", err
+		return tls.Certificate{}, err
 	}
 
-	for _, file := range files {
-		if file.IsDir() {
+	// Collect keys
+
+	keyMap := make(map[string]crypto.PrivateKey)
+
+	for _, item := range content {
+		absItemPath := path.Join(dir, item.Name())
+
+		if item.IsDir() {
 			continue
 		}
 
-		if filepath.Ext(file.Name()) == ext {
-			return path.Join(dir, file.Name()), nil
+		key, err := LoadKey(absItemPath)
+		if err != nil {
+			continue
+		}
+
+		keyMap[absItemPath] = key
+	}
+
+	for _, item := range content {
+		absItemPath := path.Join(dir, item.Name())
+
+		if item.IsDir() {
+			continue
+		}
+
+		certs, err := LoadCertificate(absItemPath)
+		if err != nil {
+			continue
+		}
+
+		if len(certs) < 1 {
+			continue
+		}
+
+		for keyFilePath, key := range keyMap {
+			if CheckCertificate(certs[0], key) == nil {
+				return tls.LoadX509KeyPair(absItemPath, keyFilePath)
+			}
 		}
 	}
 
-	return "", fmt.Errorf("no *%s files in %s", ext, dir)
+	return tls.Certificate{}, errors.New("no appropriate key & certificate pair found")
 }
 
-func getKeyPairFromDir(dir string) (cert tls.Certificate, err error) {
-	crtFile, err := getFileByExtension(dir, crtExt)
-	if err != nil {
-		return cert, err
+func parseKey(data []byte) (key crypto.PrivateKey, err error) {
+	if key, err = x509.ParsePKCS1PrivateKey(data); err == nil {
+		return key, nil
 	}
 
-	keyFile, err := getFileByExtension(dir, keyExt)
-	if err != nil {
-		return cert, err
+	if key, err = x509.ParseECPrivateKey(data); err == nil {
+		return key, nil
 	}
 
-	return tls.LoadX509KeyPair(crtFile, keyFile)
+	if key, err = x509.ParsePKCS8PrivateKey(data); err == nil {
+		return key, nil
+	}
+
+	return nil, errors.New("invalid key format")
 }
