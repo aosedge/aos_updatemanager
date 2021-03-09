@@ -431,6 +431,10 @@ gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210108153826-cb6205c6845f h1:/9X5i
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210108153826-cb6205c6845f/go.mod h1:h8bGe2l0Lm6ONSMnwsx1Y2I55V/ZTSYvxXzdVse7oh4=
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210219143607-3d89a40326f0 h1:yFG1QakWsnZ1pLmqQzFP8Mxv24F1s5qnvKHHn8Ap6cI=
 gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210219143607-3d89a40326f0/go.mod h1:IdDLDJkHeoWMhhi/Z6/XHcwhJEFbErLIXuof48yoUVE=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210309075749-eb42f75086f2 h1:q47t9hvm37GMml/3lGAHPBa+MplzzEHrW6/i2wDow5U=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210309075749-eb42f75086f2/go.mod h1:IdDLDJkHeoWMhhi/Z6/XHcwhJEFbErLIXuof48yoUVE=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210309145032-e209a86370e0 h1:frX2EEzk/kC4vd0kwOz5YROh5dieSsAoiY4iNGFOQ9k=
+gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210309145032-e209a86370e0/go.mod h1:IdDLDJkHeoWMhhi/Z6/XHcwhJEFbErLIXuof48yoUVE=
 gitpct.epam.com/epmd-aepr/aos_common v1.0.0 h1:4FftftJxMM5GuvZt135NVgy26K1UWQTgqDsbhwBWznM=
 gitpct.epam.com/epmd-aepr/aos_common v1.0.0/go.mod h1:9M0Ym70G7m2r6uWqYCp3N1RKLPtRmba+Zml6oiJXy94=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
