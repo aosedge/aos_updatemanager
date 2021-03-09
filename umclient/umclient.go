@@ -199,7 +199,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 	if insecure {
 		secureOpt = grpc.WithInsecure()
 	} else {
-		tlsConfig, err := cryptutils.GetClientTLSConfig(config.CACert, config.CertStorage)
+		tlsConfig, err := cryptutils.GetClientMutualTLSConfig(config.CACert, config.CertStorage)
 		if err != nil {
 			return err
 		}
