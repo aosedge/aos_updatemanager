@@ -25,6 +25,7 @@ import (
  * Types
  ******************************************************************************/
 
+// RebootController reboot constroller instance
 type RebootController struct {
 }
 
@@ -32,6 +33,7 @@ type RebootController struct {
  * Public
  ******************************************************************************/
 
+// Reboot reboots the system
 func (controller *RebootController) Reboot() (err error) {
 	systemd, err := dbus.NewSystemConnection()
 	if err != nil {
@@ -40,7 +42,8 @@ func (controller *RebootController) Reboot() (err error) {
 	defer systemd.Close()
 
 	channel := make(chan string)
-	if _, err = systemd.StartUnit("reboot.target", "replace", channel); err != nil {
+
+	if _, err = systemd.StartUnit("reboot.target", "replace-irreversibly", nil); err != nil {
 		return err
 	}
 
