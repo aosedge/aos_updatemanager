@@ -180,10 +180,6 @@ func (module *OverlayModule) Init() (err error) {
 
 	if _, err = os.Stat(updatedFile); err == nil {
 		module.bootWithUpdate = true
-
-		if err = os.Remove(updatedFile); err != nil {
-			return err
-		}
 	}
 
 	failedFile := path.Join(module.config.UpdateDir, failedFileName)
@@ -284,6 +280,9 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply overlay module")
 
+	// Remove updated flag
+	os.Remove(path.Join(module.config.UpdateDir, updatedFileName))
+
 	if module.bootFailed {
 		return false, errors.New("current boot failed")
 	}
@@ -318,6 +317,9 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 // Revert reverts current update
 func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert overlay module")
+
+	// Remove updated flag
+	os.Remove(path.Join(module.config.UpdateDir, updatedFileName))
 
 	if module.state.UpdateState == idleState || module.state.UpdateState == preparedState {
 		return false, nil
