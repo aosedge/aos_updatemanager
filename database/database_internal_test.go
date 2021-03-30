@@ -166,6 +166,45 @@ func TestModuleState(t *testing.T) {
 	}
 }
 
+func TestVendorVersion(t *testing.T) {
+	type testItem struct {
+		id            string
+		vendorVersion string
+	}
+
+	testData := []testItem{
+		{"id0", "vendorVersion00"},
+		{"id1", "vendorVersion01"},
+		{"id2", "vendorVersion02"},
+		{"id3", "vendorVersion03"},
+		{"id0", "vendorVersion10"},
+		{"id1", "vendorVersion11"},
+		{"id2", "vendorVersion12"},
+		{"id3", "vendorVersion13"},
+	}
+
+	for i, item := range testData {
+		if err := db.SetVendorVersion(item.id, item.vendorVersion); err != nil {
+			t.Errorf("Index: %d, can't set module state: %s", i, err)
+		}
+	}
+
+	if err := db.SetModuleState("id2", []byte("some state")); err != nil {
+		t.Errorf("Can't SetModuleState %s", err)
+	}
+
+	for i, item := range testData[4:] {
+		version, err := db.GetVendorVersion(item.id)
+		if err != nil {
+			t.Errorf("Index: %d, can't get module vendorVersion: %s", i, err)
+		}
+
+		if version != item.vendorVersion {
+			t.Errorf("Index: %d, wrong module vendorVersion: %s", i, version)
+		}
+	}
+}
+
 func TestMultiThread(t *testing.T) {
 	const numIterations = 1000
 

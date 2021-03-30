@@ -184,6 +184,46 @@ func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 	return nil
 }
 
+// GetVendorVersion returns module vendor version
+func (db *Database) GetVendorVersion(id string) (version string, err error) {
+	rows, err := db.sql.Query("SELECT vendorVersion FROM modules WHERE id = ?", id)
+	if err != nil {
+		return version, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if err = rows.Scan(&version); err != nil {
+			return version, err
+		}
+
+		return version, nil
+	}
+
+	return version, ErrNotExist
+}
+
+// SetVendorVersion sets module vendor version
+func (db *Database) SetVendorVersion(id string, version string) (err error) {
+	result, err := db.sql.Exec("UPDATE modules SET vendorVersion = ? WHERE id= ?", version, id)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		if _, err = db.sql.Exec("INSERT INTO modules (id, vendorVersion) values(?, ?)", id, version); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Close closes database
 func (db *Database) Close() {
 	db.sql.Close()
@@ -298,6 +338,7 @@ func (db *Database) createModuleTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE IF NOT EXISTS modules (
 			id TEXT NOT NULL PRIMARY KEY,
+			vendorVersion TEXT,
 			aosVersion INTEGER,
 			state TEXT)`); err != nil {
 		return err
