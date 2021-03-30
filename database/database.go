@@ -129,7 +129,7 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 
 // SetModuleState sets module state
 func (db *Database) SetModuleState(id string, state []byte) (err error) {
-	result, err := db.sql.Exec("REPLACE INTO modules (id, state) VALUES(?, ?)", id, state)
+	result, err := db.sql.Exec("UPDATE modules SET state = ? WHERE id= ?", state, id)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,9 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	}
 
 	if count == 0 {
-		return ErrNotExist
+		if _, err = db.sql.Exec("INSERT INTO modules (id, state) values(?, ?)", id, state); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -167,7 +169,7 @@ func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 
 // SetAosVersion sets module Aos version
 func (db *Database) SetAosVersion(id string, version uint64) (err error) {
-	result, err := db.sql.Exec("REPLACE INTO modules (id, aosVersion) VALUES(?, ?)", id, version)
+	result, err := db.sql.Exec("UPDATE modules SET aosVersion = ? WHERE id= ?", version, id)
 	if err != nil {
 		return err
 	}
@@ -178,7 +180,9 @@ func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 	}
 
 	if count == 0 {
-		return ErrNotExist
+		if _, err = db.sql.Exec("INSERT INTO modules (id, aosVersion) values(?, ?)", id, version); err != nil {
+			return err
+		}
 	}
 
 	return nil
