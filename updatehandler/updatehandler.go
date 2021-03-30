@@ -108,6 +108,8 @@ type StateStorage interface {
 	GetUpdateState() (state []byte, err error)
 	SetAosVersion(id string, version uint64) (err error)
 	GetAosVersion(id string) (version uint64, err error)
+	SetVendorVersion(id string, version string) (err error)
+	GetVendorVersion(id string) (version string, err error)
 }
 
 // ModuleStorage provides API store/retrive module persistent data
@@ -303,11 +305,7 @@ func (handler *Handler) getState() (err error) {
 	return nil
 }
 
-func (handler *Handler) setState(state string) (err error) {
-	log.WithField("state", state).Debugf("State changed")
-
-	handler.state.UpdateState = state
-
+func (handler *Handler) saveState() (err error) {
 	jsonState, err := json.Marshal(handler.state)
 	if err != nil {
 		return err
@@ -360,10 +358,22 @@ func (handler *Handler) getVersions() {
 	log.Debug("Update component versions")
 
 	for id, component := range handler.components {
-		vendorVersion, err := component.module.GetVendorVersion()
-		if err == nil {
-			handler.componentStatuses[id].VendorVersion = vendorVersion
+		var vendorVersion string
+		var err error
+
+		if handler.state.UpdateState == stateIdle {
+			vendorVersion, err = component.module.GetVendorVersion()
+			if err != nil {
+				log.Errorf("Can't get vendor version from module: %s", err)
+			}
+		} else {
+			vendorVersion, err = handler.storage.GetVendorVersion(id)
+			if err != nil {
+				log.Errorf("Can't get vendor version from storage: %s", err)
+			}
 		}
+
+		handler.componentStatuses[id].VendorVersion = vendorVersion
 
 		aosVersion, err := handler.storage.GetAosVersion(id)
 		if err == nil {
@@ -407,7 +417,9 @@ func (handler *Handler) sendStatus() {
 }
 
 func (handler *Handler) onStateChanged(event *fsm.Event) {
-	if handler.fsm.Current() == stateIdle {
+	handler.state.UpdateState = handler.fsm.Current()
+
+	if handler.state.UpdateState == stateIdle {
 		handler.getVersions()
 
 		for id, componentStatus := range handler.state.ComponentStatuses {
@@ -427,7 +439,7 @@ func (handler *Handler) onStateChanged(event *fsm.Event) {
 		}
 	}
 
-	if err := handler.setState(handler.fsm.Current()); err != nil {
+	if err := handler.saveState(); err != nil {
 		log.Errorf("Can't set update state: %s", err)
 
 		if handler.state.Error == "" {
@@ -666,6 +678,12 @@ func downloadImage(downloadDir, urlStr string) (filePath string, err error) {
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
+	if err := handler.storage.SetVendorVersion(updateInfo.ID, handler.componentStatuses[updateInfo.ID].VendorVersion); err != nil {
+		log.Errorf("Can't set vendor version: %s", err)
+
+		return err
+	}
+
 	vendorVersion, err := module.GetVendorVersion()
 	if err == nil && updateInfo.VendorVersion != "" {
 		if vendorVersion == updateInfo.VendorVersion {

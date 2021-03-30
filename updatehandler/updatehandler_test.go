@@ -59,8 +59,9 @@ const (
  ******************************************************************************/
 
 type testStorage struct {
-	updateState []byte
-	aosVersions map[string]uint64
+	updateState    []byte
+	aosVersions    map[string]uint64
+	vendorVersions map[string]string
 }
 
 type testModule struct {
@@ -763,7 +764,8 @@ func TestUpdatePriority(t *testing.T) {
  ******************************************************************************/
 
 func newTestStorage() (storage *testStorage) {
-	return &testStorage{aosVersions: make(map[string]uint64)}
+	return &testStorage{aosVersions: make(map[string]uint64),
+		vendorVersions: make(map[string]string)}
 }
 
 func (storage *testStorage) SetUpdateState(state []byte) (err error) {
@@ -784,6 +786,16 @@ func (storage *testStorage) SetAosVersion(id string, version uint64) (err error)
 
 func (storage *testStorage) GetAosVersion(id string) (version uint64, err error) {
 	return storage.aosVersions[id], nil
+}
+
+func (storage *testStorage) SetVendorVersion(id string, version string) (err error) {
+	storage.vendorVersions[id] = version
+
+	return nil
+}
+
+func (storage *testStorage) GetVendorVersion(id string) (version string, err error) {
+	return storage.vendorVersions[id], nil
 }
 
 func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
