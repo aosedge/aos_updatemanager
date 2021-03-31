@@ -732,6 +732,13 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 
 	infos := event.Args[0].([]umclient.ComponentUpdateInfo)
 
+	if len(infos) == 0 {
+		handler.state.Error = "Prepare componenet list is empty"
+		handler.fsm.SetState(stateFailed)
+
+		return
+	}
+
 	for i, info := range infos {
 		componentsInfo[info.ID] = &infos[i]
 
