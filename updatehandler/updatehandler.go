@@ -687,11 +687,7 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 	vendorVersion, err := module.GetVendorVersion()
 	if err == nil && updateInfo.VendorVersion != "" {
 		if vendorVersion == updateInfo.VendorVersion {
-			log.WithField("id", updateInfo.ID).Warnf("Component already has required vendor version: %s", vendorVersion)
-
-			delete(handler.state.ComponentStatuses, updateInfo.ID)
-
-			return nil
+			return fmt.Errorf("Component already has required vendor version: %s", vendorVersion)
 		}
 	}
 
@@ -700,11 +696,7 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 
 		if err == nil {
 			if aosVersion == updateInfo.AosVersion {
-				log.WithField("id", updateInfo.ID).Warnf("Component already has required Aos version: %d", updateInfo.AosVersion)
-
-				delete(handler.state.ComponentStatuses, updateInfo.ID)
-
-				return nil
+				return fmt.Errorf("Component already has required Aos version: %d", updateInfo.AosVersion)
 			}
 
 			if aosVersion > updateInfo.AosVersion {

@@ -411,7 +411,7 @@ func TestUpdateFailed(t *testing.T) {
 		map[string][]string{"id1": {opRevert}, "id2": {opRevert, opReboot, opRevert}, "id3": {opRevert}}, nil)
 }
 
-func TestUpdateWrongVersion(t *testing.T) {
+func TestUpdateSameVendorVersion(t *testing.T) {
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
 
@@ -425,16 +425,14 @@ func TestUpdateWrongVersion(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled},
-			{ID: "id2", Status: umclient.StatusInstalled},
-			{ID: "id3", Status: umclient.StatusInstalled},
+			{ID: "id1", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 0},
+			{ID: "id2", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 0},
+			{ID: "id3", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 0},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
 		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
-
-	// Test same vendor version
 
 	infos, err := createUpdateInfos(currentStatus.Components)
 	if err != nil {
@@ -449,6 +447,13 @@ func TestUpdateWrongVersion(t *testing.T) {
 	for i, info := range infos {
 		if info.ID == sameVersionComponent.id {
 			infos[i].VendorVersion = sameVersionComponent.vendorVersion
+			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
+				ID:            sameVersionComponent.id,
+				AosVersion:    info.AosVersion,
+				VendorVersion: sameVersionComponent.vendorVersion,
+				Status:        umclient.StatusError,
+				Error:         "Component already has required vendor version: " + sameVersionComponent.vendorVersion,
+			})
 		} else {
 			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
 				ID:            info.ID,
@@ -459,50 +464,75 @@ func TestUpdateWrongVersion(t *testing.T) {
 		}
 	}
 
-	newStatus.State = umclient.StatePrepared
+	newStatus.State = umclient.StateFailed
+	newStatus.Error = "Component already has required vendor version: " + sameVersionComponent.vendorVersion
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
-	newStatus.State = umclient.StateUpdated
+	newStatus = currentStatus
+	newStatus.State = umclient.StateIdle
 
-	testOperation(t, handler, handler.StartUpdate, &newStatus, nil, nil)
-
-	finalStatus := umclient.Status{State: umclient.StateIdle}
-
-	for _, info := range infos {
-		status := umclient.ComponentStatusInfo{
-			ID:            info.ID,
-			AosVersion:    info.AosVersion,
-			VendorVersion: info.VendorVersion,
-			Status:        umclient.StatusInstalled,
+	for i, stateComponent := range newStatus.Components {
+		if stateComponent.ID == sameVersionComponent.id {
+			newStatus.Components[i].VendorVersion = sameVersionComponent.vendorVersion
 		}
-
-		if sameVersionComponent.id == info.ID {
-			status.AosVersion = info.AosVersion - 1
-		}
-
-		finalStatus.Components = append(finalStatus.Components, status)
 	}
 
-	testOperation(t, handler, handler.ApplyUpdate, &finalStatus, nil, nil)
+	newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
+		ID:            sameVersionComponent.id,
+		AosVersion:    1,
+		VendorVersion: sameVersionComponent.vendorVersion,
+		Status:        umclient.StatusError,
+		Error:         "Component already has required vendor version: " + sameVersionComponent.vendorVersion,
+	})
 
-	sameVersionComponent.vendorVersion = ""
+	testOperation(t, handler, handler.RevertUpdate, &newStatus, nil, nil)
+}
 
-	// Test same Aos version
+func TestUpdateSameAosVersion(t *testing.T) {
+	components = make([]*testModule, 0)
+	storage := newTestStorage()
 
-	currentStatus = finalStatus
+	handler, err := updatehandler.New(cfg, storage, storage)
 
-	if infos, err = createUpdateInfos(currentStatus.Components); err != nil {
+	if err != nil {
+		t.Fatalf("Can't create update handler: %s", err)
+	}
+	defer handler.Close()
+
+	currentStatus := umclient.Status{
+		State: umclient.StateIdle,
+		Components: []umclient.ComponentStatusInfo{
+			{ID: "id1", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 2},
+			{ID: "id2", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 2},
+			{ID: "id3", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 2},
+		},
+	}
+
+	for _, element := range currentStatus.Components {
+		storage.SetAosVersion(element.ID, element.AosVersion)
+	}
+
+	infos, err := createUpdateInfos(currentStatus.Components)
+	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
-	sameVersionComponent = components[1]
+	errorComponent := umclient.ComponentStatusInfo{
+		ID:            components[1].id,
+		AosVersion:    2,
+		VendorVersion: "",
+		Status:        umclient.StatusError,
+		Error:         "Component already has required Aos version: 2"}
 
-	newStatus = currentStatus
+	newStatus := currentStatus
+	newStatus.Components = append(newStatus.Components, errorComponent)
+	newStatus.State = umclient.StateFailed
+	newStatus.Error = "Component already has required Aos version: 2"
 
 	for i, info := range infos {
-		if info.ID == sameVersionComponent.id {
-			infos[i].AosVersion = infos[i].AosVersion - 1
+		if info.ID == errorComponent.ID {
+			infos[i].AosVersion = errorComponent.AosVersion
 		} else {
 			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
 				ID:            info.ID,
@@ -513,40 +543,50 @@ func TestUpdateWrongVersion(t *testing.T) {
 		}
 	}
 
-	newStatus.State = umclient.StatePrepared
-
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
-	newStatus.State = umclient.StateUpdated
+	newStatus = currentStatus
+	newStatus.State = umclient.StateIdle
+	newStatus.Components = append(newStatus.Components, errorComponent)
 
-	testOperation(t, handler, handler.StartUpdate, &newStatus, nil, nil)
+	testOperation(t, handler, handler.RevertUpdate, &newStatus, nil, nil)
 
-	finalStatus = umclient.Status{State: umclient.StateIdle}
+	return
+}
 
-	for _, info := range infos {
-		status := umclient.ComponentStatusInfo{
-			ID:            info.ID,
-			AosVersion:    info.AosVersion,
-			VendorVersion: info.VendorVersion,
-			Status:        umclient.StatusInstalled,
-		}
+func TestUpdateWrongVersion(t *testing.T) {
+	//Test lower Aos version
+	components = make([]*testModule, 0)
+	storage := newTestStorage()
 
-		finalStatus.Components = append(finalStatus.Components, status)
+	handler, err := updatehandler.New(cfg, storage, storage)
+
+	if err != nil {
+		t.Fatalf("Can't create update handler: %s", err)
+	}
+	defer handler.Close()
+
+	currentStatus := umclient.Status{
+		State: umclient.StateIdle,
+		Components: []umclient.ComponentStatusInfo{
+			{ID: "id1", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 3},
+			{ID: "id2", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 3},
+			{ID: "id3", Status: umclient.StatusInstalled, VendorVersion: "", AosVersion: 3},
+		},
 	}
 
-	testOperation(t, handler, handler.ApplyUpdate, &finalStatus, nil, nil)
+	for _, element := range currentStatus.Components {
+		storage.SetAosVersion(element.ID, element.AosVersion)
+	}
 
-	// Test lower Aos version
-
-	currentStatus = finalStatus
-
-	if infos, err = createUpdateInfos(currentStatus.Components); err != nil {
+	infos, err := createUpdateInfos(currentStatus.Components)
+	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
 	lowerVersionComponent := components[2]
 
-	newStatus = currentStatus
+	newStatus := currentStatus
 
 	for i, info := range infos {
 		if info.ID == lowerVersionComponent.id {
@@ -573,7 +613,7 @@ func TestUpdateWrongVersion(t *testing.T) {
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
-	finalStatus = currentStatus
+	finalStatus := currentStatus
 
 	for _, info := range infos {
 		if info.ID == lowerVersionComponent.id {
