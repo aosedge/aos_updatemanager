@@ -199,13 +199,7 @@ func (module *DualPartModule) Init() (err error) {
 		log.WithFields(log.Fields{"id": module.id}).Warn("Boot from fallback partition")
 	}
 
-	versionPartition := module.partitions[module.currentPartition]
-
-	if module.state.State != idleState {
-		versionPartition = module.partitions[(module.state.UpdatePartition+1)%len(module.partitions)]
-	}
-
-	if module.vendorVersion, err = module.getModuleVersion(versionPartition); err != nil {
+	if module.vendorVersion, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
 		return err
 	}
 

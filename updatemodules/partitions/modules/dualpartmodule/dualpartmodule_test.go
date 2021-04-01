@@ -209,7 +209,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Can't get vendor version: %s", err)
 	}
 
-	if version == updateVersion {
+	if version != updateVersion {
 		t.Errorf("Wrong vendor version: %s", version)
 	}
 

@@ -779,7 +779,24 @@ func (handler *Handler) onUpdateState(event *fsm.Event) {
 	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
 		log.WithFields(log.Fields{"id": module.GetID()}).Debug("Update component")
 
-		return module.Update()
+		rebootRequired, err = module.Update()
+		if err != nil {
+			return false, err
+		}
+
+		if !rebootRequired {
+			vendorVersion, err := module.GetVendorVersion()
+			if err != nil {
+				return false, err
+			}
+
+			if vendorVersion != handler.state.ComponentStatuses[module.GetID()].VendorVersion {
+				return false, fmt.Errorf("versions mismatch in request %s and updated module %s",
+					handler.state.ComponentStatuses[module.GetID()].VendorVersion, vendorVersion)
+			}
+		}
+
+		return rebootRequired, err
 	}, true); err != nil {
 		handler.state.Error = err.Error()
 		handler.fsm.SetState(stateFailed)
