@@ -15,13 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package overlaymodule
+package overlayxenstore
 
 import (
 	"encoding/json"
 
 	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
+	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
+	"aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
 )
 
 /*******************************************************************************
@@ -29,9 +30,9 @@ import (
  ******************************************************************************/
 
 func init() {
-	updatehandler.RegisterPlugin("overlaymodule",
+	updatehandler.RegisterPlugin("overlayxenstore",
 		func(id string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
-			return New(id, configJSON, storage, &systemdrebooter.SystemdRebooter{})
+			return overlaymodule.New(id, configJSON, storage, &xenstorerebooter.XenstoreRebooter{})
 		})
 }

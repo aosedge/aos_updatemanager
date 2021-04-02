@@ -29,7 +29,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/updatemodules/overlaymodule"
+	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
 )
 
 /*******************************************************************************

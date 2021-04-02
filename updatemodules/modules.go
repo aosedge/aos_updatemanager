@@ -21,7 +21,8 @@ import (
 	// include all supported plugins
 	_ "aos_updatemanager/updatemodules/boardconfigmodule"
 	_ "aos_updatemanager/updatemodules/efidualpart"
-	_ "aos_updatemanager/updatemodules/overlaymodule"
+	_ "aos_updatemanager/updatemodules/overlaysystemd"
+	_ "aos_updatemanager/updatemodules/overlayxenstore"
 	_ "aos_updatemanager/updatemodules/sshmodule"
 	_ "aos_updatemanager/updatemodules/testmodule"
 	_ "aos_updatemanager/updatemodules/ubootdualpart"
