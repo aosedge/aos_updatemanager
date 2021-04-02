@@ -19,31 +19,16 @@ package ubootdualparts
 
 import (
 	"encoding/json"
-	"os"
-
-	"github.com/joelnb/xenstore-go"
 
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
+	"aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
 )
-
-/*******************************************************************************
- * Consts
- ******************************************************************************/
-
-const xenBus = "/dev/xen/xenbus"
-const featureReboot = "control/user-reboot"
-const requestReboot = "2"
-
-const exitStatus = 1
 
 /*******************************************************************************
  * Vars
  ******************************************************************************/
-
-type rebootController struct {
-}
 
 type controllerConfig struct {
 	Device      string `json:"device"`
@@ -77,32 +62,7 @@ func init() {
 			}
 
 			return dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &rebootController{})
+				controller, storage, &xenstorerebooter.XenstoreRebooter{})
 		},
 	)
-}
-
-/*******************************************************************************
- * Interfaces
- ******************************************************************************/
-
-func (reboot *rebootController) Reboot() (err error) {
-	xenClient, err := xenstore.NewXenBusClient(xenBus)
-	if err != nil {
-		return err
-	}
-
-	_, err = xenClient.Write(featureReboot, requestReboot)
-
-	// Xen Client should be closed in any case prior to error check
-	xenClient.Close()
-
-	if err != nil {
-		return err
-	}
-
-	// Exit from program. Do not run defers.
-	os.Exit(exitStatus)
-
-	return nil
 }

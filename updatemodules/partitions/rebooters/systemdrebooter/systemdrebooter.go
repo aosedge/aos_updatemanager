@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rebootcontroller
+package systemdrebooter
 
 import (
 	"os"
@@ -27,8 +27,8 @@ import (
  * Types
  ******************************************************************************/
 
-// RebootController reboot constroller instance
-type RebootController struct {
+// SystemdRebooter reboot system using systemd
+type SystemdRebooter struct {
 }
 
 /*******************************************************************************
@@ -36,7 +36,7 @@ type RebootController struct {
  ******************************************************************************/
 
 // Reboot reboots the system
-func (controller *RebootController) Reboot() (err error) {
+func (controller *SystemdRebooter) Reboot() (err error) {
 	systemd, err := dbus.NewSystemConnection()
 	if err != nil {
 		return err

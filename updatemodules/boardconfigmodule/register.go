@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 
 	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/partitions/controllers/rebootcontroller"
+	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
 )
 
 /*******************************************************************************
@@ -32,6 +32,6 @@ func init() {
 	updatehandler.RegisterPlugin("boardconfigmodule",
 		func(id string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
-			return New(id, configJSON, storage, &rebootcontroller.RebootController{})
+			return New(id, configJSON, storage, &systemdrebooter.SystemdRebooter{})
 		})
 }

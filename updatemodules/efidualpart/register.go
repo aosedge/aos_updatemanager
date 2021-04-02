@@ -23,8 +23,8 @@ import (
 
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/eficontroller"
-	"aos_updatemanager/updatemodules/partitions/controllers/rebootcontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
+	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
 )
 
 /*******************************************************************************
@@ -61,7 +61,7 @@ func init() {
 			}
 
 			return dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &rebootcontroller.RebootController{})
+				controller, storage, &systemdrebooter.SystemdRebooter{})
 		},
 	)
 }
