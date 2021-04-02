@@ -18,6 +18,8 @@
 package rebootcontroller
 
 import (
+	"os"
+
 	"github.com/coreos/go-systemd/v22/dbus"
 )
 
@@ -48,6 +50,8 @@ func (controller *RebootController) Reboot() (err error) {
 	}
 
 	<-channel
+
+	os.Exit(0)
 
 	return nil
 }
