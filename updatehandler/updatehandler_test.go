@@ -452,7 +452,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 				AosVersion:    info.AosVersion,
 				VendorVersion: sameVersionComponent.vendorVersion,
 				Status:        umclient.StatusError,
-				Error:         "Component already has required vendor version: " + sameVersionComponent.vendorVersion,
+				Error:         "component already has required vendor version: " + sameVersionComponent.vendorVersion,
 			})
 		} else {
 			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
@@ -465,7 +465,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StateFailed
-	newStatus.Error = "Component already has required vendor version: " + sameVersionComponent.vendorVersion
+	newStatus.Error = "component already has required vendor version: " + sameVersionComponent.vendorVersion
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
@@ -483,7 +483,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 		AosVersion:    1,
 		VendorVersion: sameVersionComponent.vendorVersion,
 		Status:        umclient.StatusError,
-		Error:         "Component already has required vendor version: " + sameVersionComponent.vendorVersion,
+		Error:         "component already has required vendor version: " + sameVersionComponent.vendorVersion,
 	})
 
 	testOperation(t, handler, handler.RevertUpdate, &newStatus, nil, nil)
@@ -523,12 +523,12 @@ func TestUpdateSameAosVersion(t *testing.T) {
 		AosVersion:    2,
 		VendorVersion: "",
 		Status:        umclient.StatusError,
-		Error:         "Component already has required Aos version: 2"}
+		Error:         "component already has required Aos version: 2"}
 
 	newStatus := currentStatus
 	newStatus.Components = append(newStatus.Components, errorComponent)
 	newStatus.State = umclient.StateFailed
-	newStatus.Error = "Component already has required Aos version: 2"
+	newStatus.Error = "component already has required Aos version: 2"
 
 	for i, info := range infos {
 		if info.ID == errorComponent.ID {
