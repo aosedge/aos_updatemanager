@@ -213,11 +213,7 @@ func (module *OverlayModule) Prepare(imagePath string, vendorVersion string, ann
 		"imagePath":     imagePath,
 		"vendorVersion": vendorVersion}).Debug("Prepare overlay module")
 
-	if module.state.UpdateState == preparedState {
-		return nil
-	}
-
-	if module.state.UpdateState != idleState {
+	if module.state.UpdateState != idleState && module.state.UpdateState != preparedState {
 		return fmt.Errorf("wrong state: %s", module.state.UpdateState)
 	}
 
@@ -321,7 +317,7 @@ func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 	// Remove updated flag
 	os.Remove(path.Join(module.config.UpdateDir, updatedFileName))
 
-	if module.state.UpdateState == idleState || module.state.UpdateState == preparedState {
+	if module.state.UpdateState == idleState {
 		return false, nil
 	}
 

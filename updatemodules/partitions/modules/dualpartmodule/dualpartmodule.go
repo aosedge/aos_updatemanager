@@ -218,17 +218,13 @@ func (module *DualPartModule) Prepare(imagePath string, vendorVersion string, an
 		"imagePath":     imagePath,
 		"vendorVersion": vendorVersion}).Debug("Prepare dualpart module")
 
-	// Skip if module is already prepared
-	if module.state.State == preparedState {
-		return nil
-	}
-	if module.state.State != idleState {
+	if module.state.State != idleState && module.state.State != preparedState {
 		return fmt.Errorf("wrong state during Prepare command. Expected %d, got %d", idleState,
 			module.state.State)
 	}
 
-	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
-		return fmt.Errorf("image %s doesn't exist", imagePath)
+	if _, err = os.Stat(imagePath); err != nil {
+		return err
 	}
 
 	module.state.ImagePath = imagePath
@@ -283,7 +279,7 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert dualpart module")
 
-	if module.state.State == idleState || module.state.State == preparedState {
+	if module.state.State == idleState {
 		return false, nil
 	}
 
@@ -306,12 +302,6 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 
 	if err = module.setState(idleState); err != nil {
 		return false, err
-	}
-
-	if module.state.NeedReboot == rebootNotNeeded {
-		if module.vendorVersion, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
-			return false, err
-		}
 	}
 
 	return module.state.NeedReboot, nil
@@ -340,12 +330,6 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 
 	if err = module.setState(idleState); err != nil {
 		return false, err
-	}
-
-	if module.state.NeedReboot == rebootNotNeeded {
-		if module.vendorVersion, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
-			return false, err
-		}
 	}
 
 	return module.state.NeedReboot, nil
