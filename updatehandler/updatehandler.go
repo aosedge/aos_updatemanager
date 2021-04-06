@@ -767,10 +767,6 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 		handler.state.Error = err.Error()
 		handler.fsm.SetState(stateFailed)
 	}
-
-	if len(handler.state.ComponentStatuses) == 0 {
-		handler.fsm.SetState(stateIdle)
-	}
 }
 
 func (handler *Handler) onUpdateState(event *fsm.Event) {
