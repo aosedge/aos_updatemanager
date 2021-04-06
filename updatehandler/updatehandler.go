@@ -678,6 +678,15 @@ func downloadImage(downloadDir, urlStr string) (filePath string, err error) {
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
+	currentStatus, ok := handler.componentStatuses[updateInfo.ID]
+	if !ok {
+		return fmt.Errorf("component %s is not installed", updateInfo.ID)
+	}
+
+	if currentStatus.Status == umclient.StatusError {
+		return errors.New(currentStatus.Error)
+	}
+
 	vendorVersion, err := module.GetVendorVersion()
 	if err == nil && updateInfo.VendorVersion != "" {
 		if vendorVersion == updateInfo.VendorVersion {
