@@ -678,12 +678,6 @@ func downloadImage(downloadDir, urlStr string) (filePath string, err error) {
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
-	if err := handler.storage.SetVendorVersion(updateInfo.ID, handler.componentStatuses[updateInfo.ID].VendorVersion); err != nil {
-		log.Errorf("Can't set vendor version: %s", err)
-
-		return err
-	}
-
 	vendorVersion, err := module.GetVendorVersion()
 	if err == nil && updateInfo.VendorVersion != "" {
 		if vendorVersion == updateInfo.VendorVersion {
@@ -718,6 +712,12 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 	}
 
 	if err = module.Prepare(filePath, updateInfo.VendorVersion, updateInfo.Annotations); err != nil {
+		return err
+	}
+
+	if err = handler.storage.SetVendorVersion(updateInfo.ID, handler.componentStatuses[updateInfo.ID].VendorVersion); err != nil {
+		log.Errorf("Can't set vendor version: %s", err)
+
 		return err
 	}
 
