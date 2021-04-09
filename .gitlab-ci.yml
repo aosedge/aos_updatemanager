@@ -1,18 +1,17 @@
 image: golang:1.14
 
-before_script:
-  - apt update -y
-  - apt install -y libefivar-dev libefiboot-dev libblkid-dev
-
 stages:
   - build
   - test
-  - cyclonedx
+  - dependency
 
 build:
   tags:
     - um_ci
   stage: build
+  before_script:
+    - apt update -y
+    - apt install -y libefivar-dev libefiboot-dev libblkid-dev
   script:
     - go build
 
@@ -20,20 +19,21 @@ test:
   tags:
     - um_ci
   stage: test
+  before_script:
+    - apt update -y
+    - apt install -y libefivar-dev libefiboot-dev libblkid-dev
   script:
     - apt update -y
     - apt install -y parted dosfstools
     - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
-dependency:
+whitesource:
   only:
-    refs: 
+    refs:
      - master
   tags:
-    - cyclonedx_ci
-  stage: cyclonedx
+    - whitesource_ci
+  stage: dependency
   script:
-    - sed -i '/aos_common/d' ./go.mod
-    - cyclonedx-go -o /tmp/um_bom.xml
-    - curl -X 'POST' 'https://aos-dependency.westeurope.cloudapp.azure.com/api/v1/bom' -H "X-Api-Key:$DEP_API_KEY" -F 'projectName=aos-updatemanager' -F 'autoCreate=true' -F 'bom=@/tmp/um_bom.xml'
+    - java -jar /usr/bin/wss-unified-agent.jar -apiKey $WSS_API_KEY -projectToken $WSS_IAM_TOKEN -userKey $WSS_USER_KEY  -c ./ci/wss-um.conf -d ./ -scanComment $CI_COMMIT_SHORT_SHA
