@@ -214,7 +214,11 @@ func (controller *UbootController) getEnv() (err error) {
 
 	controller.cfg, err = ini.Load(imagePath)
 	if err != nil {
-		return fmt.Errorf("error loading env file %s", imagePath)
+		log.Errorf("Error loading env file %s err: %s", imagePath, err)
+
+		if err = controller.generateDefaultEnv(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -244,6 +248,32 @@ func (controller *UbootController) setVar(name string, value string) (err error)
 		value)
 
 	controller.cfg.Section("").Key(name).SetValue(value)
+
+	return nil
+}
+
+func (controller *UbootController) generateDefaultEnv() (err error) {
+	controller.cfg = ini.Empty()
+
+	if err = controller.setVar(aosBoot1Ok, "1"); err != nil {
+		return err
+	}
+
+	if err = controller.setVar(aosBoot2Ok, "1"); err != nil {
+		return err
+	}
+
+	if err = controller.setVar(aosMainPart, strconv.Itoa(0)); err != nil {
+		return err
+	}
+
+	if err = controller.setVar(aosBootPart, strconv.Itoa(0)); err != nil {
+		return err
+	}
+
+	if err = controller.saveEnv(); err != nil {
+		return err
+	}
 
 	return nil
 }

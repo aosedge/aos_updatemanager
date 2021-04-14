@@ -171,6 +171,49 @@ func TestEnv(t *testing.T) {
 	}
 }
 
+func TestDefaultEnv(t *testing.T) {
+	if err := createIncorrectEnvFile(disk.Partitions[0]); err != nil {
+		t.Fatalf("Unable to create incorrect env file: %s", err)
+	}
+
+	controller, err := ubootcontroller.New(disk.Partitions[0].Device, uEnvFile)
+	if err != nil {
+		t.Fatalf("Unable to create ubootcontroller: %s", err)
+	}
+	defer controller.Close()
+
+	cfg, err := readConfig(disk.Partitions[0])
+	if err != nil {
+		t.Errorf("Read configuration error: %s", err)
+	}
+
+	index, err := controller.GetCurrentBoot()
+	if err != nil {
+		t.Errorf("Get current boot error: %s", err)
+	}
+
+	if index != getVar("aos_boot_part", cfg) {
+		t.Error("Wrong value of current boot")
+	}
+
+	index, err = controller.GetMainBoot()
+	if err != nil {
+		t.Errorf("Get main boot error: %s", err)
+	}
+
+	if index != getVar("aos_boot_main", cfg) {
+		t.Error("Wrong value on main boot")
+	}
+
+	if getVar("aos_boot1_ok", cfg) != 1 {
+		t.Error("Validation uEnv.txt params error")
+	}
+
+	if getVar("aos_boot2_ok", cfg) != 1 {
+		t.Error("Validation uEnv.txt params error")
+	}
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
@@ -203,6 +246,19 @@ func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) 
 func createEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
 		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0644)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func createIncorrectEnvFile(part testtools.PartInfo) (err error) {
+	err = processEnvFile(part, func(fileName string) (err error) {
+		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0644)
 		if err != nil {
 			return err
 		}
