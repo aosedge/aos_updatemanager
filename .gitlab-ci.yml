@@ -36,4 +36,4 @@ whitesource:
     - whitesource_ci
   stage: dependency
   script:
-    - java -jar /usr/bin/wss-unified-agent.jar -apiKey $WSS_API_KEY -projectToken $WSS_IAM_TOKEN -userKey $WSS_USER_KEY  -c ./ci/wss-um.conf -d ./ -scanComment $CI_COMMIT_SHORT_SHA
+    - java -jar /usr/bin/wss-unified-agent.jar -apiKey $WSS_API_KEY -projectToken $WSS_UM_TOKEN -userKey $WSS_USER_KEY  -c ./ci/wss-um.conf -d ./ -scanComment $CI_COMMIT_SHORT_SHA
