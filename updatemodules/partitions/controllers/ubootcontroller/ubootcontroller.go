@@ -19,7 +19,6 @@ package ubootcontroller
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -200,17 +199,6 @@ func (controller *UbootController) getEnv() (err error) {
 	}
 
 	imagePath := path.Join(envMountPoint, controller.envFileName)
-	//Create file if not exists
-	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
-		fd, err := os.Create(imagePath)
-		if err != nil {
-			return fmt.Errorf("can't create env file: %s", err)
-		}
-
-		fd.Close()
-
-		return nil
-	}
 
 	controller.cfg, err = ini.Load(imagePath)
 	if err != nil {
