@@ -95,11 +95,6 @@ func New(envDevice string, envFileName string) (controller *UbootController, err
 	// Unset PrettyFormat to avoid alignment
 	ini.PrettyFormat = false
 
-	// Reading environment file
-	if err = controller.getEnv(); err != nil {
-		return controller, err
-	}
-
 	return controller, nil
 }
 
@@ -234,15 +229,25 @@ func (controller *UbootController) saveEnv() (err error) {
 }
 
 func (controller *UbootController) getVar(name string) (value int, err error) {
-	log.Debugf("UbootController: getting var %s, value %s", name,
-		controller.cfg.Section("").Key(name).String())
+	if controller.cfg == nil {
+		if err = controller.getEnv(); err != nil {
+			return 0, err
+		}
+	}
+
+	log.Debugf("UbootController: getting var %s, value %s", name, controller.cfg.Section("").Key(name).String())
 
 	return controller.cfg.Section("").Key(name).Int()
 }
 
 func (controller *UbootController) setVar(name string, value string) (err error) {
-	log.Debugf("UbootController: setting var %s, value %s", name,
-		value)
+	if controller.cfg == nil {
+		if err = controller.getEnv(); err != nil {
+			return err
+		}
+	}
+
+	log.Debugf("UbootController: setting var %s, value %s", name, value)
 
 	controller.cfg.Section("").Key(name).SetValue(value)
 
