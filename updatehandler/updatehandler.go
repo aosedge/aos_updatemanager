@@ -205,9 +205,13 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 	}
 
 	handler.initWG.Add(1)
-	go handler.init()
 
 	return handler, nil
+}
+
+// InitModules initializes update modules
+func (handler *Handler) InitModules() {
+	go handler.init()
 }
 
 // Registered indicates the client registed to the server
@@ -371,6 +375,12 @@ func (handler *Handler) getVersions() {
 			if err != nil {
 				log.Errorf("Can't get vendor version from storage: %s", err)
 			}
+		}
+
+		if _, ok := handler.componentStatuses[id]; !ok {
+			log.Errorf("Component %s status not fond", id)
+
+			return
 		}
 
 		handler.componentStatuses[id].VendorVersion = vendorVersion

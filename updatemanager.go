@@ -199,6 +199,9 @@ func main() {
 	}
 	defer client.Close()
 
+	// We should start initialize modules only if all UM items are properly created
+	updater.InitModules()
+
 	// Handle SIGTERM
 	terminateChannel := make(chan os.Signal, 1)
 	signal.Notify(terminateChannel, os.Interrupt, syscall.SIGTERM)

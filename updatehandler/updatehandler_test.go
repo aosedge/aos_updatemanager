@@ -157,6 +157,8 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 
+	handler.InitModules()
+
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
@@ -213,6 +215,8 @@ func TestUpdate(t *testing.T) {
 	}
 	defer handler.Close()
 
+	handler.InitModules()
+
 	testOperation(t, handler, handler.Registered, &newStatus,
 		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
 
@@ -244,6 +248,8 @@ func TestPrepareFail(t *testing.T) {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
+
+	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -323,6 +329,8 @@ func TestUpdateFailed(t *testing.T) {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
+
+	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -422,6 +430,8 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 	}
 	defer handler.Close()
 
+	handler.InitModules()
+
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
@@ -494,11 +504,12 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	storage := newTestStorage()
 
 	handler, err := updatehandler.New(cfg, storage, storage)
-
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
+
+	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -560,11 +571,12 @@ func TestUpdateWrongVersion(t *testing.T) {
 	storage := newTestStorage()
 
 	handler, err := updatehandler.New(cfg, storage, storage)
-
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
+
+	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -639,6 +651,8 @@ func TestUpdateBadImage(t *testing.T) {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
+
+	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -725,6 +739,8 @@ func TestUpdatePriority(t *testing.T) {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
+
+	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
