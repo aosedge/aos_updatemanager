@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -50,6 +51,8 @@ const (
 
 // UbootController instance
 type UbootController struct {
+	sync.Mutex
+
 	envDevice   string
 	envFsType   string
 	envFileName string
@@ -145,6 +148,9 @@ func (controller *UbootController) SetBootOK() (err error) {
  ******************************************************************************/
 
 func (controller *UbootController) mountEnv(device string, fstype string) (err error) {
+	controller.Lock()
+	defer controller.Unlock()
+
 	if controller.mountedPart == device {
 		return nil
 	}
@@ -173,6 +179,9 @@ func (controller *UbootController) mountEnv(device string, fstype string) (err e
 }
 
 func (controller *UbootController) umountEnv() (umountErr error) {
+	controller.Lock()
+	defer controller.Unlock()
+
 	if controller.mountedPart != "" {
 		log.WithField("device", controller.mountedPart).Debug("Umount env")
 
