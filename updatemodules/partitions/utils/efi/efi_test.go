@@ -28,7 +28,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/updatemodules/partitions/utils/efi"
@@ -102,7 +101,7 @@ func TestGetByPartUUID(t *testing.T) {
 	}
 	defer efiVars.Close()
 
-	if _, err = efiVars.GetBootByPartUUID(uuid.New()); err == nil {
+	if _, err = efiVars.GetBootByPartUUID("not existed UUID"); err == nil {
 		t.Error("Not found error expected")
 	}
 
@@ -250,21 +249,21 @@ func TestBootNext(t *testing.T) {
  * Private
  ******************************************************************************/
 
-func getCurrentBootPartUUID() (id uint16, partUUID uuid.UUID, err error) {
+func getCurrentBootPartUUID() (id uint16, partUUID string, err error) {
 	var output []byte
 
 	if output, err = exec.Command("efibootmgr", "-v").CombinedOutput(); err != nil {
-		return 0, uuid.UUID{}, err
+		return 0, "", err
 	}
 
 	result := strings.Split(string(output), "\n")
 
 	if len(result) == 0 {
-		return 0, uuid.UUID{}, errors.New("wrong efibootmgr command output")
+		return 0, "", errors.New("wrong efibootmgr command output")
 	}
 
 	if !strings.HasPrefix(result[0], "BootCurrent: ") {
-		return 0, uuid.UUID{}, errors.New("wrong efibootmgr command output")
+		return 0, "", errors.New("wrong efibootmgr command output")
 	}
 
 	idStr := strings.TrimPrefix(result[0], "BootCurrent: ")
@@ -276,19 +275,15 @@ func getCurrentBootPartUUID() (id uint16, partUUID uuid.UUID, err error) {
 
 		const gptPartUUID = "[a-z0-9]{8}-[a-z0-9]{4}-[1-5][a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{12}"
 
-		uuidStr := regexp.MustCompile(gptPartUUID).FindString(strings.TrimPrefix(line, "Boot"+idStr))
-
-		if partUUID, err = uuid.Parse(uuidStr); err != nil {
-			return 0, uuid.UUID{}, err
-		}
+		partUUID = regexp.MustCompile(gptPartUUID).FindString(strings.TrimPrefix(line, "Boot"+idStr))
 
 		id64, err := strconv.ParseUint(idStr, 16, 16)
 		if err != nil {
-			return 0, uuid.UUID{}, err
+			return 0, "", err
 		}
 
 		return uint16(id64), partUUID, nil
 	}
 
-	return 0, uuid.UUID{}, errors.New("no current boot PARTUUID found")
+	return 0, "", errors.New("no current boot PARTUUID found")
 }

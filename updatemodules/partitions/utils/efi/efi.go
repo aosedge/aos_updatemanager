@@ -52,7 +52,6 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/partition"
 )
@@ -149,7 +148,7 @@ func New() (instance *Instance, err error) {
 }
 
 // GetBootByPartUUID returns boot item by PARTUUID
-func (instance *Instance) GetBootByPartUUID(partUUID uuid.UUID) (id uint16, err error) {
+func (instance *Instance) GetBootByPartUUID(partUUID string) (id uint16, err error) {
 	for _, item := range instance.bootItems {
 		if item.data == nil {
 			continue
@@ -180,13 +179,7 @@ func (instance *Instance) GetBootByPartUUID(partUUID uuid.UUID) (id uint16, err 
 				log.Errorf("Wrong PARTUUID in efi var: %s", getEfiError())
 			}
 
-			readUUID, err := uuid.Parse(C.GoString(uuidStr))
-			if err != nil {
-				log.Errorf("Wrong PARTUUID in efi var: %s", err)
-				continue
-			}
-
-			if partUUID == readUUID {
+			if partUUID == C.GoString(uuidStr) {
 				log.Debugf("Get EFI boot by PARTUUID=%s: %04X", partUUID, item.id)
 
 				return item.id, nil

@@ -182,14 +182,14 @@ func TestDefaultEnv(t *testing.T) {
 	}
 	defer controller.Close()
 
-	cfg, err := readConfig(disk.Partitions[0])
-	if err != nil {
-		t.Errorf("Read configuration error: %s", err)
-	}
-
 	index, err := controller.GetCurrentBoot()
 	if err != nil {
 		t.Errorf("Get current boot error: %s", err)
+	}
+
+	cfg, err := readConfig(disk.Partitions[0])
+	if err != nil {
+		t.Errorf("Read configuration error: %s", err)
 	}
 
 	if index != getVar("aos_boot_part", cfg) {
