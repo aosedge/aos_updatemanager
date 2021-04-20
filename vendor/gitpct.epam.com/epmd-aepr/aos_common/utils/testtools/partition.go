@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -56,7 +55,7 @@ type PartDesc struct {
 type PartInfo struct {
 	PartDesc
 	Device   string
-	PartUUID uuid.UUID
+	PartUUID string
 }
 
 // TestDisk test disk structure
@@ -261,22 +260,18 @@ func ComparePartitions(dst, src string) (err error) {
  * Private
  ******************************************************************************/
 
-func getPartUUID(device string) (partUUID uuid.UUID, err error) {
+func getPartUUID(device string) (partUUID string, err error) {
 	var output []byte
 
 	if output, err = exec.Command("blkid", device).CombinedOutput(); err != nil {
-		return uuid.UUID{}, fmt.Errorf("%s (%s)", err, (string(output)))
+		return "", fmt.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	for _, field := range strings.Fields(string(output)) {
 		if strings.HasPrefix(field, "PARTUUID=") {
-			if partUUID, err = uuid.Parse(strings.TrimPrefix(field, "PARTUUID=")); err != nil {
-				return uuid.UUID{}, err
-			}
-
-			return partUUID, nil
+			return strings.Trim(strings.TrimPrefix(field, "PARTUUID="), `"`), nil
 		}
 	}
 
-	return uuid.UUID{}, errors.New("partition UUID not found")
+	return "", errors.New("partition UUID not found")
 }

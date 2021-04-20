@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -62,7 +61,7 @@ const (
 // PartInfo partition info
 type PartInfo struct {
 	Device   string
-	PartUUID uuid.UUID
+	PartUUID string
 	FSType   string
 	Label    string
 }
@@ -164,11 +163,7 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 			partInfo.FSType = C.GoString(tagValue)
 
 		case tagTypePartUUID:
-			var err error
-
-			if partInfo.PartUUID, err = uuid.Parse(C.GoString(tagValue)); err != nil {
-				log.Errorf("Can't parse PARTUUID")
-			}
+			partInfo.PartUUID = C.GoString(tagValue)
 		}
 	}
 

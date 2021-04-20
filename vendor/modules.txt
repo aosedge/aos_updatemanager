@@ -56,7 +56,7 @@ github.com/sirupsen/logrus
 # github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 ## explicit
 github.com/tmc/scp
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210309145032-e209a86370e0
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210419204235-b2840a5bdae2
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager
 gitpct.epam.com/epmd-aepr/aos_common/fs
