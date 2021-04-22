@@ -442,10 +442,6 @@ func (handler *Handler) onStateChanged(event *fsm.Event) {
 			if err := os.RemoveAll(handler.downloadDir); err != nil {
 				log.Errorf("Can't remove download dir: %s", handler.downloadDir)
 			}
-
-			if err := os.MkdirAll(handler.downloadDir, 0755); err != nil {
-				log.Errorf("Can't create download dir: %s", handler.downloadDir)
-			}
 		}
 	}
 
@@ -716,6 +712,10 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 				return errors.New("wrong Aos version")
 			}
 		}
+	}
+
+	if err = os.MkdirAll(handler.downloadDir, 755); err != nil {
+		return err
 	}
 
 	filePath, err := downloadImage(handler.downloadDir, updateInfo.URL)
