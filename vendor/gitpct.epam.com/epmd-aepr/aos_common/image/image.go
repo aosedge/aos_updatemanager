@@ -61,15 +61,8 @@ type FileInfo struct {
  * Public
  ******************************************************************************/
 
-// New creates new image handler
-func New() (image *Handler, err error) {
-	image = &Handler{grab: grab.NewClient()}
-
-	return image, nil
-}
-
 // Download downloads the file by url
-func (image *Handler) Download(destination, url string) (fileName string, err error) {
+func Download(destination, url string) (fileName string, err error) {
 	log.WithField("url", url).Debug("Start downloading file")
 
 	timer := time.NewTicker(updateDownloadsTime)
@@ -80,7 +73,7 @@ func (image *Handler) Download(destination, url string) (fileName string, err er
 		return "", err
 	}
 
-	resp := image.grab.Do(req)
+	resp := grab.NewClient().Do(req)
 
 	for {
 		select {
