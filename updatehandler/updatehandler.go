@@ -26,7 +26,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/cavaliercoder/grab"
 	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/image"
@@ -650,39 +649,6 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 	return err
 }
 
-func downloadImage(downloadDir, urlStr string) (filePath string, err error) {
-	var urlVal *url.URL
-
-	if urlVal, err = url.Parse(urlStr); err != nil {
-		return "", err
-	}
-
-	if urlVal.Scheme == "file" {
-		return urlVal.Path, nil
-	}
-
-	grabClient := grab.NewClient()
-
-	log.WithField("url", urlStr).Debug("Start downloading file")
-
-	req, err := grab.NewRequest(downloadDir, urlStr)
-	if err != nil {
-		return "", err
-	}
-
-	resp := grabClient.Do(req)
-
-	<-resp.Done
-
-	if err = resp.Err(); err != nil {
-		return "", err
-	}
-
-	log.WithField("file", resp.Filename).Debug("Download complete")
-
-	return resp.Filename, nil
-}
-
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
 	currentStatus, ok := handler.componentStatuses[updateInfo.ID]
 	if !ok {
@@ -718,9 +684,19 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		return err
 	}
 
-	filePath, err := downloadImage(handler.downloadDir, updateInfo.URL)
+	urlVal, err := url.Parse(updateInfo.URL)
 	if err != nil {
 		return err
+	}
+
+	var filePath string
+
+	if urlVal.Scheme != "file" {
+		if filePath, err = image.Download(handler.downloadDir, updateInfo.URL); err != nil {
+			return err
+		}
+	} else {
+		filePath = urlVal.Path
 	}
 
 	if err = image.CheckFileInfo(filePath, image.FileInfo{
