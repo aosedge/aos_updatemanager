@@ -29,6 +29,14 @@ import (
 )
 
 /*******************************************************************************
+ * Types
+ ******************************************************************************/
+
+type testStorage struct {
+	state []byte
+}
+
+/*******************************************************************************
  * Var
  ******************************************************************************/
 
@@ -73,7 +81,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	module, err := sshmodule.New("TestComponent", nil, nil)
+	module, err := sshmodule.New("TestComponent", nil, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create ssh module: %s", err)
 	}
@@ -97,7 +105,7 @@ func TestUpdate(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Can't create ssh module: %s", err)
 	}
@@ -109,7 +117,9 @@ func TestUpdate(t *testing.T) {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
-	if err := module.Prepare(imagePath, "", nil); err != nil {
+	newVersion := "new_version"
+
+	if err := module.Prepare(imagePath, newVersion, nil); err != nil {
 		t.Errorf("Prepare failed: %s", err)
 	}
 
@@ -120,6 +130,15 @@ func TestUpdate(t *testing.T) {
 	if _, err := module.Apply(); err != nil {
 		t.Errorf("Apply failed: %s", err)
 	}
+
+	updatedVersion, err := module.GetVendorVersion()
+	if err != nil {
+		t.Errorf("Get vendor version failed: %s", err)
+	}
+
+	if updatedVersion != newVersion {
+		t.Errorf("Update version missmatch  %s != %s", updatedVersion, newVersion)
+	}
 }
 
 func TestWrongJson(t *testing.T) {
@@ -128,7 +147,7 @@ func TestWrongJson(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
 	if err == nil {
 		module.Close()
 		log.Fatalf("Expecting error here")
@@ -149,7 +168,7 @@ func TestUpdateErrors(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}
@@ -188,7 +207,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), nil)
+	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}
@@ -212,4 +231,18 @@ func TestUpdateWrongCommands(t *testing.T) {
 	if _, err := module.Revert(); err != nil {
 		t.Errorf("Reverts failed: %s", err)
 	}
+}
+
+/*******************************************************************************
+ * Private
+ ******************************************************************************/
+
+func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
+	return storage.state, nil
+}
+
+func (storage *testStorage) SetModuleState(id string, state []byte) (err error) {
+	storage.state = state
+
+	return nil
 }

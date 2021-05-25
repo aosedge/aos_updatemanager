@@ -19,7 +19,6 @@ package sshmodule
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -46,8 +45,11 @@ const Name = "ssh"
 type SSHModule struct {
 	id string
 	sync.Mutex
-	config   moduleConfig
-	filePath string
+	config         moduleConfig
+	storage        updatehandler.ModuleStorage
+	filePath       string
+	vendorVersion  string
+	pendingVersion string
 }
 
 type moduleConfig struct {
@@ -56,6 +58,10 @@ type moduleConfig struct {
 	Password string
 	DestPath string
 	Commands []string
+}
+
+type moduleState struct {
+	Version string `json:"version"`
 }
 
 /*******************************************************************************
@@ -67,13 +73,28 @@ func New(id string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Debug("Create SSH module")
 
-	sshModule := &SSHModule{id: id}
+	sshModule := &SSHModule{id: id, storage: storage}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
 			return nil, err
 		}
 	}
+
+	stateJSON, err := storage.GetModuleState(id)
+	if err != nil {
+		return nil, err
+	}
+
+	state := moduleState{Version: ""}
+
+	if len(stateJSON) != 0 {
+		if err = json.Unmarshal(stateJSON, &state); err != nil {
+			return nil, err
+		}
+	}
+
+	sshModule.vendorVersion = state.Version
 
 	return sshModule, nil
 }
@@ -99,6 +120,8 @@ func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotat
 
 	module.filePath = imagePath
 
+	module.pendingVersion = vendorVersion
+
 	return nil
 }
 
@@ -112,7 +135,10 @@ func (module *SSHModule) GetID() (id string) {
 
 // GetVendorVersion returns vendor version
 func (module *SSHModule) GetVendorVersion() (version string, err error) {
-	return "", errors.New("not supported")
+	module.Lock()
+	defer module.Unlock()
+
+	return module.vendorVersion, nil
 }
 
 // Update performs module update
@@ -157,6 +183,19 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 // Apply applies current update
 func (module *SSHModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply SSH module")
+
+	state := moduleState{Version: module.pendingVersion}
+
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return false, err
+	}
+
+	if err = module.storage.SetModuleState(module.id, stateJSON); err != nil {
+		return false, err
+	}
+
+	module.vendorVersion = module.pendingVersion
 
 	return false, nil
 }
