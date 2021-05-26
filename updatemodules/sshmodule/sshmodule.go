@@ -83,7 +83,7 @@ func New(id string, configJSON json.RawMessage,
 
 	stateJSON, err := storage.GetModuleState(id)
 	if err != nil {
-		return nil, err
+		stateJSON = []byte{}
 	}
 
 	state := moduleState{Version: ""}
