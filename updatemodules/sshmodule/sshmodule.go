@@ -177,6 +177,8 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 		return false, err
 	}
 
+	module.vendorVersion = module.pendingVersion
+
 	return false, nil
 }
 
@@ -194,8 +196,6 @@ func (module *SSHModule) Apply() (rebootRequired bool, err error) {
 	if err = module.storage.SetModuleState(module.id, stateJSON); err != nil {
 		return false, err
 	}
-
-	module.vendorVersion = module.pendingVersion
 
 	return false, nil
 }
