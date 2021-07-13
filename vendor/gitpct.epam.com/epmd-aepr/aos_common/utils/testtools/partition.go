@@ -18,7 +18,6 @@ package testtools
 
 import (
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,6 +28,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 // This package contains different tools which are used in unit tests by
@@ -92,11 +93,11 @@ func NewTestDisk(path string, desc []PartDesc) (disk *TestDisk, err error) {
 	var output []byte
 
 	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M", "count="+strconv.FormatUint(diskSize, 10)).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	if output, err = exec.Command("parted", "-s", path, "mktable", "gpt").CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	diskSize = 1
@@ -105,14 +106,14 @@ func NewTestDisk(path string, desc []PartDesc) (disk *TestDisk, err error) {
 		if output, err = exec.Command("parted", "-s", path, "mkpart", "primary",
 			fmt.Sprintf("%dMiB", diskSize),
 			fmt.Sprintf("%dMiB", diskSize+part.Size)).CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+			return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 		}
 
 		diskSize = diskSize + part.Size
 	}
 
 	if output, err = exec.Command("losetup", "-f", "-P", path, "--show").CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	disk.Device = strings.TrimSpace(string(output))
@@ -124,7 +125,7 @@ func NewTestDisk(path string, desc []PartDesc) (disk *TestDisk, err error) {
 		}
 
 		if info.PartUUID, err = getPartUUID(info.Device); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		disk.Partitions = append(disk.Partitions, info)
@@ -136,7 +137,7 @@ func NewTestDisk(path string, desc []PartDesc) (disk *TestDisk, err error) {
 		}
 
 		if output, err = exec.Command("mkfs."+part.Type, info.Device, labelOption, info.Label).CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+			return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 		}
 	}
 
@@ -149,12 +150,12 @@ func (disk *TestDisk) Close() (err error) {
 
 	if disk.Device != "" {
 		if output, err = exec.Command("losetup", "-d", disk.Device).CombinedOutput(); err != nil {
-			return fmt.Errorf("%s (%s)", err, (string(output)))
+			return aoserrors.Errorf("%s (%s)", err, (string(output)))
 		}
 	}
 
 	if err = os.RemoveAll(disk.path); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -167,17 +168,17 @@ func CreateFilePartition(path string, fsType string, size uint64,
 
 	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M",
 		"count="+strconv.FormatUint(size, 10)).CombinedOutput(); err != nil {
-		return fmt.Errorf("%s (%s)", err, (string(output)))
+		return aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	if output, err = exec.Command("mkfs."+fsType, path).CombinedOutput(); err != nil {
-		return fmt.Errorf("%s (%s)", err, (string(output)))
+		return aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	if archivate {
 		defer func() {
 			if output, err = exec.Command("gzip", "-k", "-f", path).CombinedOutput(); err != nil {
-				err = fmt.Errorf("%s (%s)", err, (string(output)))
+				err = aoserrors.Errorf("%s (%s)", err, (string(output)))
 			}
 		}()
 	}
@@ -186,16 +187,16 @@ func CreateFilePartition(path string, fsType string, size uint64,
 		var mountPoint string
 
 		if mountPoint, err = ioutil.TempDir("", "um_mount"); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		defer func() {
 			if output, err := exec.Command("sync").CombinedOutput(); err != nil {
-				log.Errorf("Sync error: %s", fmt.Errorf("%s (%s)", err, (string(output))))
+				log.Errorf("Sync error: %s", aoserrors.Errorf("%s (%s)", err, (string(output))))
 			}
 
 			if output, err := exec.Command("umount", mountPoint).CombinedOutput(); err != nil {
-				log.Errorf("Umount error: %s", fmt.Errorf("%s (%s)", err, (string(output))))
+				log.Errorf("Umount error: %s", aoserrors.Errorf("%s (%s)", err, (string(output))))
 			}
 
 			if err := os.RemoveAll(mountPoint); err != nil {
@@ -204,11 +205,11 @@ func CreateFilePartition(path string, fsType string, size uint64,
 		}()
 
 		if output, err = exec.Command("mount", path, mountPoint).CombinedOutput(); err != nil {
-			return fmt.Errorf("%s (%s)", err, (string(output)))
+			return aoserrors.Errorf("%s (%s)", err, (string(output)))
 		}
 
 		if err = contentCreator(mountPoint); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -219,13 +220,13 @@ func CreateFilePartition(path string, fsType string, size uint64,
 func ComparePartitions(dst, src string) (err error) {
 	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer srcFile.Close()
 
 	dstFile, err := os.OpenFile(dst, os.O_RDONLY, 0)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer dstFile.Close()
 
@@ -234,23 +235,23 @@ func ComparePartitions(dst, src string) (err error) {
 
 	size, err := srcFile.Seek(0, 2)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = srcFile.Seek(0, 0); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err := io.CopyN(srcMd5, srcFile, size); err != nil && err != io.EOF {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err := io.CopyN(dstMd5, dstFile, size); err != nil && err != io.EOF {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !reflect.DeepEqual(srcMd5.Sum(nil), dstMd5.Sum(nil)) {
-		return errors.New("data mismatch")
+		return aoserrors.New("data mismatch")
 	}
 
 	return nil
@@ -264,7 +265,7 @@ func getPartUUID(device string) (partUUID string, err error) {
 	var output []byte
 
 	if output, err = exec.Command("blkid", device).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("%s (%s)", err, (string(output)))
+		return "", aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	for _, field := range strings.Fields(string(output)) {
@@ -273,5 +274,5 @@ func getPartUUID(device string) (partUUID string, err error) {
 		}
 	}
 
-	return "", errors.New("partition UUID not found")
+	return "", aoserrors.New("partition UUID not found")
 }

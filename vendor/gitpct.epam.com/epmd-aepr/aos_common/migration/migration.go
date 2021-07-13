@@ -19,8 +19,6 @@ package migration
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,6 +30,8 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -44,7 +44,7 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 
 	m, err := getMigrationFromInstance(sql, migrationPath)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	version, dirty, err := m.Version()
@@ -54,14 +54,14 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 		log.Debugf("Migration version was not set. Setting initial version %d", version)
 
 		if err = m.Force(int(version)); err != nil {
-			return fmt.Errorf("unable to force version. err: %s", err)
+			return aoserrors.Wrap(err)
 		}
 	} else if err != nil {
-		return fmt.Errorf("unable to get migration version: %s", err)
+		return aoserrors.Wrap(err)
 	}
 
 	if dirty == true {
-		return errors.New("can't update, db is dirty")
+		return aoserrors.New("can't update, db is dirty")
 	}
 
 	log.Debugf("Got database version: %d", version)
@@ -81,18 +81,18 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 		log.Debugf("Migration successful, db version is: %d", int(migrateVersion))
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 // SetDatabaseVersion sets the database version
 func SetDatabaseVersion(sql *sql.DB, migrationPath string, version uint) (err error) {
 	m, err := getMigrationFromInstance(sql, migrationPath)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = m.Force(int(version)); err != nil {
-		return fmt.Errorf("unable to force version. err: %s", err)
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -102,25 +102,25 @@ func SetDatabaseVersion(sql *sql.DB, migrationPath string, version uint) (err er
 func MergeMigrationFiles(migrationPath string, mergedMigrationPath string) (err error) {
 	absMigrationPath, err := filepath.Abs(migrationPath)
 	if err != nil {
-		return fmt.Errorf("can't get absolute migration path: %s", err)
+		return aoserrors.Wrap(err)
 	}
 
 	absMergedMigrationPath, err := filepath.Abs(mergedMigrationPath)
 	if err != nil {
-		return fmt.Errorf("can't get absolute merged migration path: %s", err)
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = os.Stat(absMigrationPath); err != nil {
-		return fmt.Errorf("migration path doesn't exists %s", err)
+		return aoserrors.Wrap(err)
 	}
 
 	//Create target directories if needed
 	if err = os.MkdirAll(absMergedMigrationPath, 0755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = copyFiles(absMigrationPath, absMergedMigrationPath); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -143,56 +143,56 @@ func copyFiles(source, destination string) (err error) {
 		}
 
 		if info.IsDir() {
-			return os.Mkdir(filepath.Join(destination, relPath), 0755)
+			return aoserrors.Wrap(os.Mkdir(filepath.Join(destination, relPath), 0755))
 		}
 
-		return copyFile(filepath.Join(source, relPath), filepath.Join(destination, relPath))
+		return aoserrors.Wrap(copyFile(filepath.Join(source, relPath), filepath.Join(destination, relPath)))
 	})
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func copyFile(src string, dst string) (err error) {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !sourceFileStat.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", src)
+		return aoserrors.Errorf("%s is not a regular file", src)
 	}
 
 	source, err := os.Open(src)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer source.Close()
 
 	destination, err := os.Create(dst)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer destination.Close()
 	_, err = io.Copy(destination, source)
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func getMigrationFromInstance(sql *sql.DB, mergedMigrationPath string) (migration *migrate.Migrate, err error) {
 	absMergedMigrationPath, err := filepath.Abs(mergedMigrationPath)
 	if err != nil {
-		return nil, fmt.Errorf("can't get absolute merged migration path: %s", err)
+		return nil, aoserrors.Wrap(err)
 	}
 
 	driver, err := sqlite3.WithInstance(sql, &sqlite3.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("error creating migration driver, err: %s", err)
+		return nil, aoserrors.Wrap(err)
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
 		"file://"+absMergedMigrationPath,
 		"sqlite3", driver)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return m, nil

@@ -19,7 +19,6 @@ package partition
 
 import (
 	"compress/gzip"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,6 +30,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 // #cgo pkg-config: blkid
@@ -76,20 +77,20 @@ func Copy(dst, src string) (copied int64, err error) {
 
 	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 	defer srcFile.Close()
 
 	dstFile, err := os.OpenFile(dst, os.O_RDWR, 0)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 	defer dstFile.Close()
 
 	var duration time.Duration
 
 	if copied, duration, err = copyData(dstFile, srcFile); err != nil {
-		return copied, err
+		return copied, aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy partition")
@@ -103,26 +104,26 @@ func CopyFromGzipArchive(dst, src string) (copied int64, err error) {
 
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 	defer srcFile.Close()
 
 	dstFile, err := os.OpenFile(dst, os.O_RDWR, 0)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 	defer dstFile.Close()
 
 	gz, err := gzip.NewReader(srcFile)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 	defer gz.Close()
 
 	var duration time.Duration
 
 	if copied, duration, err = copyData(dstFile, gz); err != nil {
-		return copied, err
+		return copied, aoserrors.Wrap(err)
 	}
 
 	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy partition from archive")
@@ -138,11 +139,11 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 	)
 
 	if ret := C.blkid_get_cache(&blkcache, C.CString("/dev/null")); ret != 0 {
-		return PartInfo{}, errors.New("can't get blkid cache")
+		return PartInfo{}, aoserrors.New("can't get blkid cache")
 	}
 
 	if blkdev = C.blkid_get_dev(blkcache, C.CString(partDevice), C.BLKID_DEV_NORMAL); blkdev == nil {
-		return PartInfo{}, errors.New("can't get blkid device")
+		return PartInfo{}, aoserrors.New("can't get blkid device")
 	}
 
 	partInfo.Device = C.GoString(C.blkid_dev_devname(blkdev))
@@ -177,18 +178,18 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 func GetParentDevice(partitionPath string) (devPath string, err error) {
 	partition, err := filepath.Rel("/dev", partitionPath)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	items, err := ioutil.ReadDir("/sys/block")
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	for _, item := range items {
 		subItems, err := ioutil.ReadDir(path.Join("/sys/block", item.Name()))
 		if err != nil {
-			return "", err
+			return "", aoserrors.Wrap(err)
 		}
 
 		for _, subItem := range subItems {
@@ -198,7 +199,7 @@ func GetParentDevice(partitionPath string) (devPath string, err error) {
 		}
 	}
 
-	return "", errors.New("can't determine parent device")
+	return "", aoserrors.New("can't determine parent device")
 }
 
 // GetPartitionNum returns partition number
@@ -206,26 +207,26 @@ func GetParentDevice(partitionPath string) (devPath string, err error) {
 func GetPartitionNum(partitionPath string) (num int, err error) {
 	partition, err := filepath.Rel("/dev", partitionPath)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	sysPath := fmt.Sprintf("/sys/class/block/%s/partition", partition)
 	//Check if file exists
 	if _, err := os.Stat(sysPath); err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	b, err := ioutil.ReadFile(sysPath)
 	if err != nil || len(b) == 0 {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	num, err = strconv.Atoi(strings.TrimSpace(string(b)))
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
-	return num, err
+	return num, aoserrors.Wrap(err)
 }
 
 /*******************************************************************************
@@ -240,14 +241,14 @@ func copyData(dst io.Writer, src io.Reader) (copied int64, duration time.Duratio
 		var readCount int
 
 		if readCount, err = src.Read(buf); err != nil && err != io.EOF {
-			return copied, duration, err
+			return copied, duration, aoserrors.Wrap(err)
 		}
 
 		if readCount > 0 {
 			var writeCount int
 
 			if writeCount, err = dst.Write(buf[:readCount]); err != nil {
-				return copied, duration, err
+				return copied, duration, aoserrors.Wrap(err)
 			}
 
 			copied = copied + int64(writeCount)

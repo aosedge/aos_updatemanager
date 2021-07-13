@@ -25,12 +25,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -58,8 +58,9 @@ const (
 
 // URL schemes
 const (
-	SchemeFile = "file"
-	SchemeTPM  = "tpm"
+	SchemeFile   = "file"
+	SchemeTPM    = "tpm"
+	SchemePKCS11 = "pkcs11"
 )
 
 /*******************************************************************************
@@ -70,13 +71,13 @@ const (
 func GetCaCertPool(rootCaFilePath string) (caCertPool *x509.CertPool, err error) {
 	pemCA, err := ioutil.ReadFile(rootCaFilePath)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	caCertPool = x509.NewCertPool()
 
 	if !caCertPool.AppendCertsFromPEM(pemCA) {
-		return nil, fmt.Errorf("failed to add CA's certificate")
+		return nil, aoserrors.New("failed to add CA's certificate")
 	}
 
 	return caCertPool, nil
@@ -86,12 +87,12 @@ func GetCaCertPool(rootCaFilePath string) (caCertPool *x509.CertPool, err error)
 func GetClientMutualTLSConfig(CACert, certStorageDir string) (config *tls.Config, err error) {
 	certPool, err := GetCaCertPool(CACert)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	clientCert, err := getKeyPairFromDir(certStorageDir)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	config = &tls.Config{
@@ -103,14 +104,14 @@ func GetClientMutualTLSConfig(CACert, certStorageDir string) (config *tls.Config
 }
 
 // GetClientTLSConfig returns client TLS configuration
-func GetClientTLSConfig(certStorageDir string) (config *tls.Config, err error) {
-	clientCert, err := getKeyPairFromDir(certStorageDir)
+func GetClientTLSConfig(CACert string) (config *tls.Config, err error) {
+	certPool, err := GetCaCertPool(CACert)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	config = &tls.Config{
-		Certificates: []tls.Certificate{clientCert},
+		RootCAs: certPool,
 	}
 
 	return config, nil
@@ -120,12 +121,12 @@ func GetClientTLSConfig(certStorageDir string) (config *tls.Config, err error) {
 func GetServerMutualTLSConfig(CACert, certStorageDir string) (config *tls.Config, err error) {
 	certPool, err := GetCaCertPool(CACert)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	serverCert, err := getKeyPairFromDir(certStorageDir)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	config = &tls.Config{
@@ -141,7 +142,7 @@ func GetServerMutualTLSConfig(CACert, certStorageDir string) (config *tls.Config
 func GetServerTLSConfig(certStorageDir string) (config *tls.Config, err error) {
 	serverCert, err := getKeyPairFromDir(certStorageDir)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	config = &tls.Config{
@@ -152,16 +153,11 @@ func GetServerTLSConfig(certStorageDir string) (config *tls.Config, err error) {
 	return config, nil
 }
 
-// LoadKey loads key from file
-func LoadKey(fileName string) (key crypto.PrivateKey, err error) {
-	data, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
+// PEMToX509Key parses PEM data to x509 key structures
+func PEMToX509Key(data []byte) (key crypto.PrivateKey, err error) {
 	block, _ := pem.Decode(data)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if block != nil {
@@ -171,23 +167,37 @@ func LoadKey(fileName string) (key crypto.PrivateKey, err error) {
 	switch {
 	case block == nil:
 		if key, err = parseKey(data); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 	case block.Type == PEMBlockRSAPrivateKey:
 		if key, err = x509.ParsePKCS1PrivateKey(data); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 	case block.Type == PEMBlockECPrivateKey:
 		if key, err = x509.ParseECPrivateKey(data); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 	default:
 		if key, err = parseKey(data); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
+	}
+
+	return key, nil
+}
+
+// LoadKey loads key from file
+func LoadKey(fileName string) (key crypto.PrivateKey, err error) {
+	data, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	if key, err = PEMToX509Key(data); err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return key, nil
@@ -197,28 +207,28 @@ func LoadKey(fileName string) (key crypto.PrivateKey, err error) {
 func SaveKey(fileName string, key crypto.PrivateKey) (err error) {
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
 	switch privateKey := key.(type) {
 	case *rsa.PrivateKey:
 		if err = pem.Encode(file, &pem.Block{Type: PEMBlockRSAPrivateKey, Bytes: x509.MarshalPKCS1PrivateKey(privateKey)}); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 	case *ecdsa.PrivateKey:
 		data, err := x509.MarshalECPrivateKey(privateKey)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if err = pem.Encode(file, &pem.Block{Type: PEMBlockECPrivateKey, Bytes: data}); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 	default:
-		return fmt.Errorf("unsupported key type: %v", reflect.TypeOf(privateKey))
+		return aoserrors.Errorf("unsupported key type: %v", reflect.TypeOf(privateKey))
 	}
 
 	return nil
@@ -237,7 +247,7 @@ func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
 		if block.Type == PEMBlockCertificate {
 			cert, err := x509.ParseCertificate(block.Bytes)
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			certs = append(certs, cert)
@@ -245,7 +255,7 @@ func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
 	}
 
 	if len(certs) == 0 {
-		return nil, fmt.Errorf("wrong certificate PEM format")
+		return nil, aoserrors.Errorf("wrong certificate PEM format")
 	}
 
 	return certs, nil
@@ -255,11 +265,11 @@ func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
 func LoadCertificate(fileName string) (certs []*x509.Certificate, err error) {
 	data, err := ioutil.ReadFile(fileName)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if certs, err = PEMToX509Cert(data); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return certs, nil
@@ -269,13 +279,13 @@ func LoadCertificate(fileName string) (certs []*x509.Certificate, err error) {
 func SaveCertificate(fileName string, certs []*x509.Certificate) (err error) {
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
 	for _, cert := range certs {
 		if err = pem.Encode(file, &pem.Block{Type: PEMBlockCertificate, Bytes: cert.Raw}); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -286,16 +296,16 @@ func SaveCertificate(fileName string, certs []*x509.Certificate) (err error) {
 func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) (err error) {
 	signer, ok := key.(crypto.Signer)
 	if !ok {
-		return errors.New("private key does not implement public key interface")
+		return aoserrors.New("private key does not implement public key interface")
 	}
 
 	pub, err := x509.MarshalPKIXPublicKey(signer.Public())
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !bytes.Equal(pub, cert.RawSubjectPublicKeyInfo) {
-		return errors.New("certificate verification error")
+		return aoserrors.New("certificate verification error")
 	}
 
 	return nil
@@ -308,7 +318,7 @@ func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) (err error)
 func getKeyPairFromDir(dir string) (cert tls.Certificate, err error) {
 	content, err := ioutil.ReadDir(dir)
 	if err != nil {
-		return tls.Certificate{}, err
+		return tls.Certificate{}, aoserrors.Wrap(err)
 	}
 
 	// Collect keys
@@ -348,12 +358,13 @@ func getKeyPairFromDir(dir string) (cert tls.Certificate, err error) {
 
 		for keyFilePath, key := range keyMap {
 			if CheckCertificate(certs[0], key) == nil {
-				return tls.LoadX509KeyPair(absItemPath, keyFilePath)
+				cert, err = tls.LoadX509KeyPair(absItemPath, keyFilePath)				
+				return cert, aoserrors.Wrap(err)
 			}
 		}
 	}
 
-	return tls.Certificate{}, errors.New("no appropriate key & certificate pair found")
+	return tls.Certificate{}, aoserrors.New("no appropriate key & certificate pair found")
 }
 
 func parseKey(data []byte) (key crypto.PrivateKey, err error) {
@@ -369,5 +380,5 @@ func parseKey(data []byte) (key crypto.PrivateKey, err error) {
 		return key, nil
 	}
 
-	return nil, errors.New("invalid key format")
+	return nil, aoserrors.New("invalid key format")
 }

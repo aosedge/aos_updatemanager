@@ -22,12 +22,12 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 )
 
@@ -149,37 +149,42 @@ IP.1 = 127.0.0.1`
 	unitCertFile := path.Join(tmpDir, "unit.der")
 
 	if err = ioutil.WriteFile(csrFile, []byte(csr), 0644); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(caCertFile, []byte(GetCACertificate()), 0644); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(caKeyFile, []byte(GetCAKey()), 0644); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(csrConfFile, []byte(csrConf), 0644); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	var out []byte
 
 	if out, err = exec.Command("openssl", "req", "-inform", "PEM", "-in", csrFile, "-out", csrFile+".pem").CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("message: %s, %s", string(out), err)
+		return nil, aoserrors.Errorf("message: %s, %s", string(out), err)
 	}
 
 	if out, err = exec.Command("openssl", "x509", "-req", "-in", csrFile+".pem",
 		"-CA", caCertFile, "-CAkey", caKeyFile, "-extfile", csrConfFile, "-extensions", "ext",
 		"-outform", "PEM", "-out", unitCertFile, "-CAcreateserial", "-days", "3650").CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("message: %s, %s", string(out), err)
+		return nil, aoserrors.Errorf("message: %s, %s", string(out), err)
 	}
 
 	certData, err := ioutil.ReadFile(unitCertFile)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
-	return certData, nil
+	caData, err := ioutil.ReadFile(caCertFile)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return append(certData, caData...), nil
 }

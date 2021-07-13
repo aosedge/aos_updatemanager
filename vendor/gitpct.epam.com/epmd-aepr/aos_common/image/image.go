@@ -20,8 +20,6 @@ package image
 import (
 	"archive/tar"
 	"compress/gzip"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -31,6 +29,8 @@ import (
 	"github.com/cavaliercoder/grab"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -70,7 +70,7 @@ func Download(destination, url string) (fileName string, err error) {
 
 	req, err := grab.NewRequest(destination, url)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	resp := grab.NewClient().Do(req)
@@ -82,7 +82,7 @@ func Download(destination, url string) (fileName string, err error) {
 
 		case <-resp.Done:
 			if err := resp.Err(); err != nil {
-				return "", err
+				return "", aoserrors.Wrap(err)
 			}
 
 			log.WithFields(log.Fields{"url": url, "file": resp.Filename}).Debug("Download complete")
@@ -96,41 +96,41 @@ func Download(destination, url string) (fileName string, err error) {
 func CheckFileInfo(fileName string, fileInfo FileInfo) (err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
 	stat, err := file.Stat()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if uint64(stat.Size()) != fileInfo.Size {
-		return errors.New("file size mistmatch")
+		return aoserrors.New("file size mistmatch")
 	}
 
 	hash256 := sha3.New256()
 
 	if _, err := io.Copy(hash256, file); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !reflect.DeepEqual(hash256.Sum(nil), fileInfo.Sha256) {
-		return errors.New("checksum sha256 mistmatch")
+		return aoserrors.New("checksum sha256 mistmatch")
 	}
 
 	hash512 := sha3.New512()
 
 	if _, err = file.Seek(0, 0); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err := io.Copy(hash512, file); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if !reflect.DeepEqual(hash512.Sum(nil), fileInfo.Sha512) {
-		return errors.New("checksum sha512 mistmatch")
+		return aoserrors.New("checksum sha512 mistmatch")
 	}
 
 	return nil
@@ -140,13 +140,13 @@ func CheckFileInfo(fileName string, fileInfo FileInfo) (err error) {
 func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return fileInfo, err
+		return fileInfo, aoserrors.Wrap(err)
 	}
 	defer file.Close()
 
 	stat, err := file.Stat()
 	if err != nil {
-		return fileInfo, err
+		return fileInfo, aoserrors.Wrap(err)
 	}
 
 	fileInfo.Size = uint64(stat.Size())
@@ -154,7 +154,7 @@ func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 	hash256 := sha3.New256()
 
 	if _, err := io.Copy(hash256, file); err != nil {
-		return fileInfo, err
+		return fileInfo, aoserrors.Wrap(err)
 	}
 
 	fileInfo.Sha256 = hash256.Sum(nil)
@@ -162,11 +162,11 @@ func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 	hash512 := sha3.New512()
 
 	if _, err = file.Seek(0, 0); err != nil {
-		return fileInfo, err
+		return fileInfo, aoserrors.Wrap(err)
 	}
 
 	if _, err := io.Copy(hash512, file); err != nil {
-		return fileInfo, err
+		return fileInfo, aoserrors.Wrap(err)
 	}
 
 	fileInfo.Sha512 = hash512.Sum(nil)
@@ -177,18 +177,18 @@ func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 // UntarGZArchive extract data from tar.gz archive
 func UntarGZArchive(source, destination string) (err error) {
 	if _, err := os.Stat(destination); os.IsNotExist(err) {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	archive, err := os.Open(source)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer archive.Close()
 
 	gzipReader, err := gzip.NewReader(archive)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer gzipReader.Close()
 
@@ -202,7 +202,7 @@ func UntarGZArchive(source, destination string) (err error) {
 		}
 
 		if err != nil {
-			return fmt.Errorf("UntarGZArchive: Next() failed: %s", err.Error())
+			return aoserrors.Wrap(err)
 		}
 
 		switch header.Typeflag {
@@ -211,16 +211,16 @@ func UntarGZArchive(source, destination string) (err error) {
 				continue
 			}
 			if err := os.Mkdir(path.Join(destination, header.Name), 0755); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		case tar.TypeReg:
 			outFile, err := os.Create(path.Join(destination, header.Name))
 			if err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 			defer outFile.Close()
 			if _, err := io.Copy(outFile, tarReader); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		default:
 			log.Warning("Unknown tar Header type: ", header.Typeflag, header.Name)

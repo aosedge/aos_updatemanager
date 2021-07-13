@@ -24,6 +24,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -48,12 +50,12 @@ func Mount(device string, mountPoint string, fsType string, flags uintptr, opts 
 	log.WithFields(log.Fields{"device": device, "type": fsType, "mountPoint": mountPoint}).Debug("Mount partition")
 
 	if err = os.MkdirAll(mountPoint, 0755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = retry(
 		func() error {
-			return syscall.Mount(device, mountPoint, fsType, flags, opts)
+			return aoserrors.Wrap(syscall.Mount(device, mountPoint, fsType, flags, opts))
 		},
 		func(err error) {
 			log.Warningf("Mount error: %s, try remount...", err)
@@ -61,7 +63,7 @@ func Mount(device string, mountPoint string, fsType string, flags uintptr, opts 
 			// Try to sync and force umount
 			syscall.Unmount(mountPoint, syscall.MNT_FORCE)
 		}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -75,7 +77,7 @@ func Umount(mountPoint string) (err error) {
 		if removeErr := os.RemoveAll(mountPoint); removeErr != nil {
 			log.Errorf("Can't remove mount point: %s", removeErr)
 			if err == nil {
-				err = removeErr
+				err = aoserrors.Wrap(removeErr)
 			}
 		}
 	}()
@@ -84,7 +86,7 @@ func Umount(mountPoint string) (err error) {
 		func() error {
 			syscall.Sync()
 
-			return syscall.Unmount(mountPoint, 0)
+			return aoserrors.Wrap(syscall.Unmount(mountPoint, 0))
 		},
 		func(err error) {
 			log.Warningf("Umount error: %s, retry...", err)
@@ -105,7 +107,7 @@ func Umount(mountPoint string) (err error) {
 			log.Debugf("fuser says: %s", string(output))
 		}
 
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -124,7 +126,7 @@ func retry(caller func() error, restorer func(error)) (err error) {
 		}
 
 		if i >= retryCount {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if restorer != nil {
