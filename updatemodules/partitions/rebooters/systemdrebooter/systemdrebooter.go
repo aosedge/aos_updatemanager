@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -39,14 +40,14 @@ type SystemdRebooter struct {
 func (controller *SystemdRebooter) Reboot() (err error) {
 	systemd, err := dbus.NewSystemConnection()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer systemd.Close()
 
 	channel := make(chan string)
 
 	if _, err = systemd.StartUnit("reboot.target", "replace-irreversibly", nil); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	<-channel

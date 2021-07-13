@@ -20,12 +20,12 @@ package umclient
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"google.golang.org/grpc"
@@ -131,7 +131,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 	log.Debug("Create UM client")
 
 	if messageHandler == nil {
-		return nil, errors.New("message handler is nil")
+		return nil, aoserrors.New("message handler is nil")
 	}
 
 	client = &Client{
@@ -140,7 +140,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 		closeChannel:   make(chan struct{})}
 
 	if err = client.createConnection(config, insecure); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	go func() {
@@ -151,7 +151,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 
 			case status := <-client.messageHandler.StatusChannel():
 				if err := client.sendStatus(status); err != nil {
-					log.Errorf("Can't send status: %s", err)
+					log.Errorf("Can't send status: %s", aoserrors.Wrap(err))
 				}
 			}
 		}
@@ -201,7 +201,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 	} else {
 		tlsConfig, err := cryptutils.GetClientMutualTLSConfig(config.CACert, config.CertStorage)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
@@ -211,7 +211,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 	defer cancel()
 
 	if client.connection, err = grpc.DialContext(ctx, config.ServerURL, secureOpt, grpc.WithBlock()); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.Debug("Connected to SM")
@@ -222,7 +222,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 
 			for {
 				if err != nil && len(client.closeChannel) == 0 {
-					log.Errorf("Error register to SM: %s", err)
+					log.Errorf("Error register to SM: %s", aoserrors.Wrap(err))
 				} else {
 					client.messageHandler.Registered()
 
@@ -230,7 +230,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 						if err == io.EOF {
 							log.Debug("Connection is closed")
 						} else {
-							log.Errorf("Connection error: %s", err)
+							log.Errorf("Connection error: %s", aoserrors.Wrap(err))
 						}
 					}
 				}
@@ -260,7 +260,7 @@ func (client *Client) register() (err error) {
 	log.Debug("Registering to SM...")
 
 	if client.stream, err = pb.NewUpdateControllerClient(client.connection).RegisterUM(context.Background()); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	log.Debug("Registered to SM")
@@ -272,7 +272,7 @@ func (client *Client) processMessages() (err error) {
 	for {
 		message, err := client.stream.Recv()
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		switch data := message.SmMessage.(type) {
@@ -320,7 +320,7 @@ func (client *Client) sendStatus(status Status) (err error) {
 	defer client.Unlock()
 
 	if client.stream == nil {
-		return errors.New("client is not connected")
+		return aoserrors.New("client is not connected")
 	}
 
 	log.WithFields(log.Fields{"umID": client.umID, "state": status.State, "error": status.Error}).Debug("Send status")
@@ -343,7 +343,7 @@ func (client *Client) sendStatus(status Status) (err error) {
 		Error:      status.Error,
 		Components: pbComponents,
 	}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

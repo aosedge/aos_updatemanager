@@ -26,6 +26,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/fs"
 	"gitpct.epam.com/epmd-aepr/aos_common/partition"
 	"gopkg.in/ini.v1"
@@ -82,12 +83,12 @@ func New(envDevice string, envFileName string) (controller *UbootController, err
 
 	if _, err := os.Stat(envDevice); os.IsNotExist(err) {
 		log.Errorf("Can't create Uboot controller, wrong device %s", envDevice)
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	info, err := partition.GetPartInfo(envDevice)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	controller = &UbootController{envDevice: envDevice, envFsType: info.FSType, envFileName: envFileName}
@@ -113,29 +114,33 @@ func (controller *UbootController) GetCurrentBoot() (index int, err error) {
 
 // GetMainBoot returns boot main part index
 func (controller *UbootController) GetMainBoot() (index int, err error) {
-	return controller.getVar(aosMainPart)
+	if index, err = controller.getVar(aosMainPart); err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+
+	return index, nil
 }
 
 // SetMainBoot sets boot main part index
 func (controller *UbootController) SetMainBoot(index int) (err error) {
 	if err = controller.setVar(aosMainPart, strconv.Itoa(index)); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
-	return controller.saveEnv()
+	return aoserrors.Wrap(controller.saveEnv())
 }
 
 // SetBootOK sets boot successful flag
 func (controller *UbootController) SetBootOK() (err error) {
 	if err = controller.setVar(aosBoot1Ok, "1"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = controller.setVar(aosBoot2Ok, "1"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
-	return controller.saveEnv()
+	return aoserrors.Wrap(controller.saveEnv())
 }
 
 /*******************************************************************************
@@ -152,14 +157,14 @@ func (controller *UbootController) mountEnv(device string, fstype string) (err e
 
 	if controller.mountedPart != "" {
 		if err = controller.umountEnv(); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
 	log.WithField("device", device).Debug("Mount env")
 
 	if err = fs.Mount(device, envMountPoint, fstype, 0, ""); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	controller.mountedPart = device
@@ -194,22 +199,22 @@ func (controller *UbootController) umountEnv() (umountErr error) {
 		controller.mountedPart = ""
 	}
 
-	return umountErr
+	return aoserrors.Wrap(umountErr)
 }
 
 func (controller *UbootController) getEnv() (err error) {
 	if err = controller.mountEnv(controller.envDevice, controller.envFsType); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	imagePath := path.Join(envMountPoint, controller.envFileName)
 
 	controller.cfg, err = ini.Load(imagePath)
 	if err != nil {
-		log.Errorf("Error loading env file %s err: %s", imagePath, err)
+		log.Errorf("Error loading env file %s err: %s", imagePath, aoserrors.Wrap(err))
 
 		if err = controller.generateDefaultEnv(); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -218,7 +223,7 @@ func (controller *UbootController) getEnv() (err error) {
 
 func (controller *UbootController) saveEnv() (err error) {
 	if err = controller.mountEnv(controller.envDevice, controller.envFsType); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	imagePath := path.Join(envMountPoint, controller.envFileName)
@@ -231,19 +236,21 @@ func (controller *UbootController) saveEnv() (err error) {
 func (controller *UbootController) getVar(name string) (value int, err error) {
 	if controller.cfg == nil {
 		if err = controller.getEnv(); err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 	}
 
 	log.Debugf("UbootController: getting var %s, value %s", name, controller.cfg.Section("").Key(name).String())
 
-	return controller.cfg.Section("").Key(name).Int()
+	value, err = controller.cfg.Section("").Key(name).Int()
+
+	return value, aoserrors.Wrap(err)
 }
 
 func (controller *UbootController) setVar(name string, value string) (err error) {
 	if controller.cfg == nil {
 		if err = controller.getEnv(); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -258,23 +265,23 @@ func (controller *UbootController) generateDefaultEnv() (err error) {
 	controller.cfg = ini.Empty()
 
 	if err = controller.setVar(aosBoot1Ok, "1"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = controller.setVar(aosBoot2Ok, "1"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = controller.setVar(aosMainPart, strconv.Itoa(0)); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = controller.setVar(aosBootPart, strconv.Itoa(0)); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = controller.saveEnv(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

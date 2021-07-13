@@ -18,7 +18,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
@@ -85,7 +85,7 @@ func cleanup(dbFile string) {
 
 	log.WithField("file", dbFile).Debug("Delete DB file")
 	if err := os.RemoveAll(dbFile); err != nil {
-		log.Fatalf("Can't cleanup database: %s", err)
+		log.Fatalf("Can't cleanup database: %s", aoserrors.Wrap(err))
 	}
 }
 
@@ -105,17 +105,17 @@ func newJournalHook() (hook *journalHook) {
 
 func (hook *journalHook) Fire(entry *log.Entry) (err error) {
 	if entry == nil {
-		return errors.New("log entry is nil")
+		return aoserrors.New("log entry is nil")
 	}
 
 	logMessage, err := entry.String()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	err = journal.Print(hook.severityMap[entry.Level], logMessage)
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (hook *journalHook) Levels() []log.Level {
@@ -157,7 +157,7 @@ func main() {
 	// Set log level
 	logLevel, err := log.ParseLevel(*strLogLevel)
 	if err != nil {
-		log.Fatalf("Error: %s", err)
+		log.Fatalf("Error: %s", aoserrors.Wrap(err))
 	}
 	log.SetLevel(logLevel)
 
@@ -165,7 +165,7 @@ func main() {
 
 	cfg, err := config.New(*configFile)
 	if err != nil {
-		log.Fatalf("Can' open config file: %s", err)
+		log.Fatalf("Can' open config file: %s", aoserrors.Wrap(err))
 	}
 
 	// Create DB
@@ -179,23 +179,23 @@ func main() {
 
 		db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
 		if err != nil {
-			log.Fatalf("Can't create database: %s", err)
+			log.Fatalf("Can't create database: %s", aoserrors.Wrap(err))
 		}
 
 	} else if err != nil {
-		log.Fatalf("Can't create database: %s", err)
+		log.Fatalf("Can't create database: %s", aoserrors.Wrap(err))
 	}
 	defer db.Close()
 
 	updater, err := updatehandler.New(cfg, db, db)
 	if err != nil {
-		log.Fatalf("Can't create updater: %s", err)
+		log.Fatalf("Can't create updater: %s", aoserrors.Wrap(err))
 	}
 	defer updater.Close()
 
 	client, err := umclient.New(cfg, updater, false)
 	if err != nil {
-		log.Fatalf("Can't create UM client: %s", err)
+		log.Fatalf("Can't create UM client: %s", aoserrors.Wrap(err))
 	}
 	defer client.Close()
 

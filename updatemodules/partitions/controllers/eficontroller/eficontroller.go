@@ -18,10 +18,10 @@
 package eficontroller
 
 import (
-	"errors"
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/partition"
 
 	"aos_updatemanager/updatemodules/partitions/utils/efi"
@@ -63,11 +63,11 @@ func New(partitions []string, loader string) (controller *Controller, err error)
 	}
 
 	if controller.efi, err = efi.New(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if err = controller.checkPartitions(partitions); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return controller, nil
@@ -84,7 +84,7 @@ func (controller *Controller) Close() {
 func (controller *Controller) GetCurrentBoot() (index int, err error) {
 	bootCurrent, err := controller.efi.GetBootCurrent()
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	for i, bootItem := range controller.bootItems {
@@ -103,11 +103,11 @@ func (controller *Controller) GetCurrentBoot() (index int, err error) {
 func (controller *Controller) GetMainBoot() (index int, err error) {
 	bootOrder, err := controller.efi.GetBootOrder()
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	if len(bootOrder) == 0 {
-		return 0, errors.New("boot order is empty")
+		return 0, aoserrors.New("boot order is empty")
 	}
 
 	mainItem := bootOrder[0]
@@ -118,17 +118,17 @@ func (controller *Controller) GetMainBoot() (index int, err error) {
 		}
 	}
 
-	return 0, errors.New("boot item not found")
+	return 0, aoserrors.New("boot item not found")
 }
 
 // SetMainBoot sets boot main part index
 func (controller *Controller) SetMainBoot(index int) (err error) {
 	if index >= len(controller.bootItems) {
-		return errors.New("wrong main boot index")
+		return aoserrors.New("wrong main boot index")
 	}
 
 	if err = controller.efi.SetBootNext(controller.bootItems[index]); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -138,12 +138,12 @@ func (controller *Controller) SetMainBoot(index int) (err error) {
 func (controller *Controller) SetBootOK() (err error) {
 	bootOrder, err := controller.efi.GetBootOrder()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	bootCurrent, err := controller.efi.GetBootCurrent()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	found := false
@@ -175,7 +175,7 @@ func (controller *Controller) SetBootOK() (err error) {
 		bootOrder[0], bootOrder[currentIndex] = bootOrder[currentIndex], bootOrder[0]
 
 		if err = controller.efi.SetBootOrder(bootOrder); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -190,19 +190,19 @@ func (controller *Controller) checkPartitions(partitions []string) (err error) {
 	for i, part := range partitions {
 		info, err := partition.GetPartInfo(part)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		id, err := controller.efi.GetBootByPartUUID(info.PartUUID)
 		if err != nil {
 			if err != efi.ErrNotFound {
-				return err
+				return aoserrors.Wrap(err)
 			}
 
 			log.Warnf("Boot entry for partition %s not found. Creating...", part)
 
 			if id, err = controller.efi.CreateBootEntry(1, part, controller.loader, fmt.Sprintf("Boot%d", i)); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 
@@ -210,7 +210,7 @@ func (controller *Controller) checkPartitions(partitions []string) (err error) {
 	}
 
 	if err = controller.checkBootOrder(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -219,7 +219,7 @@ func (controller *Controller) checkPartitions(partitions []string) (err error) {
 func (controller *Controller) checkBootOrder() (err error) {
 	bootOrder, err := controller.efi.GetBootOrder()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	// Divide boot array by module parttitions and other entries
@@ -283,7 +283,7 @@ func (controller *Controller) checkBootOrder() (err error) {
 		log.Warn("Boot order need to be updated")
 
 		if err = controller.efi.SetBootOrder(newBootOrder); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 

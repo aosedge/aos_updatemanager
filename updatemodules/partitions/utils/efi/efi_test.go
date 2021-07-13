@@ -18,7 +18,6 @@
 package efi_test
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +28,7 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/updatemodules/partitions/utils/efi"
 )
@@ -259,11 +259,11 @@ func getCurrentBootPartUUID() (id uint16, partUUID string, err error) {
 	result := strings.Split(string(output), "\n")
 
 	if len(result) == 0 {
-		return 0, "", errors.New("wrong efibootmgr command output")
+		return 0, "", aoserrors.New("wrong efibootmgr command output")
 	}
 
 	if !strings.HasPrefix(result[0], "BootCurrent: ") {
-		return 0, "", errors.New("wrong efibootmgr command output")
+		return 0, "", aoserrors.New("wrong efibootmgr command output")
 	}
 
 	idStr := strings.TrimPrefix(result[0], "BootCurrent: ")
@@ -285,5 +285,5 @@ func getCurrentBootPartUUID() (id uint16, partUUID string, err error) {
 		return uint16(id64), partUUID, nil
 	}
 
-	return 0, "", errors.New("no current boot PARTUUID found")
+	return 0, "", aoserrors.New("no current boot PARTUUID found")
 }

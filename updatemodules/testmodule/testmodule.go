@@ -19,9 +19,9 @@ package testmodule
 
 import (
 	"encoding/json"
-	"errors"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/updatehandler"
 )
@@ -76,7 +76,7 @@ func (module *TestModule) GetID() (id string) {
 
 // GetVendorVersion returns vendor version
 func (module *TestModule) GetVendorVersion() (version string, err error) {
-	return "", errors.New("not supported")
+	return "", aoserrors.New("not supported")
 }
 
 // Prepare prepares module update

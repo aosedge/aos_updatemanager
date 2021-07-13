@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/joelnb/xenstore-go"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -47,7 +48,7 @@ type XenstoreRebooter struct {
 func (reboot *XenstoreRebooter) Reboot() (err error) {
 	xenClient, err := xenstore.NewXenBusClient(xenBus)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	_, err = xenClient.Write(featureReboot, requestReboot)
@@ -56,7 +57,7 @@ func (reboot *XenstoreRebooter) Reboot() (err error) {
 	xenClient.Close()
 
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	os.Exit(0)

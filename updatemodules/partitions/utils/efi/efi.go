@@ -53,6 +53,7 @@ import (
 	"unsafe"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/partition"
 )
 
@@ -135,13 +136,13 @@ type hdData struct {
 // New returns new EFI instance
 func New() (instance *Instance, err error) {
 	if rc := C.efi_variables_supported(); rc == 0 {
-		return nil, errors.New("EFI variables are not supported on this system")
+		return nil, aoserrors.New("EFI variables are not supported on this system")
 	}
 
 	instance = &Instance{bootItems: make([]bootItem, 0, preallocatedItemSize)}
 
 	if err = instance.readBootItems(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return instance, nil
@@ -160,7 +161,7 @@ func (instance *Instance) GetBootByPartUUID(partUUID string) (id uint16, err err
 
 		dps, err := parseDP(C.GoBytes(unsafe.Pointer(dpData), C.int(pathLen)))
 		if err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 
 		for _, dp := range dps {
@@ -194,11 +195,11 @@ func (instance *Instance) GetBootByPartUUID(partUUID string) (id uint16, err err
 func (instance *Instance) GetBootCurrent() (id uint16, err error) {
 	data, err := readU16(efiGlobalGUID, efiBootCurrentName)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	if len(data) != 1 {
-		return 0, errors.New("invalid data size")
+		return 0, aoserrors.New("invalid data size")
 	}
 
 	id = data[0]
@@ -212,11 +213,11 @@ func (instance *Instance) GetBootCurrent() (id uint16, err error) {
 func (instance *Instance) GetBootNext() (id uint16, err error) {
 	data, err := readU16(efiGlobalGUID, efiBootNextName)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	if len(data) != 1 {
-		return 0, errors.New("invalid data size")
+		return 0, aoserrors.New("invalid data size")
 	}
 
 	id = data[0]
@@ -230,8 +231,8 @@ func (instance *Instance) GetBootNext() (id uint16, err error) {
 func (instance *Instance) SetBootNext(id uint16) (err error) {
 	log.Debugf("Set EFI boot next: %04X", id)
 
-	return writeU16(efiGlobalGUID, efiBootNextName, []uint16{id},
-		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute)
+	return aoserrors.Wrap(writeU16(efiGlobalGUID, efiBootNextName, []uint16{id},
+		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute))
 
 }
 
@@ -239,13 +240,13 @@ func (instance *Instance) SetBootNext(id uint16) (err error) {
 func (instance *Instance) DeleteBootNext() (err error) {
 	log.Debug("Delete EFI boot next")
 
-	return deleteVar(efiGlobalGUID, efiBootNextName)
+	return aoserrors.Wrap(deleteVar(efiGlobalGUID, efiBootNextName))
 }
 
 // GetBootOrder returns boot order
 func (instance *Instance) GetBootOrder() (ids []uint16, err error) {
 	if ids, err = readU16(efiGlobalGUID, efiBootOrderName); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	log.Debugf("Get EFI boot order: %s", bootOrderToString(ids))
@@ -257,15 +258,15 @@ func (instance *Instance) GetBootOrder() (ids []uint16, err error) {
 func (instance *Instance) SetBootOrder(ids []uint16) (err error) {
 	log.Debugf("Set EFI boot order: %s", bootOrderToString(ids))
 
-	return writeU16(efiGlobalGUID, efiBootOrderName, ids,
-		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute)
+	return aoserrors.Wrap(writeU16(efiGlobalGUID, efiBootOrderName, ids,
+		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute))
 }
 
 // DeleteBootOrder deletes boot order
 func (instance *Instance) DeleteBootOrder() (err error) {
 	log.Debug("Delete EFI boot order")
 
-	return deleteVar(efiGlobalGUID, efiBootOrderName)
+	return aoserrors.Wrap(deleteVar(efiGlobalGUID, efiBootOrderName))
 }
 
 // SetBootActive make boot item active
@@ -291,7 +292,7 @@ func (instance *Instance) SetBootActive(id uint16, active bool) (err error) {
 			item.data = C.GoBytes(cData, C.int(len(item.data)))
 
 			if err = writeVar(efiGlobalGUID, item.name, item.data, item.attributes, writeAttribute); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 
 			instance.bootItems[i].data = item.data
@@ -331,24 +332,24 @@ func (instance *Instance) CreateBootEntry(isActive int, partitionPath string, lo
 	entryName string) (id uint16, err error) {
 	devicePath, err := partition.GetParentDevice(partitionPath)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	partition, err := partition.GetPartitionNum(partitionPath)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	item, err := instance.makeBootVar(isActive, devicePath, partition, loader, entryName)
 	if err != nil {
 		log.Errorf("Unable to create BootEntry variable: %s", err)
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	ids, err := instance.GetBootOrder()
 	if err != nil {
 		log.Errorf("Unable to get efi boot order: %s", err)
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	// Add to BootOrder
@@ -356,7 +357,7 @@ func (instance *Instance) CreateBootEntry(isActive int, partitionPath string, lo
 
 	if err = instance.SetBootOrder(ids); err != nil {
 		log.Errorf("Unable to set efi boot order: %s", err)
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 
 	// Add to bootItems
@@ -382,11 +383,11 @@ func readVar(guid, name string) (data []byte, attributes uint32, err error) {
 	)
 
 	if rc := C.efi_str_to_guid(C.CString(guid), &efiGUID); rc < 0 {
-		return nil, 0, getEfiError()
+		return nil, 0, aoserrors.Wrap(getEfiError())
 	}
 
 	if rc := C.efi_get_variable(efiGUID, C.CString(name), &efiData, &efiSize, &efiAttributes); rc < 0 {
-		return nil, 0, getEfiError()
+		return nil, 0, aoserrors.Wrap(getEfiError())
 	}
 
 	return C.GoBytes(unsafe.Pointer(efiData), C.int(efiSize)), uint32(efiAttributes), nil
@@ -395,7 +396,7 @@ func readVar(guid, name string) (data []byte, attributes uint32, err error) {
 func readU16(guid, name string) (data []uint16, err error) {
 	readData, _, err := readVar(guid, name)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	dataBuffer := bytes.NewBuffer(readData)
@@ -407,7 +408,7 @@ func readU16(guid, name string) (data []uint16, err error) {
 
 		if err = binary.Read(dataBuffer, binary.LittleEndian, &id); err != nil {
 			if err != io.EOF {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			break
@@ -435,7 +436,7 @@ func makeLinuxLoadOption(optionActive int, optionDisk string, optionPart int, op
 		C.uint32_t(options), C.uint32_t(eddDeviceNum))
 
 	if needed < 0 {
-		return nil, 0, fmt.Errorf("generate file device path failed")
+		return nil, 0, aoserrors.Errorf("generate file device path failed")
 	}
 
 	dp := make([]byte, needed)
@@ -444,7 +445,7 @@ func makeLinuxLoadOption(optionActive int, optionDisk string, optionPart int, op
 		if needed = C.efi_generate_file_device_path_from_esp_go((*C.uint8_t)(unsafe.Pointer(&dp[0])), C.ssize_t(needed),
 			C.CString(optionDisk), C.int(optionPart), C.CString(optionLoader), C.uint32_t(options),
 			C.uint32_t(eddDeviceNum)); needed < 0 {
-			return nil, 0, fmt.Errorf("generate file device path failed")
+			return nil, 0, aoserrors.Errorf("generate file device path failed")
 		}
 
 		// Allocating unsafeData
@@ -460,7 +461,7 @@ func makeLinuxLoadOption(optionActive int, optionDisk string, optionPart int, op
 	}
 
 	if needed < 0 {
-		return nil, 0, fmt.Errorf("efi load opt create failed")
+		return nil, 0, aoserrors.Errorf("efi load opt create failed")
 	}
 
 	return data, int(needed), nil
@@ -488,19 +489,19 @@ func (instance *Instance) makeBootVar(isActive int, devicePath string, partition
 	entryName string) (item bootItem, err error) {
 
 	if item.id, err = instance.findFreeNum(); err != nil {
-		return bootItem{}, err
+		return bootItem{}, aoserrors.Wrap(err)
 	}
 
 	_, needed, err := makeLinuxLoadOption(isActive, devicePath, partition, loader, 0, entryName, nil, 0)
 	if needed < 0 || err != nil {
-		return bootItem{}, err
+		return bootItem{}, aoserrors.Wrap(err)
 	}
 
 	var sz int
 
 	item.data, sz, err = makeLinuxLoadOption(isActive, devicePath, partition, loader, needed, entryName, nil, 0)
 	if sz < 0 || err != nil {
-		return bootItem{}, err
+		return bootItem{}, aoserrors.Wrap(err)
 	}
 
 	item.name = fmt.Sprintf("Boot%04x", item.id)
@@ -509,7 +510,7 @@ func (instance *Instance) makeBootVar(isActive int, devicePath string, partition
 		C.EFI_VARIABLE_BOOTSERVICE_ACCESS | C.EFI_VARIABLE_RUNTIME_ACCESS
 
 	if err := writeVar(efiGlobalGUID, item.name, item.data, item.attributes, writeAttribute); err != nil {
-		return bootItem{}, err
+		return bootItem{}, aoserrors.Wrap(err)
 	}
 
 	return item, nil
@@ -521,12 +522,12 @@ func writeVar(guid, name string, data []byte, attributes uint32, mode os.FileMod
 	)
 
 	if rc := C.efi_str_to_guid(C.CString(guid), &efiGUID); rc < 0 {
-		return getEfiError()
+		return aoserrors.Wrap(getEfiError())
 	}
 
 	if rc := C.efi_set_variable(efiGUID, C.CString(name), (*C.uint8_t)(C.CBytes(data)),
 		C.size_t(len(data)), C.uint32_t(attributes), C.mode_t(mode)); rc < 0 {
-		return getEfiError()
+		return aoserrors.Wrap(getEfiError())
 	}
 
 	return nil
@@ -537,12 +538,12 @@ func writeU16(guid, name string, data []uint16, attributes uint32, mode os.FileM
 
 	for _, value := range data {
 		if err = binary.Write(dataBuffer, binary.LittleEndian, value); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
 	if err = writeVar(guid, name, dataBuffer.Bytes(), attributes, mode); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -554,11 +555,11 @@ func deleteVar(guid, name string) (err error) {
 	)
 
 	if rc := C.efi_str_to_guid(C.CString(guid), &efiGUID); rc < 0 {
-		return getEfiError()
+		return aoserrors.Wrap(getEfiError())
 	}
 
 	if rc := C.efi_del_variable(efiGUID, C.CString(name)); rc < 0 {
-		return getEfiError()
+		return aoserrors.Wrap(getEfiError())
 	}
 
 	return nil
@@ -575,21 +576,21 @@ func getEfiError() (err error) {
 
 	rc := C.efi_error_get(C.uint(0), &filename, &function, &line, &message, &errCode)
 	if rc < 0 {
-		return errors.New("can't get EFI error")
+		return aoserrors.New("can't get EFI error")
 	}
 	if rc == 0 {
-		return errors.New("unknown error")
+		return aoserrors.New("unknown error")
 	}
 
 	if syscall.Errno(errCode) == syscall.ENOENT {
 		err = ErrNotFound
 	} else {
-		err = fmt.Errorf("%s: %s", C.GoString(message), syscall.Errno(errCode).Error())
+		err = aoserrors.Errorf("%s: %s", C.GoString(message), syscall.Errno(errCode).Error())
 	}
 
 	C.efi_error_clear()
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func bootOrderToString(bootOrder []uint16) (s string) {
@@ -637,13 +638,13 @@ func readBootItem(name string) (item bootItem, err error) {
 
 	id, err := strconv.ParseUint(regexp.MustCompile(bootItemIDPattern).FindString(name), 16, 16)
 	if err != nil {
-		return bootItem{}, err
+		return bootItem{}, aoserrors.Wrap(err)
 	}
 
 	item.id = uint16(id)
 
 	if item.data, item.attributes, err = readVar(efiGlobalGUID, name); err != nil {
-		return bootItem{}, err
+		return bootItem{}, aoserrors.Wrap(err)
 	}
 
 	efiLoadOption := (*C.efi_load_option)(C.CBytes(item.data))
@@ -664,32 +665,32 @@ func parseDP(dpData []byte) (dps []interface{}, err error) {
 		)
 
 		if err = binary.Read(buffer, binary.LittleEndian, &dpType); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if err = binary.Read(buffer, binary.LittleEndian, &dpSubType); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if err = binary.Read(buffer, binary.LittleEndian, &dpLen); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if dpLen < 4 {
-			return nil, errors.New("invalid dp size")
+			return nil, aoserrors.New("invalid dp size")
 		}
 
 		data := make([]byte, dpLen-4)
 
 		if _, err = io.ReadFull(buffer, data); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		switch dpType {
 		case C.EFIDP_MEDIA_TYPE:
 			dp, err := parseMediaType(dpSubType, data)
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			dps = append(dps, dp)
@@ -707,7 +708,7 @@ func parseMediaType(subType uint8, data []byte) (dp interface{}, err error) {
 	case C.EFIDP_MEDIA_HD:
 		hd, err := parseHD(data)
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		return hd, nil
@@ -720,27 +721,27 @@ func parseHD(data []byte) (hd hdData, err error) {
 	buffer := bytes.NewBuffer(data)
 
 	if err = binary.Read(buffer, binary.LittleEndian, &hd.partNumber); err != nil {
-		return hdData{}, err
+		return hdData{}, aoserrors.Wrap(err)
 	}
 
 	if err = binary.Read(buffer, binary.LittleEndian, &hd.start); err != nil {
-		return hdData{}, err
+		return hdData{}, aoserrors.Wrap(err)
 	}
 
 	if err = binary.Read(buffer, binary.LittleEndian, &hd.size); err != nil {
-		return hdData{}, err
+		return hdData{}, aoserrors.Wrap(err)
 	}
 
 	if err = binary.Read(buffer, binary.LittleEndian, &hd.signature); err != nil {
-		return hdData{}, err
+		return hdData{}, aoserrors.Wrap(err)
 	}
 
 	if err = binary.Read(buffer, binary.LittleEndian, &hd.format); err != nil {
-		return hdData{}, err
+		return hdData{}, aoserrors.Wrap(err)
 	}
 
 	if err = binary.Read(buffer, binary.LittleEndian, &hd.signatureType); err != nil {
-		return hdData{}, err
+		return hdData{}, aoserrors.Wrap(err)
 	}
 
 	return hd, nil

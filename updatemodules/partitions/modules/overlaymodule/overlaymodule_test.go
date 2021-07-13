@@ -19,7 +19,6 @@ package overlaymodule_test
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
 )
@@ -415,7 +415,7 @@ func (rebooter *testRebooter) waitForReboot() (err error) {
 		return nil
 
 	case <-time.After(1 * time.Second):
-		return errors.New("wait reboot timeout")
+		return aoserrors.New("wait reboot timeout")
 	}
 }
 

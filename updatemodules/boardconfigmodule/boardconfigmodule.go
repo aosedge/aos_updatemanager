@@ -20,13 +20,12 @@ package boardconfigmodule
 import (
 	"compress/gzip"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/updatehandler"
 )
@@ -94,7 +93,7 @@ func New(id string, configJSON json.RawMessage,
 	boardModule := &BoardCfgModule{id: id, storage: storage, rebooter: rebooter}
 
 	if err = json.Unmarshal(configJSON, &boardModule.config); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return boardModule, nil
@@ -109,7 +108,7 @@ func (module *BoardCfgModule) Close() (err error) {
 // Init initializes module
 func (module *BoardCfgModule) Init() (err error) {
 	if module.getState(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if module.state.RebootRequired {
@@ -117,7 +116,7 @@ func (module *BoardCfgModule) Init() (err error) {
 	}
 
 	if module.currentVersion, err = module.getVendorVersionFromFile(module.config.Path); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -142,28 +141,28 @@ func (module *BoardCfgModule) Prepare(imagePath string, vendorVersion string, an
 		return nil
 
 	case module.state.State != stateIdle:
-		return fmt.Errorf("invalid state: %s", module.state.State)
+		return aoserrors.Errorf("invalid state: %s", module.state.State)
 	}
 
 	newBoardConfig := module.config.Path + newPostfix
 
 	if err := extractFileFromGz(newBoardConfig, imagePath); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	newVersion, err := module.getVendorVersionFromFile(newBoardConfig)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if newVersion != vendorVersion {
 		os.RemoveAll(newBoardConfig)
 
-		return errors.New("vendor version missmatch")
+		return aoserrors.New("vendor version missmatch")
 	}
 
 	if err = module.setState(statePrepared); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -176,25 +175,25 @@ func (module *BoardCfgModule) Update() (rebootRequired bool, err error) {
 		return module.state.RebootRequired, nil
 
 	case module.state.State != statePrepared:
-		return false, fmt.Errorf("invalid state: %s", module.state.State)
+		return false, aoserrors.Errorf("invalid state: %s", module.state.State)
 	}
 
 	log.WithFields(log.Fields{"id": module.id}).Debug("Update")
 
 	// save original file
 	if err := os.Rename(module.config.Path, module.config.Path+originalPostfix); err != nil {
-		log.Warn("Original file does not exist: ", err)
+		log.Warn("Original file does not exist: ", aoserrors.Wrap(err))
 	}
 
 	// copy new to original
 	if err := os.Rename(module.config.Path+newPostfix, module.config.Path); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	module.state.RebootRequired = true
 
 	if err = module.setState(stateUpdated); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return module.state.RebootRequired, nil
@@ -207,7 +206,7 @@ func (module *BoardCfgModule) Apply() (rebootRequired bool, err error) {
 		return module.state.RebootRequired, nil
 
 	case module.state.State != stateUpdated:
-		return false, fmt.Errorf("invalid state: %s", module.state.State)
+		return false, aoserrors.Errorf("invalid state: %s", module.state.State)
 	}
 
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply")
@@ -221,11 +220,11 @@ func (module *BoardCfgModule) Apply() (rebootRequired bool, err error) {
 	}
 
 	if err = module.setState(stateIdle); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if module.currentVersion, err = module.getVendorVersionFromFile(module.config.Path); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return module.state.RebootRequired, nil
@@ -239,7 +238,7 @@ func (module *BoardCfgModule) Revert() (rebootRequired bool, err error) {
 
 	case module.state.State == stateUpdated:
 		if err := os.Rename(module.config.Path+originalPostfix, module.config.Path); err != nil {
-			return false, err
+			return false, aoserrors.Wrap(err)
 		}
 	}
 
@@ -258,11 +257,11 @@ func (module *BoardCfgModule) Revert() (rebootRequired bool, err error) {
 	}
 
 	if err = module.setState(stateIdle); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if module.currentVersion, err = module.getVendorVersionFromFile(module.config.Path); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return module.state.RebootRequired, nil
@@ -273,7 +272,7 @@ func (module *BoardCfgModule) Reboot() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot")
 
 	if module.rebooter != nil {
-		return module.rebooter.Reboot()
+		return aoserrors.Wrap(module.rebooter.Reboot())
 	}
 
 	return nil
@@ -290,7 +289,7 @@ func (state updateState) String() string {
 func (module *BoardCfgModule) getState() (err error) {
 	stateJSON, err := module.storage.GetModuleState(module.id)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if len(stateJSON) == 0 {
@@ -298,7 +297,7 @@ func (module *BoardCfgModule) getState() (err error) {
 	}
 
 	if err = json.Unmarshal(stateJSON, &module.state); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -311,11 +310,11 @@ func (module *BoardCfgModule) setState(state updateState) (err error) {
 
 	stateJSON, err := json.Marshal(module.state)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = module.storage.SetModuleState(module.id, stateJSON); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -326,11 +325,11 @@ func (module *BoardCfgModule) getVendorVersionFromFile(path string) (version str
 
 	byteValue, err := ioutil.ReadFile(path)
 	if err != nil {
-		return version, err
+		return version, aoserrors.Wrap(err)
 	}
 
 	if err = json.Unmarshal(byteValue, &boardFile); err != nil {
-		return version, err
+		return version, aoserrors.Wrap(err)
 	}
 
 	return boardFile.VendorVersion, nil
@@ -341,25 +340,25 @@ func extractFileFromGz(destination, source string) (err error) {
 
 	srcFile, err := os.Open(source)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer srcFile.Close()
 
 	dstFile, err := os.OpenFile(destination, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer dstFile.Close()
 
 	gz, err := gzip.NewReader(srcFile)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer gz.Close()
 
 	err = copyData(dstFile, gz)
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func copyData(dst io.Writer, src io.Reader) (err error) {
@@ -369,12 +368,12 @@ func copyData(dst io.Writer, src io.Reader) (err error) {
 		var readCount int
 
 		if readCount, err = src.Read(buf); err != nil && err != io.EOF {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if readCount > 0 {
 			if _, err = dst.Write(buf[:readCount]); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 		}
 	}

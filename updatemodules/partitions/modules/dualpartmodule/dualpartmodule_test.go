@@ -18,7 +18,6 @@
 package dualpartmodule_test
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,6 +29,7 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
@@ -711,7 +711,7 @@ func compareContent(srcContent, dstContent []fsContent) (err error) {
 	sort.Slice(dstContent, func(i, j int) bool { return dstContent[i].name < dstContent[j].name })
 
 	if !reflect.DeepEqual(srcContent, dstContent) {
-		return errors.New("content mismatch")
+		return aoserrors.New("content mismatch")
 	}
 
 	return nil

@@ -19,7 +19,6 @@ package umclient_test
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager"
 	"google.golang.org/grpc"
 
@@ -318,7 +318,7 @@ func (server *testServer) waitClientRegistered() (err error) {
 		return nil
 
 	case <-time.After(waitRegisteredTimeout):
-		return errors.New("timeout")
+		return aoserrors.New("timeout")
 	}
 }
 
@@ -328,7 +328,7 @@ func (server *testServer) waitStatus() (status umclient.Status, err error) {
 		return status, nil
 
 	case <-time.After(waitMessageTimeout):
-		return umclient.Status{}, errors.New("timeout")
+		return umclient.Status{}, aoserrors.New("timeout")
 	}
 }
 
@@ -414,13 +414,13 @@ func (handler *testMessageHandler) waitMessage(message string) (err error) {
 	select {
 	case receiveMessage := <-handler.messageChannel:
 		if receiveMessage != message {
-			return errors.New("wrong message received")
+			return aoserrors.New("wrong message received")
 		}
 
 		return nil
 
 	case <-time.After(waitMessageTimeout):
-		return errors.New("timeout")
+		return aoserrors.New("timeout")
 	}
 }
 

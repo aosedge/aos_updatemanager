@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/fs"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 	"gopkg.in/ini.v1"
@@ -221,12 +222,12 @@ func TestDefaultEnv(t *testing.T) {
 func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) {
 	mountPoint, err := ioutil.TempDir("", "uboot_*")
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer os.RemoveAll(mountPoint)
 
 	if err = fs.Mount(part.Device, mountPoint, part.Type, 0, ""); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer func() {
 		if err = fs.Umount(mountPoint); err != nil {
@@ -237,7 +238,7 @@ func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) 
 	fileName := path.Join(mountPoint, uEnvFile)
 
 	if err = cb(fileName); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -247,33 +248,33 @@ func createEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
 		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0644)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		return nil
 	})
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func createIncorrectEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
 		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0644)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		return nil
 	})
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func readConfig(part testtools.PartInfo) (cfg *ini.File, err error) {
 	var conf *ini.File
 	err = processEnvFile(part, func(fileName string) (err error) {
 		conf, err = ini.Load(fileName)
-		return err
+		return aoserrors.Wrap(err)
 	})
 
 	return conf, err

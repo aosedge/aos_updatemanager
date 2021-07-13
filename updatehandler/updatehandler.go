@@ -19,8 +19,6 @@ package updatehandler
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"sort"
@@ -28,6 +26,7 @@ import (
 
 	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/image"
 
 	"aos_updatemanager/config"
@@ -162,7 +161,7 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 	}
 
 	if err = handler.getState(); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if handler.state.UpdateState == "" {
@@ -197,7 +196,7 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 
 		if component.module, err = handler.createComponent(moduleCfg.Plugin, moduleCfg.ID,
 			moduleCfg.Params, moduleStorage); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		handler.components[moduleCfg.ID] = component
@@ -229,7 +228,7 @@ func (handler *Handler) PrepareUpdate(components []umclient.ComponentUpdateInfo)
 	log.Info("Prepare update")
 
 	if err := handler.sendEvent(eventPrepare, components); err != nil {
-		log.Errorf("Can't send prepare event: %s", err)
+		log.Errorf("Can't send prepare event: %s", aoserrors.Wrap(err))
 	}
 }
 
@@ -238,7 +237,7 @@ func (handler *Handler) StartUpdate() {
 	log.Info("Start update")
 
 	if err := handler.sendEvent(eventUpdate); err != nil {
-		log.Errorf("Can't send update event: %s", err)
+		log.Errorf("Can't send update event: %s", aoserrors.Wrap(err))
 	}
 }
 
@@ -247,7 +246,7 @@ func (handler *Handler) ApplyUpdate() {
 	log.Info("Apply update")
 
 	if err := handler.sendEvent(eventApply); err != nil {
-		log.Errorf("Can't send apply event: %s", err)
+		log.Errorf("Can't send apply event: %s", aoserrors.Wrap(err))
 	}
 }
 
@@ -256,7 +255,7 @@ func (handler *Handler) RevertUpdate() {
 	log.Info("Revert update")
 
 	if err := handler.sendEvent(eventRevert); err != nil {
-		log.Errorf("Can't send revert event: %s", err)
+		log.Errorf("Can't send revert event: %s", aoserrors.Wrap(err))
 	}
 }
 
@@ -281,11 +280,11 @@ func (handler *Handler) Close() {
 func (handler *Handler) createComponent(plugin, id string, params json.RawMessage, storage ModuleStorage) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
-		return nil, fmt.Errorf("plugin %s not found", plugin)
+		return nil, aoserrors.Errorf("plugin %s not found", plugin)
 	}
 
 	if module, err = newFunc(id, params, storage); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return module, nil
@@ -294,7 +293,7 @@ func (handler *Handler) createComponent(plugin, id string, params json.RawMessag
 func (handler *Handler) getState() (err error) {
 	jsonState, err := handler.storage.GetUpdateState()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if len(jsonState) == 0 {
@@ -302,7 +301,7 @@ func (handler *Handler) getState() (err error) {
 	}
 
 	if err = json.Unmarshal(jsonState, &handler.state); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -311,11 +310,11 @@ func (handler *Handler) getState() (err error) {
 func (handler *Handler) saveState() (err error) {
 	jsonState, err := json.Marshal(handler.state)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = handler.storage.SetUpdateState(jsonState); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -341,7 +340,7 @@ func (handler *Handler) init() {
 				log.WithField("id", id).Debug("Init component")
 
 				if err := module.Init(); err != nil {
-					log.Errorf("Can't initialize module %s: %s", id, err)
+					log.Errorf("Can't initialize module %s: %s", id, aoserrors.Wrap(err))
 
 					handler.componentStatuses[id].Status = umclient.StatusError
 					handler.componentStatuses[id].Error = err.Error()
@@ -367,12 +366,12 @@ func (handler *Handler) getVersions() {
 		if handler.state.UpdateState == stateIdle {
 			vendorVersion, err = component.module.GetVendorVersion()
 			if err != nil {
-				log.Errorf("Can't get vendor version from module: %s", err)
+				log.Errorf("Can't get vendor version from module: %s", aoserrors.Wrap(err))
 			}
 		} else {
 			vendorVersion, err = handler.storage.GetVendorVersion(id)
 			if err != nil {
-				log.Errorf("Can't get vendor version from storage: %s", err)
+				log.Errorf("Can't get vendor version from storage: %s", aoserrors.Wrap(err))
 			}
 		}
 
@@ -445,7 +444,7 @@ func (handler *Handler) onStateChanged(event *fsm.Event) {
 	}
 
 	if err := handler.saveState(); err != nil {
-		log.Errorf("Can't set update state: %s", err)
+		log.Errorf("Can't set update state: %s", aoserrors.Wrap(err))
 
 		if handler.state.Error == "" {
 			handler.state.Error = err.Error()
@@ -459,7 +458,7 @@ func (handler *Handler) onStateChanged(event *fsm.Event) {
 }
 
 func componentError(componentStatus *umclient.ComponentStatusInfo, err error) {
-	log.WithField("id", componentStatus.ID).Errorf("Component error: %s", err)
+	log.WithField("id", componentStatus.ID).Errorf("Component error: %s", aoserrors.Wrap(err))
 
 	componentStatus.Status = umclient.StatusError
 	componentStatus.Error = err.Error()
@@ -518,7 +517,7 @@ func doPriorityOperations(operations []priorityOperation, stopOnError bool) (err
 		}
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatusInfo,
@@ -528,7 +527,7 @@ func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatu
 	for _, componentStatus := range componentStatuses {
 		component, ok := handler.components[componentStatus.ID]
 		if !ok {
-			notFoundErr := fmt.Errorf("component %s not found", componentStatus.ID)
+			notFoundErr := aoserrors.Errorf("component %s not found", componentStatus.ID)
 			componentError(componentStatus, notFoundErr)
 
 			if stopOnError {
@@ -551,7 +550,7 @@ func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatu
 				rebootRequired, err := operation(module)
 				if err != nil {
 					componentError(status, err)
-					return err
+					return aoserrors.Wrap(err)
 				}
 
 				if rebootRequired {
@@ -567,7 +566,7 @@ func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatu
 
 	err = doPriorityOperations(operations, stopOnError)
 
-	return rebootStatuses, err
+	return rebootStatuses, aoserrors.Wrap(err)
 }
 
 func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusInfo, stopOnError bool) (err error) {
@@ -576,7 +575,7 @@ func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusIn
 	for _, componentStatus := range componentStatuses {
 		component, ok := handler.components[componentStatus.ID]
 		if !ok {
-			notFoundErr := fmt.Errorf("component %s not found", componentStatus.ID)
+			notFoundErr := aoserrors.Errorf("component %s not found", componentStatus.ID)
 			componentError(componentStatus, notFoundErr)
 
 			if stopOnError {
@@ -599,7 +598,7 @@ func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusIn
 
 				if err := module.Reboot(); err != nil {
 					componentError(componentStatus, err)
-					return err
+					return aoserrors.Wrap(err)
 				}
 
 				return nil
@@ -607,7 +606,7 @@ func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusIn
 		})
 	}
 
-	return doPriorityOperations(operations, stopOnError)
+	return aoserrors.Wrap(doPriorityOperations(operations, stopOnError))
 }
 
 func (handler *Handler) componentOperation(operation componentOperation, stopOnError bool) (err error) {
@@ -630,7 +629,7 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 		}
 
 		if len(rebootStatuses) == 0 {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if rebootError := handler.doReboot(rebootStatuses, stopOnError); rebootError != nil {
@@ -646,23 +645,23 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 		operationStatuses = rebootStatuses
 	}
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
 	currentStatus, ok := handler.componentStatuses[updateInfo.ID]
 	if !ok {
-		return fmt.Errorf("component %s is not installed", updateInfo.ID)
+		return aoserrors.Errorf("component %s is not installed", updateInfo.ID)
 	}
 
 	if currentStatus.Status == umclient.StatusError {
-		return errors.New(currentStatus.Error)
+		return aoserrors.New(currentStatus.Error)
 	}
 
 	vendorVersion, err := module.GetVendorVersion()
 	if err == nil && updateInfo.VendorVersion != "" {
 		if vendorVersion == updateInfo.VendorVersion {
-			return fmt.Errorf("component already has required vendor version: %s", vendorVersion)
+			return aoserrors.Errorf("component already has required vendor version: %s", vendorVersion)
 		}
 	}
 
@@ -671,29 +670,29 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 
 		if err == nil {
 			if aosVersion == updateInfo.AosVersion {
-				return fmt.Errorf("component already has required Aos version: %d", updateInfo.AosVersion)
+				return aoserrors.Errorf("component already has required Aos version: %d", updateInfo.AosVersion)
 			}
 
 			if aosVersion > updateInfo.AosVersion {
-				return errors.New("wrong Aos version")
+				return aoserrors.New("wrong Aos version")
 			}
 		}
 	}
 
 	if err = os.MkdirAll(handler.downloadDir, 755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	urlVal, err := url.Parse(updateInfo.URL)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	var filePath string
 
 	if urlVal.Scheme != "file" {
 		if filePath, err = image.Download(handler.downloadDir, updateInfo.URL); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	} else {
 		filePath = urlVal.Path
@@ -703,17 +702,17 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		Sha256: updateInfo.Sha256,
 		Sha512: updateInfo.Sha512,
 		Size:   updateInfo.Size}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = module.Prepare(filePath, updateInfo.VendorVersion, updateInfo.Annotations); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = handler.storage.SetVendorVersion(updateInfo.ID, handler.componentStatuses[updateInfo.ID].VendorVersion); err != nil {
-		log.Errorf("Can't set vendor version: %s", err)
+		log.Errorf("Can't set vendor version: %s", aoserrors.Wrap(err))
 
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -748,7 +747,7 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
 		updateInfo, ok := componentsInfo[module.GetID()]
 		if !ok {
-			return false, fmt.Errorf("update info for %s component not found", module.GetID())
+			return false, aoserrors.Errorf("update info for %s component not found", module.GetID())
 		}
 
 		log.WithFields(log.Fields{
@@ -772,22 +771,22 @@ func (handler *Handler) onUpdateState(event *fsm.Event) {
 
 		rebootRequired, err = module.Update()
 		if err != nil {
-			return false, err
+			return false, aoserrors.Wrap(err)
 		}
 
 		if !rebootRequired {
 			vendorVersion, err := module.GetVendorVersion()
 			if err != nil {
-				return false, err
+				return false, aoserrors.Wrap(err)
 			}
 
 			if vendorVersion != handler.state.ComponentStatuses[module.GetID()].VendorVersion {
-				return false, fmt.Errorf("versions mismatch in request %s and updated module %s",
+				return false, aoserrors.Errorf("versions mismatch in request %s and updated module %s",
 					handler.state.ComponentStatuses[module.GetID()].VendorVersion, vendorVersion)
 			}
 		}
 
-		return rebootRequired, err
+		return rebootRequired, aoserrors.Wrap(err)
 	}, true); err != nil {
 		handler.state.Error = err.Error()
 		handler.fsm.SetState(stateFailed)
@@ -801,21 +800,21 @@ func (handler *Handler) onApplyState(event *fsm.Event) {
 		log.WithFields(log.Fields{"id": module.GetID()}).Debug("Apply component")
 
 		if rebootRequired, err = module.Apply(); err != nil {
-			return rebootRequired, err
+			return rebootRequired, aoserrors.Wrap(err)
 		}
 
 		componentStatus, ok := handler.state.ComponentStatuses[module.GetID()]
 		if !ok {
-			return rebootRequired, fmt.Errorf("component %s status not found", module.GetID())
+			return rebootRequired, aoserrors.Errorf("component %s status not found", module.GetID())
 		}
 
 		if err = handler.storage.SetAosVersion(componentStatus.ID, componentStatus.AosVersion); err != nil {
-			return rebootRequired, err
+			return rebootRequired, aoserrors.Wrap(err)
 		}
 
 		return rebootRequired, nil
 	}, false); err != nil {
-		log.Errorf("Can't apply update: %s", err)
+		log.Errorf("Can't apply update: %s", aoserrors.Wrap(err))
 		handler.state.Error = err.Error()
 	}
 }
@@ -828,24 +827,24 @@ func (handler *Handler) onRevertState(event *fsm.Event) {
 
 		return module.Revert()
 	}, false); err != nil {
-		log.Errorf("Can't revert update: %s", err)
+		log.Errorf("Can't revert update: %s", aoserrors.Wrap(err))
 		handler.state.Error = err.Error()
 	}
 }
 
 func (handler *Handler) sendEvent(event string, args ...interface{}) (err error) {
 	if handler.fsm.Cannot(event) {
-		return fmt.Errorf("error sending event %s in state: %s", event, handler.fsm.Current())
+		return aoserrors.Errorf("error sending event %s in state: %s", event, handler.fsm.Current())
 	}
 
 	if err = handler.fsm.Event(event, args...); err != nil {
 		if _, ok := err.(fsm.AsyncError); !ok {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		go func() {
 			if err := handler.fsm.Transition(); err != nil {
-				log.Errorf("Error transition event %s: %s", event, err)
+				log.Errorf("Error transition event %s: %s", event, aoserrors.Wrap(err))
 			}
 		}()
 	}

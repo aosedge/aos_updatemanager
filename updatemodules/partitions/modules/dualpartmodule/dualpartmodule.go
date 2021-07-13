@@ -19,8 +19,6 @@ package dualpartmodule
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -28,6 +26,7 @@ import (
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/fs"
 	"gitpct.epam.com/epmd-aepr/aos_common/partition"
 
@@ -150,7 +149,7 @@ func New(id string, partitions []string, versionFile string, controller StateCon
 		versionFile:   versionFile}
 
 	if len(partitions) != 2 {
-		return nil, errors.New("num of configured partitions should be 2")
+		return nil, aoserrors.New("num of configured partitions should be 2")
 	}
 
 	return module, nil
@@ -175,20 +174,20 @@ func (module *DualPartModule) Init() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init dualpart module")
 
 	if err = module.controller.SetBootOK(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if module.currentPartition, err = module.controller.GetCurrentBoot(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	primaryPartition, err := module.controller.GetMainBoot()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if module.getState(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if module.state.NeedReboot == rebootNeeded {
@@ -200,7 +199,7 @@ func (module *DualPartModule) Init() (err error) {
 	}
 
 	if module.vendorVersion, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -219,18 +218,18 @@ func (module *DualPartModule) Prepare(imagePath string, vendorVersion string, an
 		"vendorVersion": vendorVersion}).Debug("Prepare dualpart module")
 
 	if module.state.State != idleState && module.state.State != preparedState {
-		return fmt.Errorf("wrong state during Prepare command. Expected %d, got %d", idleState,
+		return aoserrors.Errorf("wrong state during Prepare command. Expected %d, got %d", idleState,
 			module.state.State)
 	}
 
 	if _, err = os.Stat(imagePath); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	module.state.ImagePath = imagePath
 
 	if err = module.setState(preparedState); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -244,14 +243,14 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 		log.Debugf("Current partition %d, update partition = %d", module.currentPartition, module.state.UpdatePartition)
 
 		if module.currentPartition != module.state.UpdatePartition {
-			return false, fmt.Errorf("update was failed")
+			return false, aoserrors.Errorf("update was failed")
 		}
 
 		return false, nil
 	}
 
 	if module.state.State != preparedState {
-		return false, fmt.Errorf("wrong state during Update command. Expected %d, got %d", preparedState,
+		return false, aoserrors.Errorf("wrong state during Update command. Expected %d, got %d", preparedState,
 			module.state.State)
 	}
 
@@ -261,15 +260,15 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 	module.state.NeedReboot = rebootNeeded
 
 	if _, err = partition.CopyFromGzipArchive(module.partitions[secPartition], module.state.ImagePath); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if err = module.controller.SetMainBoot(secPartition); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if err = module.setState(updatedState); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return module.state.NeedReboot, nil
@@ -287,11 +286,11 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	secPartition := (updatePartition + 1) % len(module.partitions)
 
 	if _, err = partition.Copy(module.partitions[updatePartition], module.partitions[secPartition]); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if err = module.controller.SetMainBoot(secPartition); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if module.currentPartition == module.state.UpdatePartition {
@@ -301,7 +300,7 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	}
 
 	if err = module.setState(idleState); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return module.state.NeedReboot, nil
@@ -317,7 +316,7 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	}
 
 	if module.state.State != updatedState {
-		return false, fmt.Errorf("wrong state during Apply command. Expected %d, got %d", updatedState,
+		return false, aoserrors.Errorf("wrong state during Apply command. Expected %d, got %d", updatedState,
 			module.state.State)
 	}
 
@@ -325,11 +324,11 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	secPartition := (currentPartition + 1) % len(module.partitions)
 
 	if _, err = partition.Copy(module.partitions[secPartition], module.partitions[currentPartition]); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if err = module.setState(idleState); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return module.state.NeedReboot, nil
@@ -360,11 +359,11 @@ func (state updateState) String() string {
 func (module *DualPartModule) getState() (err error) {
 	stateJSON, err := module.storage.GetModuleState(module.id)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = json.Unmarshal(stateJSON, &module.state); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -377,11 +376,11 @@ func (module *DualPartModule) setState(state updateState) (err error) {
 
 	stateJSON, err := json.Marshal(module.state)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = module.storage.SetModuleState(module.id, stateJSON); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -390,21 +389,21 @@ func (module *DualPartModule) setState(state updateState) (err error) {
 func (module *DualPartModule) getModuleVersion(part string) (version string, err error) {
 	mountDir, err := ioutil.TempDir("", "aos_")
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 	defer os.RemoveAll(mountDir)
 
 	partInfo, err := partition.GetPartInfo(part)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	if err = fs.Mount(partInfo.Device, mountDir, partInfo.FSType, syscall.MS_RDONLY, ""); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 	defer func() {
 		if err := fs.Umount(mountDir); err != nil {
-			log.Errorf("can't unmount partitions: %s", err)
+			log.Errorf("can't unmount partitions: %s", aoserrors.Wrap(err))
 		}
 	}()
 
@@ -412,14 +411,14 @@ func (module *DualPartModule) getModuleVersion(part string) (version string, err
 
 	data, err := ioutil.ReadFile(versionFilePath)
 	if err != nil {
-		return "", fmt.Errorf("nonexistent or empty vendor version file %s, err: %s", versionFilePath, err)
+		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", versionFilePath, err)
 	}
 
 	pattern := regexp.MustCompile(`VERSION\s*=\s*\"(.+)\"`)
 
 	loc := pattern.FindSubmatchIndex(data)
 	if loc == nil {
-		return "", fmt.Errorf("vendor version file has wrong format")
+		return "", aoserrors.Errorf("vendor version file has wrong format")
 	}
 
 	return string(data[loc[2]:loc[3]]), nil

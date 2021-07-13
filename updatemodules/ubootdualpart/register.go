@@ -20,6 +20,8 @@ package ubootdualparts
 import (
 	"encoding/json"
 
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
@@ -53,16 +55,20 @@ func init() {
 			var config moduleConfig
 
 			if err = json.Unmarshal(configJSON, &config); err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			controller, err := ubootcontroller.New(config.Controller.Device, config.Controller.EnvFileName)
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
-			return dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &xenstorerebooter.XenstoreRebooter{})
+			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
+				controller, storage, &xenstorerebooter.XenstoreRebooter{}); err != nil {
+				return nil, aoserrors.Wrap(err)
+			}
+
+			return module, nil
 		},
 	)
 }

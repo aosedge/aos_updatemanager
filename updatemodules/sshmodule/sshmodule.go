@@ -25,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tmc/scp"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"golang.org/x/crypto/ssh"
 
 	"aos_updatemanager/updatehandler"
@@ -77,7 +78,7 @@ func New(id string, configJSON json.RawMessage,
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -90,7 +91,7 @@ func New(id string, configJSON json.RawMessage,
 
 	if len(stateJSON) != 0 {
 		if err = json.Unmarshal(stateJSON, &state); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
@@ -156,13 +157,13 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 
 	client, err := ssh.Dial("tcp", module.config.Host, config)
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 	defer session.Close()
 
@@ -170,11 +171,11 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 
 	// Copy file to the remote DestDir
 	if err = scp.CopyPath(module.filePath, module.config.DestPath, session); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if err = module.runCommands(client); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	module.vendorVersion = module.pendingVersion
@@ -190,11 +191,11 @@ func (module *SSHModule) Apply() (rebootRequired bool, err error) {
 
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	if err = module.storage.SetModuleState(module.id, stateJSON); err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 
 	return false, nil
@@ -221,36 +222,36 @@ func (module *SSHModule) Reboot() (err error) {
 func (module *SSHModule) runCommands(client *ssh.Client) (err error) {
 	session, err := client.NewSession()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer session.Close()
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
 
 	if err = session.Shell(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	for _, command := range module.config.Commands {
 		log.WithField("command", command).Debug("SSH command")
 
 		if _, err = fmt.Fprintf(stdin, "%s\n", command); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
 	if _, err = fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = session.Wait(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

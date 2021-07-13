@@ -26,6 +26,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3" //ignore lint
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"gitpct.epam.com/epmd-aepr/aos_common/migration"
 )
 
@@ -66,19 +67,23 @@ type Database struct {
 
 // New creates new database handle
 func New(name string, migrationPath string, mergedMigrationPath string) (db *Database, err error) {
-	return newDatabase(name, migrationPath, mergedMigrationPath, dbVersion)
+	if db, err = newDatabase(name, migrationPath, mergedMigrationPath, dbVersion); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return db, nil
 }
 
 // SetUpdateState stores update state
 func (db *Database) SetUpdateState(state []byte) (err error) {
 	result, err := db.sql.Exec("UPDATE config SET updateState = ?", state)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	count, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if count == 0 {
@@ -92,7 +97,7 @@ func (db *Database) SetUpdateState(state []byte) (err error) {
 func (db *Database) GetUpdateState() (state []byte, err error) {
 	stmt, err := db.sql.Prepare("SELECT updateState FROM config")
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 	defer stmt.Close()
 
@@ -102,7 +107,7 @@ func (db *Database) GetUpdateState() (state []byte, err error) {
 			return nil, ErrNotExist
 		}
 
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return state, nil
@@ -112,13 +117,13 @@ func (db *Database) GetUpdateState() (state []byte, err error) {
 func (db *Database) GetModuleState(id string) (state []byte, err error) {
 	rows, err := db.sql.Query("SELECT state FROM modules WHERE id = ?", id)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		if err = rows.Scan(&state); err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		return state, nil
@@ -131,17 +136,17 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	result, err := db.sql.Exec("UPDATE modules SET state = ? WHERE id= ?", state, id)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	count, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if count == 0 {
 		if _, err = db.sql.Exec("INSERT INTO modules (id, state) values(?, ?)", id, state); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -152,13 +157,13 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 	rows, err := db.sql.Query("SELECT aosVersion FROM modules WHERE id = ?", id)
 	if err != nil {
-		return 0, err
+		return 0, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		if err = rows.Scan(&version); err != nil {
-			return 0, err
+			return 0, aoserrors.Wrap(err)
 		}
 
 		return version, nil
@@ -171,17 +176,17 @@ func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 	result, err := db.sql.Exec("UPDATE modules SET aosVersion = ? WHERE id= ?", version, id)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	count, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if count == 0 {
 		if _, err = db.sql.Exec("INSERT INTO modules (id, aosVersion) values(?, ?)", id, version); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -192,13 +197,13 @@ func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 func (db *Database) GetVendorVersion(id string) (version string, err error) {
 	rows, err := db.sql.Query("SELECT vendorVersion FROM modules WHERE id = ?", id)
 	if err != nil {
-		return version, err
+		return version, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		if err = rows.Scan(&version); err != nil {
-			return version, err
+			return version, aoserrors.Wrap(err)
 		}
 
 		return version, nil
@@ -211,17 +216,17 @@ func (db *Database) GetVendorVersion(id string) (version string, err error) {
 func (db *Database) SetVendorVersion(id string, version string) (err error) {
 	result, err := db.sql.Exec("UPDATE modules SET vendorVersion = ? WHERE id= ?", version, id)
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	count, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if count == 0 {
 		if _, err = db.sql.Exec("INSERT INTO modules (id, vendorVersion) values(?, ?)", id, version); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -243,17 +248,17 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 	// Check and create db path
 	if _, err = os.Stat(filepath.Dir(name)); err != nil {
 		if !os.IsNotExist(err) {
-			return db, err
+			return db, aoserrors.Wrap(err)
 		}
 		if err = os.MkdirAll(filepath.Dir(name), 0755); err != nil {
-			return db, err
+			return db, aoserrors.Wrap(err)
 		}
 	}
 
 	sqlite, err := sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
 		name, busyTimeout, journalMode, syncMode))
 	if err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	db = &Database{sqlite}
@@ -264,23 +269,23 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 	}()
 
 	if err = migration.MergeMigrationFiles(migrationPath, mergedMigrationPath); err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	exists, err := db.isTableExist("config")
 	if err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	if !exists {
 		// Set database version if database not exist
 		if err = migration.SetDatabaseVersion(sqlite, migrationPath, version); err != nil {
-			log.Debugf("Error forcing database version. Err: %s", err)
+			log.Debugf("Error forcing database version. Err: %s", aoserrors.Wrap(err))
 			return db, ErrMigrationFailed
 		}
 	} else {
 		if err = migration.DoMigrate(db.sql, mergedMigrationPath, version); err != nil {
-			log.Debugf("Error during database migration. Err: %s", err)
+			log.Debugf("Error during database migration. Err: %s", aoserrors.Wrap(err))
 			return db, ErrMigrationFailed
 		}
 	}
@@ -290,7 +295,7 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 	}
 
 	if err := db.createModuleTable(); err != nil {
-		return db, err
+		return db, aoserrors.Wrap(err)
 	}
 
 	return db, nil
@@ -300,13 +305,13 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 func (db *Database) isTableExist(name string) (result bool, err error) {
 	rows, err := db.sql.Query("SELECT * FROM sqlite_master WHERE name = ? and type='table'", name)
 	if err != nil {
-		return false, err
+		return false, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	result = rows.Next()
 
-	return result, rows.Err()
+	return result, aoserrors.Wrap(rows.Err())
 }
 
 func (db *Database) createConfigTable() (err error) {
@@ -314,7 +319,7 @@ func (db *Database) createConfigTable() (err error) {
 
 	exist, err := db.isTableExist("config")
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if exist {
@@ -324,13 +329,13 @@ func (db *Database) createConfigTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE config (
 			updateState TEXT)`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = db.sql.Exec(
 		`INSERT INTO config (
 			updateState) values(?)`, ""); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -345,7 +350,7 @@ func (db *Database) createModuleTable() (err error) {
 			vendorVersion TEXT,
 			aosVersion INTEGER,
 			state TEXT)`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

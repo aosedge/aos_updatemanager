@@ -19,7 +19,8 @@ package efidualpart
 
 import (
 	"encoding/json"
-	"fmt"
+
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/eficontroller"
@@ -46,22 +47,26 @@ func init() {
 		func(id string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
 			if len(configJSON) == 0 {
-				return nil, fmt.Errorf("config for %s module is required", id)
+				return nil, aoserrors.Errorf("config for %s module is required", id)
 			}
 
 			var config moduleConfig
 
 			if err = json.Unmarshal(configJSON, &config); err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
 			controller, err := eficontroller.New(config.Partitions, config.Loader)
 			if err != nil {
-				return nil, err
+				return nil, aoserrors.Wrap(err)
 			}
 
-			return dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &systemdrebooter.SystemdRebooter{})
+			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
+				controller, storage, &systemdrebooter.SystemdRebooter{}); err != nil {
+				return nil, aoserrors.Wrap(err)
+			}
+
+			return module, nil
 		},
 	)
 }
