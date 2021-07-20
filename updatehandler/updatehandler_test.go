@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -987,7 +988,7 @@ func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Stat
 			return fmt.Errorf("wrong current state: %s", currentStatus.State)
 		}
 
-		if currentStatus.Error != expectedStatus.Error {
+		if !strings.Contains(currentStatus.Error, expectedStatus.Error) {
 			return fmt.Errorf("wrong error value: %s", currentStatus.Error)
 		}
 
@@ -995,9 +996,13 @@ func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Stat
 			index := len(expectedStatus.Components)
 
 			for i, currentItem := range currentStatus.Components {
-				if reflect.DeepEqual(currentItem, expectedItem) {
-					index = i
+				if currentItem.ID == expectedItem.ID &&
+					currentItem.VendorVersion == expectedItem.VendorVersion &&
+					currentItem.AosVersion == expectedItem.AosVersion &&
+					currentItem.Status == expectedItem.Status &&
+					strings.Contains(currentItem.Error, expectedItem.Error) {
 
+					index = i
 					break
 				}
 			}
