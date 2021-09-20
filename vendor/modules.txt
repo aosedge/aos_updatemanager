@@ -25,6 +25,7 @@ github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 # github.com/google/uuid v1.1.2
 ## explicit
+github.com/google/uuid
 # github.com/gorilla/websocket v1.4.2
 ## explicit
 # github.com/hashicorp/errwrap v1.0.0
@@ -55,14 +56,15 @@ github.com/sirupsen/logrus
 # github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 ## explicit
 github.com/tmc/scp
-# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210713152207-c523a792a812
+# gitpct.epam.com/epmd-aepr/aos_common v0.0.0-20210928130140-41cdb2842108
 ## explicit
 gitpct.epam.com/epmd-aepr/aos_common/aoserrors
-gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager
+gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager/v1
 gitpct.epam.com/epmd-aepr/aos_common/fs
 gitpct.epam.com/epmd-aepr/aos_common/image
 gitpct.epam.com/epmd-aepr/aos_common/migration
 gitpct.epam.com/epmd-aepr/aos_common/partition
+gitpct.epam.com/epmd-aepr/aos_common/utils/contextreader
 gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils
 gitpct.epam.com/epmd-aepr/aos_common/utils/testtools
 # golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899

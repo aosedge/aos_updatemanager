@@ -358,7 +358,7 @@ func getKeyPairFromDir(dir string) (cert tls.Certificate, err error) {
 
 		for keyFilePath, key := range keyMap {
 			if CheckCertificate(certs[0], key) == nil {
-				cert, err = tls.LoadX509KeyPair(absItemPath, keyFilePath)				
+				cert, err = tls.LoadX509KeyPair(absItemPath, keyFilePath)
 				return cert, aoserrors.Wrap(err)
 			}
 		}

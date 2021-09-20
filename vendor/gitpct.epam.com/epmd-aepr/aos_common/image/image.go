@@ -20,6 +20,7 @@ package image
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"io"
 	"os"
 	"path"
@@ -31,6 +32,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+	"gitpct.epam.com/epmd-aepr/aos_common/utils/contextreader"
 )
 
 /*******************************************************************************
@@ -62,7 +64,7 @@ type FileInfo struct {
  ******************************************************************************/
 
 // Download downloads the file by url
-func Download(destination, url string) (fileName string, err error) {
+func Download(ctx context.Context, destination, url string) (fileName string, err error) {
 	log.WithField("url", url).Debug("Start downloading file")
 
 	timer := time.NewTicker(updateDownloadsTime)
@@ -72,6 +74,8 @@ func Download(destination, url string) (fileName string, err error) {
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
+
+	req = req.WithContext(ctx)
 
 	resp := grab.NewClient().Do(req)
 
@@ -93,7 +97,7 @@ func Download(destination, url string) (fileName string, err error) {
 }
 
 // CheckFileInfo checks if file matches FileInfo
-func CheckFileInfo(fileName string, fileInfo FileInfo) (err error) {
+func CheckFileInfo(ctx context.Context, fileName string, fileInfo FileInfo) (err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return aoserrors.Wrap(err)
@@ -111,7 +115,9 @@ func CheckFileInfo(fileName string, fileInfo FileInfo) (err error) {
 
 	hash256 := sha3.New256()
 
-	if _, err := io.Copy(hash256, file); err != nil {
+	contextRead := contextreader.New(ctx, file)
+
+	if _, err := io.Copy(hash256, contextRead); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -125,7 +131,7 @@ func CheckFileInfo(fileName string, fileInfo FileInfo) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err := io.Copy(hash512, file); err != nil {
+	if _, err := io.Copy(hash512, contextRead); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -137,7 +143,7 @@ func CheckFileInfo(fileName string, fileInfo FileInfo) (err error) {
 }
 
 // CreateFileInfo creates FileInfo from existing file
-func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
+func CreateFileInfo(ctx context.Context, fileName string) (fileInfo FileInfo, err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return fileInfo, aoserrors.Wrap(err)
@@ -153,7 +159,9 @@ func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 
 	hash256 := sha3.New256()
 
-	if _, err := io.Copy(hash256, file); err != nil {
+	contextRead := contextreader.New(ctx, file)
+
+	if _, err := io.Copy(hash256, contextRead); err != nil {
 		return fileInfo, aoserrors.Wrap(err)
 	}
 
@@ -165,7 +173,7 @@ func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 		return fileInfo, aoserrors.Wrap(err)
 	}
 
-	if _, err := io.Copy(hash512, file); err != nil {
+	if _, err := io.Copy(hash512, contextRead); err != nil {
 		return fileInfo, aoserrors.Wrap(err)
 	}
 
@@ -175,8 +183,8 @@ func CreateFileInfo(fileName string) (fileInfo FileInfo, err error) {
 }
 
 // UntarGZArchive extract data from tar.gz archive
-func UntarGZArchive(source, destination string) (err error) {
-	if _, err := os.Stat(destination); os.IsNotExist(err) {
+func UntarGZArchive(ctx context.Context, source, destination string) (err error) {
+	if _, err = os.Stat(destination); os.IsNotExist(err) {
 		return aoserrors.Wrap(err)
 	}
 
@@ -193,39 +201,46 @@ func UntarGZArchive(source, destination string) (err error) {
 	defer gzipReader.Close()
 
 	tarReader := tar.NewReader(gzipReader)
+	contextReader := contextreader.New(ctx, tarReader)
 
 	for {
-		header, err := tarReader.Next()
+		select {
+		case <-ctx.Done():
+			return aoserrors.Wrap(ctx.Err())
 
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if header.Name == "./" {
-				continue
-			}
-			if err := os.Mkdir(path.Join(destination, header.Name), 0755); err != nil {
-				return aoserrors.Wrap(err)
-			}
-		case tar.TypeReg:
-			outFile, err := os.Create(path.Join(destination, header.Name))
-			if err != nil {
-				return aoserrors.Wrap(err)
-			}
-			defer outFile.Close()
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				return aoserrors.Wrap(err)
-			}
 		default:
-			log.Warning("Unknown tar Header type: ", header.Typeflag, header.Name)
+			header, err := tarReader.Next()
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+
+				return aoserrors.Wrap(err)
+			}
+
+			switch header.Typeflag {
+			case tar.TypeDir:
+				if header.Name == "./" {
+					continue
+				}
+				if err := os.Mkdir(path.Join(destination, header.Name), 0755); err != nil {
+					return aoserrors.Wrap(err)
+				}
+
+			case tar.TypeReg:
+				outFile, err := os.Create(path.Join(destination, header.Name))
+				if err != nil {
+					return aoserrors.Wrap(err)
+				}
+				defer outFile.Close()
+
+				if _, err := io.Copy(outFile, contextReader); err != nil {
+					return aoserrors.Wrap(err)
+				}
+
+			default:
+				log.Warning("Unknown tar Header type: ", header.Typeflag, header.Name)
+			}
 		}
 	}
-
-	return nil
 }

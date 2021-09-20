@@ -186,5 +186,7 @@ IP.1 = 127.0.0.1`
 		return nil, aoserrors.Wrap(err)
 	}
 
-	return append(certData, caData...), nil
+	cert = append(certData, caData...)
+
+	return append(cert, '\n'), nil
 }
