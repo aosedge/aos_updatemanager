@@ -28,7 +28,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager"
+	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager/v1"
 	"google.golang.org/grpc"
 
 	"aos_updatemanager/config"
@@ -57,9 +57,10 @@ const waitRegisteredTimeout = 30 * time.Second
 
 type testServer struct {
 	grpcServer      *grpc.Server
-	stream          pb.UpdateController_RegisterUMServer
+	stream          pb.UMService_RegisterUMServer
 	registerChannel chan bool
 	statusChannel   chan umclient.Status
+	pb.UnimplementedUMServiceServer
 }
 
 type testMessageHandler struct {
@@ -262,7 +263,7 @@ func newTestServer(url string) (server *testServer, err error) {
 
 	server.grpcServer = grpc.NewServer()
 
-	pb.RegisterUpdateControllerServer(server.grpcServer, server)
+	pb.RegisterUMServiceServer(server.grpcServer, server)
 
 	go server.grpcServer.Serve(listener)
 
@@ -277,7 +278,7 @@ func (server *testServer) close() (err error) {
 	return nil
 }
 
-func (server *testServer) RegisterUM(stream pb.UpdateController_RegisterUMServer) (err error) {
+func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err error) {
 	server.stream = stream
 
 	server.registerChannel <- true
@@ -348,7 +349,7 @@ func (server *testServer) prepareUpdate(components []umclient.ComponentUpdateInf
 		})
 	}
 
-	if err = server.stream.Send(&pb.SmMessages{SmMessage: &pb.SmMessages_PrepareUpdate{
+	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_PrepareUpdate{
 		PrepareUpdate: &pb.PrepareUpdate{Components: pbComponents}}}); err != nil {
 		return err
 	}
@@ -357,7 +358,7 @@ func (server *testServer) prepareUpdate(components []umclient.ComponentUpdateInf
 }
 
 func (server *testServer) startUpdate() (err error) {
-	if err = server.stream.Send(&pb.SmMessages{SmMessage: &pb.SmMessages_StartUpdate{}}); err != nil {
+	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_StartUpdate{}}); err != nil {
 		return err
 	}
 
@@ -365,7 +366,7 @@ func (server *testServer) startUpdate() (err error) {
 }
 
 func (server *testServer) applyUpdate() (err error) {
-	if err = server.stream.Send(&pb.SmMessages{SmMessage: &pb.SmMessages_ApplyUpdate{}}); err != nil {
+	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_ApplyUpdate{}}); err != nil {
 		return err
 	}
 
@@ -373,7 +374,7 @@ func (server *testServer) applyUpdate() (err error) {
 }
 
 func (server *testServer) revertUpdate() (err error) {
-	if err = server.stream.Send(&pb.SmMessages{SmMessage: &pb.SmMessages_RevertUpdate{}}); err != nil {
+	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_RevertUpdate{}}); err != nil {
 		return err
 	}
 

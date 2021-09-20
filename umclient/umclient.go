@@ -26,7 +26,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager"
+	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager/v1"
 	"gitpct.epam.com/epmd-aepr/aos_common/utils/cryptutils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -66,7 +66,7 @@ const (
 type Client struct {
 	sync.Mutex
 	connection     *grpc.ClientConn
-	stream         pb.UpdateController_RegisterUMClient
+	stream         pb.UMService_RegisterUMClient
 	messageHandler MessageHandler
 	umID           string
 	closeChannel   chan struct{}
@@ -192,7 +192,7 @@ func (status ComponentStatus) String() string {
  ******************************************************************************/
 
 func (client *Client) createConnection(config *config.Config, insecure bool) (err error) {
-	log.Debug("Connecting to SM...")
+	log.Debug("Connecting to CM...")
 
 	var secureOpt grpc.DialOption
 
@@ -214,7 +214,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 		return aoserrors.Wrap(err)
 	}
 
-	log.Debug("Connected to SM")
+	log.Debug("Connected to CM")
 
 	go func() {
 		for {
@@ -222,7 +222,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 
 			for {
 				if err != nil && len(client.closeChannel) == 0 {
-					log.Errorf("Error register to SM: %s", aoserrors.Wrap(err))
+					log.Errorf("Error register to CM: %s", aoserrors.Wrap(err))
 				} else {
 					client.messageHandler.Registered()
 
@@ -235,11 +235,11 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 					}
 				}
 
-				log.Debugf("Reconnect to SM in %v...", reconnectTimeout)
+				log.Debugf("Reconnect to CM in %v...", reconnectTimeout)
 
 				select {
 				case <-client.closeChannel:
-					log.Debugf("Disconnected from SM")
+					log.Debugf("Disconnected from CM")
 
 					return
 
@@ -257,13 +257,13 @@ func (client *Client) register() (err error) {
 	client.Lock()
 	defer client.Unlock()
 
-	log.Debug("Registering to SM...")
+	log.Debug("Registering to CM...")
 
-	if client.stream, err = pb.NewUpdateControllerClient(client.connection).RegisterUM(context.Background()); err != nil {
+	if client.stream, err = pb.NewUMServiceClient(client.connection).RegisterUM(context.Background()); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	log.Debug("Registered to SM")
+	log.Debug("Registered to CM")
 
 	return nil
 }
@@ -275,8 +275,8 @@ func (client *Client) processMessages() (err error) {
 			return aoserrors.Wrap(err)
 		}
 
-		switch data := message.SmMessage.(type) {
-		case *pb.SmMessages_PrepareUpdate:
+		switch data := message.CMMessage.(type) {
+		case *pb.CMMessages_PrepareUpdate:
 			log.Debug("Prepare update received")
 
 			components := make([]ComponentUpdateInfo, 0, len(data.PrepareUpdate.Components))
@@ -297,17 +297,17 @@ func (client *Client) processMessages() (err error) {
 
 			client.messageHandler.PrepareUpdate(components)
 
-		case *pb.SmMessages_StartUpdate:
+		case *pb.CMMessages_StartUpdate:
 			log.Debug("Start update received")
 
 			client.messageHandler.StartUpdate()
 
-		case *pb.SmMessages_ApplyUpdate:
+		case *pb.CMMessages_ApplyUpdate:
 			log.Debug("Apply update received")
 
 			client.messageHandler.ApplyUpdate()
 
-		case *pb.SmMessages_RevertUpdate:
+		case *pb.CMMessages_RevertUpdate:
 			log.Debug("Revert update received")
 
 			client.messageHandler.RevertUpdate()
