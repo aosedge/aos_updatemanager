@@ -18,6 +18,7 @@
 package updatehandler_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1027,7 +1028,7 @@ func createImage(imagePath string) (fileInfo image.FileInfo, err error) {
 		return fileInfo, err
 	}
 
-	return image.CreateFileInfo(imagePath)
+	return image.CreateFileInfo(context.Background(), imagePath)
 }
 
 func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo) (infos []umclient.ComponentUpdateInfo, err error) {

@@ -18,6 +18,7 @@
 package updatehandler
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -691,14 +692,14 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 	var filePath string
 
 	if urlVal.Scheme != "file" {
-		if filePath, err = image.Download(handler.downloadDir, updateInfo.URL); err != nil {
+		if filePath, err = image.Download(context.Background(), handler.downloadDir, updateInfo.URL); err != nil {
 			return aoserrors.Wrap(err)
 		}
 	} else {
 		filePath = urlVal.Path
 	}
 
-	if err = image.CheckFileInfo(filePath, image.FileInfo{
+	if err = image.CheckFileInfo(context.Background(), filePath, image.FileInfo{
 		Sha256: updateInfo.Sha256,
 		Sha512: updateInfo.Sha512,
 		Size:   updateInfo.Size}); err != nil {
