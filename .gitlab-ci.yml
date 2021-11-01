@@ -32,6 +32,7 @@ whitesource:
   only:
     refs:
      - master
+     - develop
   tags:
     - whitesource_ci
   stage: dependency
