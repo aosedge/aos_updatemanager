@@ -61,6 +61,7 @@ const (
  ******************************************************************************/
 
 type testStorage struct {
+	sync.Mutex
 	updateState    []byte
 	aosVersions    map[string]uint64
 	vendorVersions map[string]string
@@ -827,40 +828,64 @@ func newTestStorage() (storage *testStorage) {
 }
 
 func (storage *testStorage) SetUpdateState(state []byte) (err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	storage.updateState = state
 
 	return nil
 }
 
 func (storage *testStorage) GetUpdateState() (state []byte, err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	return storage.updateState, nil
 }
 
 func (storage *testStorage) SetAosVersion(id string, version uint64) (err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	storage.aosVersions[id] = version
 
 	return nil
 }
 
 func (storage *testStorage) GetAosVersion(id string) (version uint64, err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	return storage.aosVersions[id], nil
 }
 
 func (storage *testStorage) SetVendorVersion(id string, version string) (err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	storage.vendorVersions[id] = version
 
 	return nil
 }
 
 func (storage *testStorage) GetVendorVersion(id string) (version string, err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	return storage.vendorVersions[id], nil
 }
 
 func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	return []byte("valid"), nil
 }
 
 func (storage *testStorage) SetModuleState(id string, state []byte) (err error) {
+	storage.Lock()
+	defer storage.Unlock()
+
 	return nil
 }
 
