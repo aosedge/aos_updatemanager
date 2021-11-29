@@ -72,7 +72,6 @@ type Handler struct {
 	components        map[string]componentData
 	componentStatuses map[string]*umclient.ComponentStatusInfo
 	state             handlerState
-	initWG            sync.WaitGroup
 	fsm               *fsm.FSM
 	downloadDir       string
 
@@ -203,25 +202,17 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 		handler.components[moduleCfg.ID] = component
 	}
 
-	handler.initWG.Add(1)
+	handler.init()
 
 	return handler, nil
 }
 
-// InitModules initializes update modules
-func (handler *Handler) InitModules() {
-	go handler.init()
-}
-
 // Registered indicates the client registed to the server
 func (handler *Handler) Registered() {
-	go func() {
-		// Wait for all modules are initialized before sending status
-		handler.initWG.Wait()
+	handler.Lock()
+	defer handler.Unlock()
 
-		handler.sendStatus()
-	}()
-
+	handler.sendStatus()
 }
 
 // PrepareUpdate prepares update
@@ -322,8 +313,6 @@ func (handler *Handler) saveState() (err error) {
 }
 
 func (handler *Handler) init() {
-	defer handler.initWG.Done()
-
 	var operations []priorityOperation
 
 	for id, component := range handler.components {
@@ -680,7 +669,7 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		}
 	}
 
-	if err = os.MkdirAll(handler.downloadDir, 755); err != nil {
+	if err = os.MkdirAll(handler.downloadDir, 0755); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -720,6 +709,9 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 }
 
 func (handler *Handler) onPrepareState(event *fsm.Event) {
+	handler.Lock()
+	defer handler.Unlock()
+
 	componentsInfo := make(map[string]*umclient.ComponentUpdateInfo)
 
 	handler.state.Error = ""
@@ -765,6 +757,9 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 }
 
 func (handler *Handler) onUpdateState(event *fsm.Event) {
+	handler.Lock()
+	defer handler.Unlock()
+
 	handler.state.Error = ""
 
 	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
@@ -795,6 +790,9 @@ func (handler *Handler) onUpdateState(event *fsm.Event) {
 }
 
 func (handler *Handler) onApplyState(event *fsm.Event) {
+	handler.Lock()
+	defer handler.Unlock()
+
 	handler.state.Error = ""
 
 	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
@@ -821,6 +819,9 @@ func (handler *Handler) onApplyState(event *fsm.Event) {
 }
 
 func (handler *Handler) onRevertState(event *fsm.Event) {
+	handler.Lock()
+	defer handler.Unlock()
+
 	handler.state.Error = ""
 
 	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {

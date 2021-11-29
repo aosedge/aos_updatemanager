@@ -120,7 +120,8 @@ func TestMain(m *testing.M) {
 	}
 
 	updatehandler.RegisterPlugin("testmodule",
-		func(id string, configJSON json.RawMessage, storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+		func(id string, configJSON json.RawMessage,
+			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
 			testModule := &testModule{id: id}
 
 			components = append(components, testModule)
@@ -136,7 +137,13 @@ func TestMain(m *testing.M) {
 			{ID: "id2", Plugin: "testmodule"},
 			{ID: "id3", Plugin: "testmodule"}}}
 
+	server := &http.Server{Addr: ":9000", Handler: http.FileServer(http.Dir(tmpDir))}
+
+	go server.ListenAndServe()
+
 	ret := m.Run()
+
+	server.Shutdown(context.Background())
 
 	if err := os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error removing tmp dir: %s", err)
@@ -150,17 +157,14 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestUpdate(t *testing.T) {
-	go http.ListenAndServe(":9000", http.FileServer(http.Dir(tmpDir)))
-
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
+	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -195,6 +199,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StatePrepared
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus,
 		map[string][]string{"id1": {opPrepare}, "id2": {opPrepare}, "id3": {opPrepare}}, nil)
@@ -203,6 +208,7 @@ func TestUpdate(t *testing.T) {
 
 	newStatus.State = umclient.StateUpdated
 	components[1].rebootRequired = true
+	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus,
 		map[string][]string{"id1": {opUpdate}, "id2": {opUpdate, opReboot, opUpdate}, "id3": {opUpdate}}, nil)
@@ -212,13 +218,12 @@ func TestUpdate(t *testing.T) {
 	handler.Close()
 
 	components = make([]*testModule, 0)
+	order = nil
 
 	if handler, err = updatehandler.New(cfg, storage, storage); err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
-
-	handler.InitModules()
 
 	testOperation(t, handler, handler.Registered, &newStatus,
 		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
@@ -237,6 +242,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	components[2].rebootRequired = true
+	order = nil
 
 	testOperation(t, handler, handler.ApplyUpdate, &finalStatus,
 		map[string][]string{"id1": {opApply}, "id2": {opApply}, "id3": {opApply, opReboot, opApply}}, nil)
@@ -245,14 +251,13 @@ func TestUpdate(t *testing.T) {
 func TestPrepareFail(t *testing.T) {
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
+	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -299,6 +304,7 @@ func TestPrepareFail(t *testing.T) {
 
 	newStatus.State = umclient.StateFailed
 	newStatus.Error = failedErr.Error()
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
@@ -306,6 +312,7 @@ func TestPrepareFail(t *testing.T) {
 
 	failedComponent.rebootRequired = true
 	finalStatus := currentStatus
+	order = nil
 
 	for _, info := range infos {
 		if info.ID == failedComponent.id {
@@ -326,14 +333,13 @@ func TestPrepareFail(t *testing.T) {
 func TestUpdateFailed(t *testing.T) {
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
+	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -366,6 +372,7 @@ func TestUpdateFailed(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StatePrepared
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus,
 		map[string][]string{"id1": {opPrepare}, "id2": {opPrepare}, "id3": {opPrepare}}, nil)
@@ -398,6 +405,7 @@ func TestUpdateFailed(t *testing.T) {
 
 	newStatus.State = umclient.StateFailed
 	newStatus.Error = failedErr.Error()
+	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus, nil, nil)
 
@@ -405,6 +413,7 @@ func TestUpdateFailed(t *testing.T) {
 
 	failedComponent.rebootRequired = true
 	finalStatus := currentStatus
+	order = nil
 
 	for _, info := range infos {
 		if info.ID == failedComponent.id {
@@ -425,6 +434,7 @@ func TestUpdateFailed(t *testing.T) {
 func TestUpdateSameVendorVersion(t *testing.T) {
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
+	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
 
@@ -432,8 +442,6 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -479,11 +487,13 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 
 	newStatus.State = umclient.StateFailed
 	newStatus.Error = "component already has required vendor version: " + sameVersionComponent.vendorVersion
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
 	newStatus = currentStatus
 	newStatus.State = umclient.StateIdle
+	order = nil
 
 	for i, stateComponent := range newStatus.Components {
 		if stateComponent.ID == sameVersionComponent.id {
@@ -506,14 +516,6 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
 
-	handler, err := updatehandler.New(cfg, storage, storage)
-	if err != nil {
-		t.Fatalf("Can't create update handler: %s", err)
-	}
-	defer handler.Close()
-
-	handler.InitModules()
-
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
@@ -526,6 +528,12 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	for _, element := range currentStatus.Components {
 		storage.SetAosVersion(element.ID, element.AosVersion)
 	}
+
+	handler, err := updatehandler.New(cfg, storage, storage)
+	if err != nil {
+		t.Fatalf("Can't create update handler: %s", err)
+	}
+	defer handler.Close()
 
 	infos, err := createUpdateInfos(currentStatus.Components)
 	if err != nil {
@@ -543,6 +551,7 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	newStatus.Components = append(newStatus.Components, errorComponent)
 	newStatus.State = umclient.StateFailed
 	newStatus.Error = "component already has required Aos version: 2"
+	order = nil
 
 	for i, info := range infos {
 		if info.ID == errorComponent.ID {
@@ -562,24 +571,15 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	newStatus = currentStatus
 	newStatus.State = umclient.StateIdle
 	newStatus.Components = append(newStatus.Components, errorComponent)
+	order = nil
 
 	testOperation(t, handler, handler.RevertUpdate, &newStatus, nil, nil)
-
-	return
 }
 
 func TestUpdateWrongVersion(t *testing.T) {
 	//Test lower Aos version
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
-
-	handler, err := updatehandler.New(cfg, storage, storage)
-	if err != nil {
-		t.Fatalf("Can't create update handler: %s", err)
-	}
-	defer handler.Close()
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -593,6 +593,12 @@ func TestUpdateWrongVersion(t *testing.T) {
 	for _, element := range currentStatus.Components {
 		storage.SetAosVersion(element.ID, element.AosVersion)
 	}
+
+	handler, err := updatehandler.New(cfg, storage, storage)
+	if err != nil {
+		t.Fatalf("Can't create update handler: %s", err)
+	}
+	defer handler.Close()
 
 	infos, err := createUpdateInfos(currentStatus.Components)
 	if err != nil {
@@ -625,10 +631,12 @@ func TestUpdateWrongVersion(t *testing.T) {
 
 	newStatus.State = umclient.StateFailed
 	newStatus.Error = "wrong Aos version"
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
 	finalStatus := currentStatus
+	order = nil
 
 	for _, info := range infos {
 		if info.ID == lowerVersionComponent.id {
@@ -648,14 +656,13 @@ func TestUpdateWrongVersion(t *testing.T) {
 func TestUpdateBadImage(t *testing.T) {
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
+	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -702,12 +709,14 @@ func TestUpdateBadImage(t *testing.T) {
 
 	newStatus.State = umclient.StateFailed
 	newStatus.Error = failedErr.Error()
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
 
 	// Revert
 
 	finalStatus := currentStatus
+	order = nil
 
 	for _, info := range infos {
 		if info.ID == failedComponent.id {
@@ -736,14 +745,13 @@ func TestUpdatePriority(t *testing.T) {
 
 	components = make([]*testModule, 0)
 	storage := newTestStorage()
+	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
 	defer handler.Close()
-
-	handler.InitModules()
 
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
@@ -776,6 +784,7 @@ func TestUpdatePriority(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StatePrepared
+	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil,
 		[]orderInfo{{"id1", opPrepare}, {"id2", opPrepare}, {"id3", opPrepare}})
@@ -787,6 +796,7 @@ func TestUpdatePriority(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StateUpdated
+	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus, nil,
 		[]orderInfo{
@@ -801,6 +811,7 @@ func TestUpdatePriority(t *testing.T) {
 	}
 
 	finalStatus := umclient.Status{State: umclient.StateIdle}
+	order = nil
 
 	for _, info := range infos {
 		finalStatus.Components = append(finalStatus.Components, umclient.ComponentStatusInfo{
@@ -1088,8 +1099,6 @@ func testOperation(
 	expectedOps map[string][]string,
 	expectedOrder []orderInfo) {
 	t.Helper()
-
-	order = nil
 
 	operation()
 

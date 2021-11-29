@@ -172,7 +172,7 @@ func (module *OverlayModule) Init() (err error) {
 	}
 
 	if module.state.UpdateState == idleState {
-		return
+		return nil
 	}
 
 	updatedFile := path.Join(module.config.UpdateDir, updatedFileName)
@@ -189,7 +189,6 @@ func (module *OverlayModule) Init() (err error) {
 		if err = os.Remove(failedFile); err != nil {
 			return aoserrors.Wrap(err)
 		}
-
 	}
 
 	return nil
