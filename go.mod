@@ -5,6 +5,8 @@ go 1.14
 require (
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/godbus/dbus/v5 v5.0.4 // indirect
+	github.com/google/uuid v1.1.2
 	github.com/joelnb/xenstore-go v0.2.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/looplab/fsm v0.3.0

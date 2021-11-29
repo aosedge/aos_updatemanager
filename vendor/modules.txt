@@ -2,11 +2,13 @@
 github.com/cavaliercoder/grab
 # github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 ## explicit
+github.com/coreos/go-systemd/daemon
 github.com/coreos/go-systemd/journal
 # github.com/coreos/go-systemd/v22 v22.3.2
 ## explicit
 github.com/coreos/go-systemd/v22/dbus
 # github.com/godbus/dbus/v5 v5.0.4
+## explicit
 github.com/godbus/dbus/v5
 # github.com/golang-migrate/migrate/v4 v4.14.1
 github.com/golang-migrate/migrate/v4
@@ -22,6 +24,9 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/google/uuid v1.1.2
+## explicit
+github.com/google/uuid
 # github.com/hashicorp/errwrap v1.0.0
 github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.1.0

@@ -26,6 +26,7 @@ import (
 	"path"
 	"syscall"
 
+	"github.com/coreos/go-systemd/daemon"
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
@@ -198,6 +199,11 @@ func main() {
 		log.Fatalf("Can't create UM client: %s", aoserrors.Wrap(err))
 	}
 	defer client.Close()
+
+	// Notify systemd
+	if _, err = daemon.SdNotify(false, daemon.SdNotifyReady); err != nil {
+		log.Errorf("Can't notify systemd: %s", err)
+	}
 
 	// Handle SIGTERM
 	terminateChannel := make(chan os.Signal, 1)
