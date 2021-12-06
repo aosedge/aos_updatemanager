@@ -26,6 +26,7 @@ import (
 	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
+	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /*******************************************************************************
@@ -38,9 +39,10 @@ type controllerConfig struct {
 }
 
 type moduleConfig struct {
-	Controller  controllerConfig `json:"controller"`
-	Partitions  []string         `json:"partitions"`
-	VersionFile string           `json:"versionFile"`
+	Controller     controllerConfig      `json:"controller"`
+	Partitions     []string              `json:"partitions"`
+	VersionFile    string                `json:"versionFile"`
+	SystemdChecker systemdchecker.Config `json:"systemdChecker"`
 }
 
 /*******************************************************************************
@@ -64,7 +66,7 @@ func init() {
 			}
 
 			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &xenstorerebooter.XenstoreRebooter{}); err != nil {
+				controller, storage, &xenstorerebooter.XenstoreRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 

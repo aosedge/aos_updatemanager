@@ -26,6 +26,7 @@ import (
 	"aos_updatemanager/updatemodules/partitions/controllers/eficontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
+	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /*******************************************************************************
@@ -33,9 +34,10 @@ import (
  ******************************************************************************/
 
 type moduleConfig struct {
-	Loader      string   `json:"loader"`
-	VersionFile string   `json:"versionFile"`
-	Partitions  []string `json:"partitions"`
+	Loader         string                `json:"loader"`
+	VersionFile    string                `json:"versionFile"`
+	Partitions     []string              `json:"partitions"`
+	SystemdChecker systemdchecker.Config `json:"systemdChecker"`
 }
 
 /*******************************************************************************
@@ -62,7 +64,7 @@ func init() {
 			}
 
 			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &systemdrebooter.SystemdRebooter{}); err != nil {
+				controller, storage, &systemdrebooter.SystemdRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 
