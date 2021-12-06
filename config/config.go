@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"os"
 	"path"
+	"time"
 
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
@@ -29,7 +30,8 @@ import (
 /*******************************************************************************
  * Types
  ******************************************************************************/
-//Migration struct represents path for db migration
+
+// Migration struct represents path for db migration
 type Migration struct {
 	MigrationPath       string `json:"migrationPath"`
 	MergedMigrationPath string `json:"mergedMigrationPath"`
@@ -55,6 +57,11 @@ type ModuleConfig struct {
 	UpdatePriority uint32 `json:"updatePriority"`
 	RebootPriority uint32 `json:"rebootPriority"`
 	Params         json.RawMessage
+}
+
+// Duration represents duration in format "00:00:00"
+type Duration struct {
+	time.Duration
 }
 
 /*******************************************************************************
@@ -84,4 +91,37 @@ func New(fileName string) (config *Config, err error) {
 	}
 
 	return config, nil
+}
+
+// MarshalJSON marshals JSON Duration type
+func (d Duration) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(d.Duration.String())
+}
+
+// UnmarshalJSON unmarshals JSON Duration type
+func (d *Duration) UnmarshalJSON(b []byte) (err error) {
+	var v interface{}
+
+	if err := json.Unmarshal(b, &v); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	switch value := v.(type) {
+	case float64:
+		d.Duration = time.Duration(value)
+		return nil
+
+	case string:
+		duration, err := time.ParseDuration(value)
+		if err != nil {
+			return aoserrors.Wrap(err)
+		}
+
+		d.Duration = duration
+
+		return nil
+
+	default:
+		return aoserrors.Errorf("invalid duration value: %v", value)
+	}
 }
