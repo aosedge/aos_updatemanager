@@ -30,7 +30,14 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+	"gitpct.epam.com/epmd-aepr/aos_common/migration"
 )
+
+/*******************************************************************************
+ * Variables
+ ******************************************************************************/
+
+const migrationDir = "migration"
 
 /*******************************************************************************
  * Variables
@@ -167,45 +174,6 @@ func TestModuleState(t *testing.T) {
 	}
 }
 
-func TestVendorVersion(t *testing.T) {
-	type testItem struct {
-		id            string
-		vendorVersion string
-	}
-
-	testData := []testItem{
-		{"id0", "vendorVersion00"},
-		{"id1", "vendorVersion01"},
-		{"id2", "vendorVersion02"},
-		{"id3", "vendorVersion03"},
-		{"id0", "vendorVersion10"},
-		{"id1", "vendorVersion11"},
-		{"id2", "vendorVersion12"},
-		{"id3", "vendorVersion13"},
-	}
-
-	for i, item := range testData {
-		if err := db.SetVendorVersion(item.id, item.vendorVersion); err != nil {
-			t.Errorf("Index: %d, can't set module state: %s", i, err)
-		}
-	}
-
-	if err := db.SetModuleState("id2", []byte("some state")); err != nil {
-		t.Errorf("Can't SetModuleState %s", err)
-	}
-
-	for i, item := range testData[4:] {
-		version, err := db.GetVendorVersion(item.id)
-		if err != nil {
-			t.Errorf("Index: %d, can't get module vendorVersion: %s", i, err)
-		}
-
-		if version != item.vendorVersion {
-			t.Errorf("Index: %d, wrong module vendorVersion: %s", i, version)
-		}
-	}
-}
-
 func TestMultiThread(t *testing.T) {
 	const numIterations = 1000
 
@@ -249,21 +217,16 @@ func TestMultiThread(t *testing.T) {
 func TestMigrationToV1(t *testing.T) {
 	migrationDb := path.Join(tmpDir, "test_migration.db")
 
-	if err := os.MkdirAll("mergedMigration", 0755); err != nil {
-		t.Fatalf("Error creating service images: %s", err)
+	if err := os.RemoveAll(migrationDb); err != nil {
+		t.Fatalf("Error deleting migration DB: %s", err)
 	}
-	defer func() {
-		if err := os.RemoveAll("mergedMigration"); err != nil {
-			log.Fatalf("Error deleting tmp dir: %s", err)
-		}
-	}()
 
 	if err := createDatabaseV0(migrationDb); err != nil {
-		t.Fatalf("Can't create initial database %s", err)
+		t.Fatalf("Can't create initial database: %s", err)
 	}
 
 	// Migration upward
-	db, err := newDatabase(migrationDb, "migration", "mergedMigration", 1)
+	db, err := newDatabase(migrationDb, migrationDir, migrationDir, 1)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
 	}
@@ -275,12 +238,48 @@ func TestMigrationToV1(t *testing.T) {
 	db.Close()
 
 	// Migration downward
-	db, err = newDatabase(migrationDb, "migration", "mergedMigration", 0)
+	db, err = newDatabase(migrationDb, migrationDir, migrationDir, 0)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
 	}
 
 	if err = isDatabaseVer0(db.sql); err != nil {
+		t.Fatalf("Error checking db version: %s", err)
+	}
+
+	db.Close()
+}
+
+func TestMigrationToV2(t *testing.T) {
+	migrationDb := path.Join(tmpDir, "test_migration.db")
+
+	if err := os.RemoveAll(migrationDb); err != nil {
+		t.Fatalf("Error deleting migration DB: %s", err)
+	}
+
+	if err := createDatabaseV1(migrationDb); err != nil {
+		t.Fatalf("Can't create initial database: %s", err)
+	}
+
+	// Migration upward
+	db, err := newDatabase(migrationDb, migrationDir, migrationDir, 2)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+
+	if err = isDatabaseVer2(db.sql); err != nil {
+		t.Fatalf("Error checking db version: %s", err)
+	}
+
+	db.Close()
+
+	// Migration downward
+	db, err = newDatabase(migrationDb, "migration", "mergedMigration", 1)
+	if err != nil {
+		t.Fatalf("Can't create database: %s", err)
+	}
+
+	if err = isDatabaseVer1(db.sql); err != nil {
 		t.Fatalf("Error checking db version: %s", err)
 	}
 
@@ -299,23 +298,26 @@ func createDatabaseV0(name string) (err error) {
 	}
 	defer sqlite.Close()
 
-	if _, err = sqlite.Exec(
-		`CREATE TABLE config (
-			updateState TEXT, version INTEGER)`); err != nil {
+	if _, err = sqlite.Exec(`CREATE TABLE config (
+			updateState TEXT,
+			version INTEGER)`); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err = sqlite.Exec(
-		`INSERT INTO config (
-			updateState, version) values(?, ?)`, "", 0); err != nil {
+	if _, err = sqlite.Exec(`INSERT INTO config (updateState, version) values(?, ?)`, "", 0); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
+	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules (
+		id TEXT NOT NULL PRIMARY KEY,
+		state TEXT)`); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules_data (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, value TEXT)`); err != nil {
+	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules_data (
+		id TEXT NOT NULL PRIMARY KEY,
+		name TEXT NOT NULL,
+		value TEXT)`); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -330,70 +332,141 @@ func createDatabaseV0(name string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
+	if err = migration.SetDatabaseVersion(sqlite, migrationDir, 0); err != nil {
+		return aoserrors.Errorf("%s (%s)", ErrMigrationFailedStr, err.Error())
+	}
+
 	return nil
 }
 
+func createDatabaseV1(name string) (err error) {
+	sqlite, err := sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
+		name, busyTimeout, journalMode, syncMode))
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+	defer sqlite.Close()
+
+	if _, err = sqlite.Exec(`CREATE TABLE config (
+			updateState TEXT)`); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if _, err = sqlite.Exec(`INSERT INTO config (updateState) values(?)`, ""); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules (
+		id TEXT NOT NULL PRIMARY KEY,
+		vendorVersion TEXT,
+		aosVersion INTEGER,
+		state TEXT)`); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if _, err = sqlite.Exec(`INSERT INTO modules (id, vendorVersion, aosVersion, state)
+		values(?, ?, ? ,?)`, "id1", "1.0", 3, "module state"); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if err = migration.SetDatabaseVersion(sqlite, migrationDir, 1); err != nil {
+		return aoserrors.Errorf("%s (%s)", ErrMigrationFailedStr, err.Error())
+	}
+
+	return nil
+}
 func isDatabaseVer0(sqlite *sql.DB) (err error) {
-	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info('config') WHERE name='version'")
+	if err = checkColumn(sqlite, "config", "version"); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	rows, err := sqlite.Query("SELECT version FROM config")
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
-	var count int
-	for rows.Next() {
-		if err = rows.Scan(&count); err != nil {
-			return aoserrors.Wrap(err)
-		}
-
-		if count == 0 {
-			return aoserrors.New(ErrNotExistStr)
-		}
-
-		verRows, err := sqlite.Query("SELECT version FROM config")
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
-		defer verRows.Close()
-
-		var version int
-		for verRows.Next() {
-			if err = verRows.Scan(&version); err != nil {
-				return aoserrors.Wrap(err)
-			}
-
-			if version != 5 {
-				return aoserrors.Errorf("wrong version in database: expected 5, got %d", version)
-			}
-
-			return nil
-		}
-
-		break
+	if !rows.Next() {
+		return aoserrors.New(ErrNotExistStr)
 	}
 
-	return aoserrors.New(ErrNotExistStr)
+	var version int
+
+	if err = rows.Scan(&version); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if version != 5 {
+		return aoserrors.Errorf("wrong version in database: expected 5, got %d", version)
+	}
+
+	return nil
+
 }
 
 func isDatabaseVer1(sqlite *sql.DB) (err error) {
-	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info('config') WHERE name='version'")
+	if err = checkColumn(sqlite, "config", "version"); err == nil {
+		return aoserrors.New("column `version` in `config` should not exist")
+	}
+
+	if err = checkColumn(sqlite, "modules", "vendorVersion"); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	return nil
+}
+
+func isDatabaseVer2(sqlite *sql.DB) (err error) {
+	if err = checkColumn(sqlite, "modules", "vendorVersion"); err == nil {
+		return aoserrors.New("column `vendorVersion` in `modules` should not exist")
+	}
+
+	rows, err := sqlite.Query("SELECT id, aosVersion, state FROM modules")
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
-	var count int
-	for rows.Next() {
-		if err = rows.Scan(&count); err != nil {
-			return aoserrors.Wrap(err)
-		}
-
-		if count != 0 {
-			return aoserrors.New(ErrNotExistStr)
-		}
-
-		return nil
+	if !rows.Next() {
+		return aoserrors.New(ErrNotExistStr)
 	}
 
-	return aoserrors.New(ErrNotExistStr)
+	var (
+		id, state  string
+		aosVersion int
+	)
+
+	if err = rows.Scan(&id, &aosVersion, &state); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if id != "id1" || aosVersion != 3 || state != "module state" {
+		return aoserrors.New("wrong module values")
+	}
+
+	return nil
+}
+
+func checkColumn(sqlite *sql.DB, table, column string) (err error) {
+	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info(?) WHERE name=?", table, column)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return aoserrors.New(ErrNotExistStr)
+	}
+
+	var count int
+
+	if err = rows.Scan(&count); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if count == 0 {
+		return aoserrors.New(ErrNotExistStr)
+	}
+
+	return nil
 }
