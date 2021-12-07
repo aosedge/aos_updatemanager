@@ -106,8 +106,6 @@ type StateStorage interface {
 	GetUpdateState() (state []byte, err error)
 	SetAosVersion(id string, version uint64) (err error)
 	GetAosVersion(id string) (version uint64, err error)
-	SetVendorVersion(id string, version string) (err error)
-	GetVendorVersion(id string) (version string, err error)
 }
 
 // ModuleStorage provides API store/retrive module persistent data
@@ -120,9 +118,10 @@ type ModuleStorage interface {
 type NewPlugin func(id string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
 
 type handlerState struct {
-	UpdateState       string                                   `json:"updateState"`
-	Error             string                                   `json:"error"`
-	ComponentStatuses map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
+	UpdateState           string                                   `json:"updateState"`
+	Error                 string                                   `json:"error"`
+	ComponentStatuses     map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
+	CurrentVendorVersions map[string]string                        `json:"currentVendorVersions"`
 }
 
 type componentData struct {
@@ -350,25 +349,14 @@ func (handler *Handler) getVersions() {
 	log.Debug("Update component versions")
 
 	for id, component := range handler.components {
-		var vendorVersion string
 		var err error
 
-		if handler.state.UpdateState == stateIdle {
-			vendorVersion, err = component.module.GetVendorVersion()
-			if err != nil {
-				log.Errorf("Can't get vendor version from module: %s", aoserrors.Wrap(err))
-			}
-		} else {
-			vendorVersion, err = handler.storage.GetVendorVersion(id)
-			if err != nil {
-				log.Errorf("Can't get vendor version from storage: %s", aoserrors.Wrap(err))
-			}
-		}
+		vendorVersion, ok := handler.state.CurrentVendorVersions[id]
 
-		if _, ok := handler.componentStatuses[id]; !ok {
-			log.Errorf("Component %s status not fond", id)
-
-			return
+		if handler.state.UpdateState == stateIdle || !ok {
+			if vendorVersion, err = component.module.GetVendorVersion(); err != nil {
+				log.Errorf("Can't get vendor version: %s", aoserrors.Wrap(err))
+			}
 		}
 
 		handler.componentStatuses[id].VendorVersion = vendorVersion
@@ -657,7 +645,6 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 
 	if updateInfo.AosVersion != 0 {
 		aosVersion, err := handler.storage.GetAosVersion(updateInfo.ID)
-
 		if err == nil {
 			if aosVersion == updateInfo.AosVersion {
 				return aoserrors.Errorf("component already has required Aos version: %d", updateInfo.AosVersion)
@@ -699,11 +686,7 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		return aoserrors.Wrap(err)
 	}
 
-	if err = handler.storage.SetVendorVersion(updateInfo.ID, handler.componentStatuses[updateInfo.ID].VendorVersion); err != nil {
-		log.Errorf("Can't set vendor version: %s", aoserrors.Wrap(err))
-
-		return aoserrors.Wrap(err)
-	}
+	handler.state.CurrentVendorVersions[updateInfo.ID] = handler.componentStatuses[updateInfo.ID].VendorVersion
 
 	return nil
 }
@@ -716,6 +699,7 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 
 	handler.state.Error = ""
 	handler.state.ComponentStatuses = make(map[string]*umclient.ComponentStatusInfo)
+	handler.state.CurrentVendorVersions = make(map[string]string)
 
 	infos := event.Args[0].([]umclient.ComponentUpdateInfo)
 

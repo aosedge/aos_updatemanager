@@ -62,9 +62,8 @@ const (
 
 type testStorage struct {
 	sync.Mutex
-	updateState    []byte
-	aosVersions    map[string]uint64
-	vendorVersions map[string]string
+	updateState []byte
+	aosVersions map[string]uint64
 }
 
 type testModule struct {
@@ -86,7 +85,7 @@ type orderInfo struct {
 var tmpDir string
 var imagePath string
 
-var components = []*testModule{}
+var components map[string]*testModule
 
 var cfg *config.Config
 
@@ -122,11 +121,11 @@ func TestMain(m *testing.M) {
 	updatehandler.RegisterPlugin("testmodule",
 		func(id string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
-			testModule := &testModule{id: id}
+			if _, ok := components[id]; !ok {
+				components[id] = &testModule{id: id}
+			}
 
-			components = append(components, testModule)
-
-			return testModule, nil
+			return components[id], nil
 		})
 
 	cfg = &config.Config{
@@ -157,7 +156,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestUpdate(t *testing.T) {
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
 
@@ -180,7 +179,7 @@ func TestUpdate(t *testing.T) {
 
 	// Prepare
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
@@ -207,7 +206,7 @@ func TestUpdate(t *testing.T) {
 	// Update
 
 	newStatus.State = umclient.StateUpdated
-	components[1].rebootRequired = true
+	components["id2"].rebootRequired = true
 	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus,
@@ -217,7 +216,7 @@ func TestUpdate(t *testing.T) {
 
 	handler.Close()
 
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	order = nil
 
 	if handler, err = updatehandler.New(cfg, storage, storage); err != nil {
@@ -241,7 +240,7 @@ func TestUpdate(t *testing.T) {
 		})
 	}
 
-	components[2].rebootRequired = true
+	components["id3"].rebootRequired = true
 	order = nil
 
 	testOperation(t, handler, handler.ApplyUpdate, &finalStatus,
@@ -249,7 +248,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestPrepareFail(t *testing.T) {
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
 
@@ -273,13 +272,13 @@ func TestPrepareFail(t *testing.T) {
 
 	// Prepare
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
 	failedErr := errors.New("prepare error")
-	failedComponent := components[1]
+	failedComponent := components["id2"]
 	failedComponent.status = failedErr
 
 	newStatus := currentStatus
@@ -331,7 +330,7 @@ func TestPrepareFail(t *testing.T) {
 }
 
 func TestUpdateFailed(t *testing.T) {
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
 
@@ -355,7 +354,7 @@ func TestUpdateFailed(t *testing.T) {
 
 	// Prepare
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
@@ -380,7 +379,7 @@ func TestUpdateFailed(t *testing.T) {
 	// Update
 
 	failedErr := errors.New("update error")
-	failedComponent := components[1]
+	failedComponent := components["id2"]
 	failedComponent.status = failedErr
 
 	newStatus = currentStatus
@@ -432,7 +431,7 @@ func TestUpdateFailed(t *testing.T) {
 }
 
 func TestUpdateSameVendorVersion(t *testing.T) {
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
 
@@ -455,12 +454,12 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 	testOperation(t, handler, handler.Registered, &currentStatus,
 		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
-	sameVersionComponent := components[0]
+	sameVersionComponent := components["id1"]
 	sameVersionComponent.vendorVersion = "1.0"
 
 	newStatus := currentStatus
@@ -513,7 +512,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 }
 
 func TestUpdateSameAosVersion(t *testing.T) {
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 
 	currentStatus := umclient.Status{
@@ -535,13 +534,13 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	}
 	defer handler.Close()
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
 	errorComponent := umclient.ComponentStatusInfo{
-		ID:            components[1].id,
+		ID:            components["id2"].id,
 		AosVersion:    2,
 		VendorVersion: "",
 		Status:        umclient.StatusError,
@@ -577,8 +576,8 @@ func TestUpdateSameAosVersion(t *testing.T) {
 }
 
 func TestUpdateWrongVersion(t *testing.T) {
-	//Test lower Aos version
-	components = make([]*testModule, 0)
+	// test lower Aos version
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 
 	currentStatus := umclient.Status{
@@ -600,12 +599,12 @@ func TestUpdateWrongVersion(t *testing.T) {
 	}
 	defer handler.Close()
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
-	lowerVersionComponent := components[2]
+	lowerVersionComponent := components["id3"]
 
 	newStatus := currentStatus
 
@@ -654,7 +653,7 @@ func TestUpdateWrongVersion(t *testing.T) {
 }
 
 func TestUpdateBadImage(t *testing.T) {
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
 
@@ -678,13 +677,13 @@ func TestUpdateBadImage(t *testing.T) {
 
 	// Prepare
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
 	failedErr := errors.New("checksum sha512 mistmatch")
-	failedComponent := components[1]
+	failedComponent := components["id2"]
 
 	newStatus := currentStatus
 
@@ -743,7 +742,7 @@ func TestUpdatePriority(t *testing.T) {
 			{ID: "id2", Plugin: "testmodule", UpdatePriority: 2, RebootPriority: 2},
 			{ID: "id3", Plugin: "testmodule", UpdatePriority: 1, RebootPriority: 3}}}
 
-	components = make([]*testModule, 0)
+	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
 
@@ -767,7 +766,7 @@ func TestUpdatePriority(t *testing.T) {
 
 	// Prepare
 
-	infos, err := createUpdateInfos(currentStatus.Components)
+	infos, err := createUpdateInfos(currentStatus.Components, "")
 	if err != nil {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
@@ -829,13 +828,86 @@ func TestUpdatePriority(t *testing.T) {
 			{"id1", opApply}, {"id2", opApply}, {"id3", opApply}})
 }
 
+func TestVendorVersionInUpdate(t *testing.T) {
+	components = map[string]*testModule{
+		"id1": {id: "id1", vendorVersion: "1.0"},
+		"id2": {id: "id2", vendorVersion: "1.0"},
+		"id3": {id: "id3", vendorVersion: "1.0"},
+	}
+	storage := newTestStorage()
+	order = nil
+
+	handler, err := updatehandler.New(cfg, storage, storage)
+	if err != nil {
+		t.Fatalf("Can't create update handler: %s", err)
+	}
+
+	currentStatus := umclient.Status{
+		State: umclient.StateIdle,
+		Components: []umclient.ComponentStatusInfo{
+			{ID: "id1", Status: umclient.StatusInstalled, VendorVersion: "1.0"},
+			{ID: "id2", Status: umclient.StatusInstalled, VendorVersion: "1.0"},
+			{ID: "id3", Status: umclient.StatusInstalled, VendorVersion: "1.0"},
+		},
+	}
+
+	testOperation(t, handler, handler.Registered, &currentStatus,
+		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+
+	// Prepare
+
+	infos, err := createUpdateInfos(currentStatus.Components[1:2], "2.0")
+	if err != nil {
+		t.Fatalf("Can't create update infos: %s", err)
+	}
+
+	newStatus := currentStatus
+
+	for _, info := range infos {
+		newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
+			ID:            info.ID,
+			AosVersion:    info.AosVersion,
+			VendorVersion: info.VendorVersion,
+			Status:        umclient.StatusInstalling,
+		})
+	}
+
+	newStatus.State = umclient.StatePrepared
+	order = nil
+
+	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus,
+		map[string][]string{"id2": {opPrepare}}, nil)
+
+	// Update
+
+	newStatus.State = umclient.StateUpdated
+	components["id2"].vendorVersion = "2.0"
+	order = nil
+
+	testOperation(t, handler, handler.StartUpdate, &newStatus,
+		map[string][]string{"id2": {opUpdate}}, nil)
+
+	// Reboot
+
+	handler.Close()
+
+	order = nil
+
+	if handler, err = updatehandler.New(cfg, storage, storage); err != nil {
+		t.Fatalf("Can't create update handler: %s", err)
+	}
+	defer handler.Close()
+
+	testOperation(t, handler, handler.Registered, &newStatus,
+		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+}
+
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
 func newTestStorage() (storage *testStorage) {
-	return &testStorage{aosVersions: make(map[string]uint64),
-		vendorVersions: make(map[string]string)}
+	return &testStorage{aosVersions: make(map[string]uint64)}
 }
 
 func (storage *testStorage) SetUpdateState(state []byte) (err error) {
@@ -868,22 +940,6 @@ func (storage *testStorage) GetAosVersion(id string) (version uint64, err error)
 	defer storage.Unlock()
 
 	return storage.aosVersions[id], nil
-}
-
-func (storage *testStorage) SetVendorVersion(id string, version string) (err error) {
-	storage.Lock()
-	defer storage.Unlock()
-
-	storage.vendorVersions[id] = version
-
-	return nil
-}
-
-func (storage *testStorage) GetVendorVersion(id string) (version string, err error) {
-	storage.Lock()
-	defer storage.Unlock()
-
-	return storage.vendorVersions[id], nil
 }
 
 func (storage *testStorage) GetModuleState(id string) (state []byte, err error) {
@@ -1067,7 +1123,8 @@ func createImage(imagePath string) (fileInfo image.FileInfo, err error) {
 	return image.CreateFileInfo(context.Background(), imagePath)
 }
 
-func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo) (infos []umclient.ComponentUpdateInfo, err error) {
+func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo,
+	vendorVersion string) (infos []umclient.ComponentUpdateInfo, err error) {
 	for _, status := range currentStatus {
 		imagePath := path.Join(tmpDir, fmt.Sprintf("testimage_%s.bin", status.ID))
 
@@ -1077,12 +1134,13 @@ func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo) (infos []um
 		}
 
 		info := umclient.ComponentUpdateInfo{
-			ID:         status.ID,
-			AosVersion: status.AosVersion + 1,
-			URL:        "file://" + imagePath,
-			Sha256:     imageInfo.Sha256,
-			Sha512:     imageInfo.Sha512,
-			Size:       imageInfo.Size,
+			ID:            status.ID,
+			AosVersion:    status.AosVersion + 1,
+			VendorVersion: vendorVersion,
+			URL:           "file://" + imagePath,
+			Sha256:        imageInfo.Sha256,
+			Sha512:        imageInfo.Sha512,
+			Size:          imageInfo.Size,
 		}
 
 		infos = append(infos, info)
