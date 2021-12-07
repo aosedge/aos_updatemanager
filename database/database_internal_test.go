@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -294,28 +295,28 @@ func createDatabaseV0(name string) (err error) {
 	sqlite, err := sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
 		name, busyTimeout, journalMode, syncMode))
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer sqlite.Close()
 
 	if _, err = sqlite.Exec(
 		`CREATE TABLE config (
 			updateState TEXT, version INTEGER)`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = sqlite.Exec(
 		`INSERT INTO config (
 			updateState, version) values(?, ?)`, "", 0); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules (id TEXT NOT NULL PRIMARY KEY, state TEXT)`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS modules_data (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, value TEXT)`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if _, err = sqlite.Exec(`CREATE TABLE IF NOT EXISTS certificates (
@@ -326,7 +327,7 @@ func createDatabaseV0(name string) (err error) {
 		keyURL TEXT,
 		notAfter TIMESTAMP,
 		PRIMARY KEY (issuer, serial))`); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -335,34 +336,34 @@ func createDatabaseV0(name string) (err error) {
 func isDatabaseVer0(sqlite *sql.DB) (err error) {
 	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info('config') WHERE name='version'")
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	var count int
 	for rows.Next() {
 		if err = rows.Scan(&count); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if count == 0 {
-			return ErrNotExist
+			return aoserrors.New(ErrNotExistStr)
 		}
 
 		verRows, err := sqlite.Query("SELECT version FROM config")
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 		defer verRows.Close()
 
 		var version int
 		for verRows.Next() {
 			if err = verRows.Scan(&version); err != nil {
-				return err
+				return aoserrors.Wrap(err)
 			}
 
 			if version != 5 {
-				return fmt.Errorf("wrong version in database: expected 5, got %d", version)
+				return aoserrors.Errorf("wrong version in database: expected 5, got %d", version)
 			}
 
 			return nil
@@ -371,28 +372,28 @@ func isDatabaseVer0(sqlite *sql.DB) (err error) {
 		break
 	}
 
-	return ErrNotExist
+	return aoserrors.New(ErrNotExistStr)
 }
 
 func isDatabaseVer1(sqlite *sql.DB) (err error) {
 	rows, err := sqlite.Query("SELECT COUNT(*) AS CNTREC FROM pragma_table_info('config') WHERE name='version'")
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	var count int
 	for rows.Next() {
 		if err = rows.Scan(&count); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if count != 0 {
-			return ErrNotExist
+			return aoserrors.New(ErrNotExistStr)
 		}
 
 		return nil
 	}
 
-	return ErrNotExist
+	return aoserrors.New(ErrNotExistStr)
 }

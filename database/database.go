@@ -19,7 +19,6 @@ package database
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,11 +45,11 @@ const dbVersion = 1
  * Vars
  ******************************************************************************/
 
-// ErrNotExist is returned when requested entry not exist in DB
-var ErrNotExist = errors.New("entry doesn't exist")
+// ErrNotExistStr is returned when requested entry not exist in DB
+var ErrNotExistStr = "entry doesn't exist"
 
-// ErrMigrationFailed is returned if migration was failed and db returned to the previous state
-var ErrMigrationFailed = errors.New("database migration failed")
+// ErrMigrationFailedStr is returned if migration was failed and db returned to the previous state
+var ErrMigrationFailedStr = "database migration failed"
 
 /*******************************************************************************
  * Types
@@ -87,7 +86,7 @@ func (db *Database) SetUpdateState(state []byte) (err error) {
 	}
 
 	if count == 0 {
-		return ErrNotExist
+		return aoserrors.New(ErrNotExistStr)
 	}
 
 	return nil
@@ -104,7 +103,7 @@ func (db *Database) GetUpdateState() (state []byte, err error) {
 	err = stmt.QueryRow().Scan(&state)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, ErrNotExist
+			return nil, aoserrors.New(ErrNotExistStr)
 		}
 
 		return nil, aoserrors.Wrap(err)
@@ -129,7 +128,7 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 		return state, nil
 	}
 
-	return nil, ErrNotExist
+	return nil, aoserrors.New(ErrNotExistStr)
 }
 
 // SetModuleState sets module state
@@ -169,7 +168,7 @@ func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 		return version, nil
 	}
 
-	return 0, ErrNotExist
+	return 0, aoserrors.New(ErrNotExistStr)
 }
 
 // SetAosVersion sets module Aos version
@@ -209,7 +208,7 @@ func (db *Database) GetVendorVersion(id string) (version string, err error) {
 		return version, nil
 	}
 
-	return version, ErrNotExist
+	return version, aoserrors.New(ErrNotExistStr)
 }
 
 // SetVendorVersion sets module vendor version
@@ -280,13 +279,11 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 	if !exists {
 		// Set database version if database not exist
 		if err = migration.SetDatabaseVersion(sqlite, migrationPath, version); err != nil {
-			log.Debugf("Error forcing database version. Err: %s", aoserrors.Wrap(err))
-			return db, ErrMigrationFailed
+			return db, aoserrors.Errorf("%s (%s)", ErrMigrationFailedStr, err.Error())
 		}
 	} else {
 		if err = migration.DoMigrate(db.sql, mergedMigrationPath, version); err != nil {
-			log.Debugf("Error during database migration. Err: %s", aoserrors.Wrap(err))
-			return db, ErrMigrationFailed
+			return db, aoserrors.Errorf("%s (%s)", ErrMigrationFailedStr, err.Error())
 		}
 	}
 

@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
@@ -381,9 +382,8 @@ func (module *OverlayModule) saveState() (err error) {
 func (module *OverlayModule) getState() (err error) {
 	stateJSON, err := module.storage.GetModuleState(module.id)
 	if err != nil {
-		if err == database.ErrNotExist {
+		if strings.Contains(err.Error(), database.ErrNotExistStr) {
 			module.state = moduleState{}
-
 			return nil
 		}
 

@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 
 	"github.com/coreos/go-systemd/daemon"
@@ -173,18 +174,18 @@ func main() {
 	dbFile := path.Join(cfg.WorkingDir, dbFileName)
 
 	db, err := database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
-	if err == database.ErrMigrationFailed {
-		log.Warning("Unable to perform db migration")
+	if err != nil {
+		if strings.Contains(err.Error(), database.ErrMigrationFailedStr) {
+			log.Warning("Unable to perform db migration")
 
-		cleanup(dbFile)
+			cleanup(dbFile)
 
-		db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
+			db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
+		}
+
 		if err != nil {
 			log.Fatalf("Can't create database: %s", aoserrors.Wrap(err))
 		}
-
-	} else if err != nil {
-		log.Fatalf("Can't create database: %s", aoserrors.Wrap(err))
 	}
 	defer db.Close()
 
