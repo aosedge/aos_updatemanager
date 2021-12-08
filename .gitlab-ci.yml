@@ -25,7 +25,7 @@ test:
   script:
     - apt update -y
     - apt install -y parted dosfstools
-    - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi") -v -coverprofile .testCoverage.txt
+    - go test $(go list ./... | grep -v "/vendor\|ssh*\|efi\|systemdchecker") -v -coverprofile .testCoverage.txt
     - go tool cover -func=.testCoverage.txt
 
 whitesource:
