@@ -79,11 +79,6 @@ const (
 	updatedState
 )
 
-const (
-	rebootNotNeeded = false
-	rebootNeeded    = true
-)
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -93,6 +88,11 @@ type RebootHandler interface {
 	Reboot() (err error)
 }
 
+// UpdateChecker handler for checking update
+type UpdateChecker interface {
+	Check() (err error)
+}
+
 // DualPartModule update dual partition module
 type DualPartModule struct {
 	id string
@@ -100,11 +100,13 @@ type DualPartModule struct {
 	storage          Storage
 	controller       StateController
 	rebootHandler    RebootHandler
+	checker          UpdateChecker
 	partitions       []string
 	currentPartition int
 	state            moduleState
 	versionFile      string
 	vendorVersion    string
+	bootErr          error
 }
 
 // StateController state controller interface
@@ -125,7 +127,6 @@ type Storage interface {
 type moduleState struct {
 	State           updateState `json:"state"`
 	UpdatePartition int         `json:"updatePartition"`
-	NeedReboot      bool        `json:"needReboot"`
 	ImagePath       string      `json:"imagePath"`
 }
 
@@ -137,7 +138,8 @@ type updateState int
 
 // New creates fs update module instance
 func New(id string, partitions []string, versionFile string, controller StateController,
-	storage updatehandler.ModuleStorage, rebootHandler RebootHandler) (updateModule updatehandler.UpdateModule, err error) {
+	storage updatehandler.ModuleStorage, rebootHandler RebootHandler,
+	checker UpdateChecker) (updateModule updatehandler.UpdateModule, err error) {
 	log.WithField("module", id).Debug("Create dualpart module")
 
 	module := &DualPartModule{
@@ -146,6 +148,7 @@ func New(id string, partitions []string, versionFile string, controller StateCon
 		controller:    controller,
 		storage:       storage,
 		rebootHandler: rebootHandler,
+		checker:       checker,
 		versionFile:   versionFile}
 
 	if len(partitions) != 2 {
@@ -190,16 +193,16 @@ func (module *DualPartModule) Init() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if module.state.NeedReboot == rebootNeeded {
-		module.state.NeedReboot = rebootNotNeeded
-	}
-
 	if module.state.State == idleState && module.currentPartition != primaryPartition {
 		log.WithFields(log.Fields{"id": module.id}).Warn("Boot from fallback partition")
 	}
 
 	if module.vendorVersion, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
 		return aoserrors.Wrap(err)
+	}
+
+	if module.checker != nil && module.bootErr == nil {
+		module.bootErr = aoserrors.Wrap(module.checker.Check())
 	}
 
 	return nil
@@ -246,6 +249,10 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 			return false, aoserrors.Errorf("update was failed")
 		}
 
+		if module.bootErr != nil {
+			return false, aoserrors.Wrap(module.bootErr)
+		}
+
 		return false, nil
 	}
 
@@ -257,7 +264,6 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 	secPartition := (module.currentPartition + 1) % len(module.partitions)
 
 	module.state.UpdatePartition = secPartition
-	module.state.NeedReboot = rebootNeeded
 
 	if _, err = partition.CopyFromGzipArchive(module.partitions[secPartition], module.state.ImagePath); err != nil {
 		return false, aoserrors.Wrap(err)
@@ -271,7 +277,7 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 		return false, aoserrors.Wrap(err)
 	}
 
-	return module.state.NeedReboot, nil
+	return true, nil
 }
 
 // Revert reverts update
@@ -293,17 +299,15 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 		return false, aoserrors.Wrap(err)
 	}
 
-	if module.currentPartition == module.state.UpdatePartition {
-		module.state.NeedReboot = rebootNeeded
-	} else {
-		module.state.NeedReboot = rebootNotNeeded
-	}
-
 	if err = module.setState(idleState); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
-	return module.state.NeedReboot, nil
+	if module.currentPartition == module.state.UpdatePartition {
+		rebootRequired = true
+	}
+
+	return rebootRequired, nil
 }
 
 // Apply applies update
@@ -331,7 +335,7 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 		return false, aoserrors.Wrap(err)
 	}
 
-	return module.state.NeedReboot, nil
+	return false, nil
 }
 
 // Reboot performs module reboot

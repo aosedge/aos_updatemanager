@@ -65,6 +65,10 @@ type fsContent struct {
 	content []byte
 }
 
+type testChecker struct {
+	err error
+}
+
 /*******************************************************************************
  * Var
  ******************************************************************************/
@@ -140,7 +144,7 @@ func TestUpdate(t *testing.T) {
 	module, err := dualpartmodule.New("test", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
-	}, versionFile, &stateController, &stateStorage, nil)
+	}, versionFile, &stateController, &stateStorage, nil, nil)
 	if err != nil {
 		t.Fatalf("Can't create test module: %s", err)
 	}
@@ -261,7 +265,7 @@ func TestRevert(t *testing.T) {
 	module, err := dualpartmodule.New("test", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
-	}, versionFile, &stateController, &stateStorage, nil)
+	}, versionFile, &stateController, &stateStorage, nil, nil)
 	if err != nil {
 		t.Fatalf("Can't create test module: %s", err)
 	}
@@ -395,7 +399,7 @@ func TestRevertOnFail(t *testing.T) {
 	module, err := dualpartmodule.New("test", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
-	}, versionFile, &stateController, &stateStorage, nil)
+	}, versionFile, &stateController, &stateStorage, nil, nil)
 	if err != nil {
 		t.Fatalf("Can't create test module: %s", err)
 	}
@@ -502,79 +506,73 @@ func TestRevertOnFail(t *testing.T) {
 	}
 }
 
-/*
-func TestRevertOnFail(t *testing.T) {
-	copier := testCopier{}
-
-	module, err := dualpartmodule.New("testfs", []string{
-		disk.Partitions[partRoot0].Device,
-		disk.Partitions[partRoot1].Device,
-	}, &stateController, &stateStorage,
-		&rebootHandler, &copier)
+func TestUpdateChecker(t *testing.T) {
+	updateChecker := newTestChecker(nil)
+	module, err := dualpartmodule.New("test", []string{
+		disk.Partitions[part0].Device,
+		disk.Partitions[part1].Device,
+	}, versionFile, &stateController, &stateStorage, nil, updateChecker)
 	if err != nil {
-		t.Fatalf("Can't create testfs module: %s", err)
+		t.Fatalf("Can't create test module: %s", err)
 	}
 	defer module.Close()
 
-	stateController.bootCurrent = partRoot0
+	updateVersion := "v3.0"
+	imagePath := path.Join(tmpDir, "image.gz")
+
+	if _, err = generateImage(imagePath, updateVersion); err != nil {
+		t.Fatalf("Can't generate image: %s", err)
+	}
+
+	stateController.bootCurrent = part0
+	stateController.bootOK = false
+
+	// Init
 
 	if err = module.Init(); err != nil {
-		log.Fatal("Error in Dom0 init")
+		t.Fatalf("Error init module: %s", err)
 	}
 
-	log.Infof("Registered module with ID %s", module.GetID())
+	// Prepare
 
-	if err = module.Prepare(testImage); err != nil {
-		log.Fatal("Error in Dom0 prepare")
+	if err = module.Prepare(imagePath, updateVersion, nil); err != nil {
+		t.Fatalf("Error prepare module: %s", err)
 	}
 
-	if err = module.Update(); err != nil {
-		t.Errorf("Error in Dom0 Update: %s", err)
+	// Update
+
+	rebootRequired, err := module.Update()
+	if err != nil {
+		t.Errorf("Error update module: %s", err)
 	}
 
-	if copier.call != "CopyArchive" || copier.dst != disk.Partitions[partRoot1].Device ||
-		copier.src != testImage {
-		t.Error("Error data validation after update")
+	if !rebootRequired {
+		t.Errorf("Reboot is required")
 	}
 
-	rebootCnt := rebootHandler.rebootCount
+	// Reboot
+
 	if err = module.Reboot(); err != nil {
-		t.Error("Error in Dom0 Reboot")
+		t.Errorf("Error reboot module: %s", err)
 	}
 
-	if rebootHandler.rebootCount-rebootCnt != 1 {
-		t.Error("Error: reboot expected to be done")
-	}
-
-	stateController.bootCurrent = partRoot0
+	stateController.bootCurrent = part1
+	updateChecker.err = aoserrors.New("update error")
 
 	if err = module.Init(); err != nil {
-		log.Fatal("Error in Dom0 init")
+		log.Fatalf("Error init module: %s", err)
 	}
 
-	if err = module.Update(); err == nil {
-		t.Errorf("Error Update error is expected")
+	// Update
+
+	if rebootRequired, err = module.Update(); err == nil {
+		t.Error("Update should fail")
 	}
 
-	if err = module.Revert(); err != nil {
-		t.Errorf("Error in Dom0 Apply %s", err)
-	}
-
-	if copier.call != "CopyPartition" || copier.dst != disk.Partitions[partRoot1].Device ||
-		copier.src != disk.Partitions[partRoot0].Device {
-		t.Error("Error data validation after update")
-	}
-
-	rebootCnt = rebootHandler.rebootCount
-	if err = module.Reboot(); err != nil {
-		t.Error("Error in Dom0 Reboot")
-	}
-
-	if rebootHandler.rebootCount != rebootCnt {
-		t.Error("Error: reboot expected to be done")
+	if rebootRequired {
+		t.Errorf("Reboot is not required")
 	}
 }
-*/
 
 /*******************************************************************************
  * Interfaces
@@ -611,6 +609,15 @@ func (storage *testStateStorage) SetModuleState(id string, state []byte) (err er
 	storage.state = state
 
 	return nil
+}
+
+// Update checker
+func newTestChecker(err error) (checker *testChecker) {
+	return &testChecker{err: err}
+}
+
+func (checker *testChecker) Check() (err error) {
+	return checker.err
 }
 
 func generateImage(imagePath string, vendorVersion string) (content []fsContent, err error) {

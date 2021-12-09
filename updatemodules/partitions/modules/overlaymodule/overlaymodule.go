@@ -83,12 +83,14 @@ const (
 // OverlayModule overlay module
 type OverlayModule struct {
 	id             string
-	config         moduleConfig
+	versionFile    string
+	updateDir      string
 	storage        updatehandler.ModuleStorage
 	state          moduleState
 	bootWithUpdate bool
-	bootFailed     bool
+	bootErr        error
 	rebooter       Rebooter
+	checker        UpdateChecker
 	vendorVersion  string
 }
 
@@ -97,10 +99,14 @@ type Rebooter interface {
 	Reboot() (err error)
 }
 
+// UpdateChecker handler for checking update
+type UpdateChecker interface {
+	Check() (err error)
+}
+
 type moduleState struct {
-	UpdateState   updateState `json:"updateState"`
-	RebootRequest bool        `json:"rebootRequired"`
-	UpdateType    string      `json:"updateType"`
+	UpdateState updateState `json:"updateState"`
+	UpdateType  string      `json:"updateType"`
 }
 
 type updateState int
@@ -109,35 +115,29 @@ type moduleMetadata struct {
 	Type string `json:"type"`
 }
 
-type moduleConfig struct {
-	VersionFile string `json:"versionFile"`
-	UpdateDir   string `json:"updateDir"`
-}
-
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // New creates module instance
-func New(id string, configJSON json.RawMessage,
-	storage updatehandler.ModuleStorage, rebooter Rebooter) (module updatehandler.UpdateModule, err error) {
+func New(id string, versionFile, updateDir string,
+	storage updatehandler.ModuleStorage, rebooter Rebooter,
+	checker UpdateChecker) (module updatehandler.UpdateModule, err error) {
 	log.WithFields(log.Fields{"id": id}).Debug("Create overlay module")
 
 	if storage == nil {
 		return nil, aoserrors.New("no storage provided")
 	}
 
-	overlayModule := &OverlayModule{id: id, storage: storage, rebooter: rebooter}
+	overlayModule := &OverlayModule{
+		id: id, versionFile: versionFile, updateDir: updateDir, storage: storage,
+		rebooter: rebooter, checker: checker}
 
-	if err = json.Unmarshal(configJSON, &overlayModule.config); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if overlayModule.config.VersionFile == "" {
+	if overlayModule.versionFile == "" {
 		return nil, aoserrors.New("version file is not set")
 	}
 
-	if overlayModule.config.UpdateDir == "" {
+	if overlayModule.updateDir == "" {
 		return nil, aoserrors.New("update dir is nit set")
 	}
 
@@ -157,38 +157,42 @@ func (module *OverlayModule) Close() (err error) {
 
 // Init initializes module
 func (module *OverlayModule) Init() (err error) {
+	defer func() {
+		if err != nil && module.bootErr == nil {
+			module.bootErr = aoserrors.Wrap(err)
+		}
+	}()
+
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init overlay module")
 
 	if module.vendorVersion, err = module.getModuleVersion(); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if module.state.RebootRequest {
-		module.state.RebootRequest = false
-
-		if err = module.saveState(); err != nil {
-			return aoserrors.Wrap(err)
-		}
-	}
-
 	if module.state.UpdateState == idleState {
 		return nil
 	}
 
-	updatedFile := path.Join(module.config.UpdateDir, updatedFileName)
+	updatedFile := path.Join(module.updateDir, updatedFileName)
 
 	if _, err = os.Stat(updatedFile); err == nil {
 		module.bootWithUpdate = true
 	}
 
-	failedFile := path.Join(module.config.UpdateDir, failedFileName)
+	failedFile := path.Join(module.updateDir, failedFileName)
 
 	if _, err = os.Stat(failedFile); err == nil {
-		module.bootFailed = true
+		if module.bootErr == nil {
+			module.bootErr = aoserrors.New("boot failed")
+		}
 
 		if err = os.Remove(failedFile); err != nil {
 			return aoserrors.Wrap(err)
 		}
+	}
+
+	if module.checker != nil && module.bootErr == nil {
+		module.bootErr = aoserrors.Wrap(module.checker.Check())
 	}
 
 	return nil
@@ -228,7 +232,7 @@ func (module *OverlayModule) Prepare(imagePath string, vendorVersion string, ann
 		return aoserrors.Wrap(err)
 	}
 
-	if err = os.Rename(imagePath, path.Join(module.config.UpdateDir, path.Base(imagePath)+imageExtension)); err != nil {
+	if err = os.Rename(imagePath, path.Join(module.updateDir, path.Base(imagePath)+imageExtension)); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -248,6 +252,10 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 			return false, aoserrors.New("boot with update failed")
 		}
 
+		if module.bootErr != nil {
+			return false, aoserrors.Wrap(module.bootErr)
+		}
+
 		return false, nil
 	}
 
@@ -255,19 +263,18 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 		return false, aoserrors.Errorf("wrong state: %s", module.state.UpdateState)
 	}
 
-	if err = ioutil.WriteFile(path.Join(module.config.UpdateDir, doUpdateFileName),
+	if err = ioutil.WriteFile(path.Join(module.updateDir, doUpdateFileName),
 		[]byte(module.state.UpdateType), 0644); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
 	module.state.UpdateState = updatedState
-	module.state.RebootRequest = true
 
 	if err = module.saveState(); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
-	return module.state.RebootRequest, nil
+	return true, nil
 }
 
 // Apply applies current update
@@ -275,10 +282,10 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply overlay module")
 
 	// Remove updated flag
-	os.Remove(path.Join(module.config.UpdateDir, updatedFileName))
+	os.Remove(path.Join(module.updateDir, updatedFileName))
 
-	if module.bootFailed {
-		return false, aoserrors.New("current boot failed")
+	if module.bootErr != nil {
+		return false, aoserrors.Wrap(module.bootErr)
 	}
 
 	if module.state.UpdateState == idleState {
@@ -293,19 +300,18 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 		return false, aoserrors.Errorf("wrong state: %s", module.state.UpdateState)
 	}
 
-	if err = ioutil.WriteFile(path.Join(module.config.UpdateDir, doApplyFileName),
+	if err = ioutil.WriteFile(path.Join(module.updateDir, doApplyFileName),
 		[]byte(module.state.UpdateType), 0644); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
 	module.state.UpdateState = idleState
-	module.state.RebootRequest = true
 
 	if err = module.saveState(); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
-	return module.state.RebootRequest, nil
+	return true, nil
 }
 
 // Revert reverts current update
@@ -313,7 +319,7 @@ func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert overlay module")
 
 	// Remove updated flag
-	os.Remove(path.Join(module.config.UpdateDir, updatedFileName))
+	os.Remove(path.Join(module.updateDir, updatedFileName))
 
 	if module.state.UpdateState == idleState {
 		return false, nil
@@ -323,22 +329,22 @@ func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 		return false, aoserrors.Wrap(err)
 	}
 
-	if module.bootWithUpdate {
-		module.state.RebootRequest = true
-	}
-
 	module.state.UpdateState = idleState
 
 	if err = module.saveState(); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
-	return module.state.RebootRequest, nil
+	if module.bootWithUpdate {
+		rebootRequired = true
+	}
+
+	return rebootRequired, nil
 }
 
 // Reboot performs module reboot
 func (module *OverlayModule) Reboot() (err error) {
-	if module.rebooter != nil && module.state.RebootRequest {
+	if module.rebooter != nil {
 		log.WithFields(log.Fields{"id": module.id}).Debug("Reboot overlay module")
 
 		if err = module.rebooter.Reboot(); err != nil {
@@ -396,9 +402,9 @@ func (module *OverlayModule) getState() (err error) {
 }
 
 func (module *OverlayModule) getModuleVersion() (version string, err error) {
-	data, err := ioutil.ReadFile(module.config.VersionFile)
+	data, err := ioutil.ReadFile(module.versionFile)
 	if err != nil {
-		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", module.config.VersionFile, err)
+		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", module.versionFile, err)
 	}
 
 	pattern := regexp.MustCompile(`VERSION\s*=\s*\"(.+)\"`)
@@ -412,11 +418,11 @@ func (module *OverlayModule) getModuleVersion() (version string, err error) {
 }
 
 func (module *OverlayModule) clearUpdateDir() (err error) {
-	if err = os.RemoveAll(module.config.UpdateDir); err != nil {
+	if err = os.RemoveAll(module.updateDir); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = os.MkdirAll(module.config.UpdateDir, 0755); err != nil {
+	if err = os.MkdirAll(module.updateDir, 0755); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

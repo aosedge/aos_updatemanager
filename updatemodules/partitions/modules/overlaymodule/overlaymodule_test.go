@@ -44,6 +44,10 @@ type testRebooter struct {
 	rebootChannel chan struct{}
 }
 
+type testChecker struct {
+	err error
+}
+
 /*******************************************************************************
  * Var
  ******************************************************************************/
@@ -94,8 +98,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	module, err := overlaymodule.New("test",
-		json.RawMessage(`{"VersionFile":"/etc/os-release","UpdateDir":"/var/aos/update"}`), &testStorage{}, nil)
+	module, err := overlaymodule.New("test", versionFile, updateDir, &testStorage{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -109,7 +112,6 @@ func TestGetID(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	rebooter := newTestRebooter()
 	storage := &testStorage{}
-	config := json.RawMessage(fmt.Sprintf(`{"VersionFile":"%s","UpdateDir":"%s"}`, versionFile, updateDir))
 
 	if err := createVersionFile("v1.0"); err != nil {
 		t.Fatalf("Can't create version file: %s", err)
@@ -117,7 +119,7 @@ func TestUpdate(t *testing.T) {
 
 	// Create and init module
 
-	module, err := overlaymodule.New("test", config, storage, rebooter)
+	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil)
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -180,7 +182,7 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("Can't create version file: %s", err)
 	}
 
-	if module, err = overlaymodule.New("test", config, storage, rebooter); err != nil {
+	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 
@@ -231,7 +233,7 @@ func TestUpdate(t *testing.T) {
 
 	module.Close()
 
-	if module, err = overlaymodule.New("test", config, storage, rebooter); err != nil {
+	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 
@@ -278,7 +280,6 @@ func TestUpdate(t *testing.T) {
 func TestUpdateFail(t *testing.T) {
 	rebooter := newTestRebooter()
 	storage := &testStorage{}
-	config := json.RawMessage(fmt.Sprintf(`{"VersionFile":"%s","UpdateDir":"%s"}`, versionFile, updateDir))
 
 	if err := createVersionFile("v1.0"); err != nil {
 		t.Fatalf("Can't create version file: %s", err)
@@ -286,7 +287,7 @@ func TestUpdateFail(t *testing.T) {
 
 	// Create and init module
 
-	module, err := overlaymodule.New("test", config, storage, rebooter)
+	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil)
 
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
@@ -342,7 +343,7 @@ func TestUpdateFail(t *testing.T) {
 
 	module.Close()
 
-	if module, err = overlaymodule.New("test", config, storage, rebooter); err != nil {
+	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 
@@ -357,7 +358,7 @@ func TestUpdateFail(t *testing.T) {
 	}
 
 	if rebootRequired {
-		t.Errorf("Reboot is not required")
+		t.Error("Reboot is not required")
 	}
 
 	// Revert
@@ -367,7 +368,7 @@ func TestUpdateFail(t *testing.T) {
 	}
 
 	if rebootRequired {
-		t.Errorf("Reboot is not required")
+		t.Error("Reboot is not required")
 	}
 
 	if _, err = os.Stat(path.Join(updateDir, "do_update")); err == nil {
@@ -380,6 +381,102 @@ func TestUpdateFail(t *testing.T) {
 
 	if _, err = os.Stat(path.Join(updateDir, "updated")); err == nil {
 		t.Error("Updated file should be deleted")
+	}
+
+	module.Close()
+}
+
+func TestUpdateChecker(t *testing.T) {
+	rebooter := newTestRebooter()
+	storage := &testStorage{}
+
+	if err := createVersionFile("v1.0"); err != nil {
+		t.Fatalf("Can't create version file: %s", err)
+	}
+
+	// Create and init module
+
+	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, newTestChecker(nil))
+
+	if err != nil {
+		t.Fatalf("Can't create overlay module: %s", err)
+	}
+
+	if err = module.Init(); err != nil {
+		t.Fatalf("Can't initialize module: %s", err)
+	}
+
+	// Prepare
+
+	imagePath := path.Join(tmpDir, "rootfs")
+
+	if err = createImage(imagePath); err != nil {
+		t.Fatalf("Can't create image: %s", err)
+	}
+
+	if err = module.Prepare(imagePath, "v3.0", json.RawMessage(`{"type":"full"}`)); err != nil {
+		t.Fatalf("Prepare error: %s", err)
+	}
+
+	// Update
+
+	rebootRequired, err := module.Update()
+	if err != nil {
+		t.Fatalf("Update error: %s", err)
+	}
+
+	if !rebootRequired {
+		t.Errorf("Reboot is required")
+	}
+
+	updateContent, err := ioutil.ReadFile(path.Join(updateDir, "do_update"))
+	if err != nil {
+		t.Errorf("Can't read update file: %s", err)
+	}
+
+	if string(updateContent) != "full" {
+		t.Errorf("Wrong update file content: %s", updateContent)
+	}
+
+	// Reboot
+
+	if err = module.Reboot(); err != nil {
+		t.Fatalf("Reboot error: %s", err)
+	}
+
+	if err = rebooter.waitForReboot(); err != nil {
+		t.Fatalf("Wait for reboot error: %s", err)
+	}
+
+	// Restart and init module
+
+	module.Close()
+
+	if err := createVersionFile("v3.0"); err != nil {
+		t.Fatalf("Can't create version file: %s", err)
+	}
+
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 644); err != nil {
+		t.Fatalf("Can't create updated file: %s", err)
+	}
+
+	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter,
+		newTestChecker(aoserrors.New("update failed"))); err != nil {
+		t.Fatalf("Can't create overlay module: %s", err)
+	}
+
+	if err = module.Init(); err != nil {
+		t.Fatalf("Can't initialize module: %s", err)
+	}
+
+	// Update
+
+	if rebootRequired, err = module.Update(); err == nil {
+		t.Fatal("Update should fail")
+	}
+
+	if rebootRequired {
+		t.Error("Reboot is not required")
 	}
 
 	module.Close()
@@ -417,6 +514,14 @@ func (rebooter *testRebooter) waitForReboot() (err error) {
 	case <-time.After(1 * time.Second):
 		return aoserrors.New("wait reboot timeout")
 	}
+}
+
+func newTestChecker(err error) (checker *testChecker) {
+	return &testChecker{err: err}
+}
+
+func (checker *testChecker) Check() (err error) {
+	return checker.err
 }
 
 func createImage(imagePath string) (err error) {
