@@ -187,7 +187,7 @@ func (module *OverlayModule) Init() (err error) {
 			module.bootErr = aoserrors.New("boot failed")
 		}
 
-		if err = os.Remove(failedFile); err != nil {
+		if err = os.RemoveAll(failedFile); err != nil {
 			return aoserrors.Wrap(err)
 		}
 	}
@@ -257,6 +257,10 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 			return false, aoserrors.Wrap(module.bootErr)
 		}
 
+		if err = os.RemoveAll(path.Join(module.updateDir, updatedFileName)); err != nil {
+			return false, aoserrors.Wrap(err)
+		}
+
 		return false, nil
 	}
 
@@ -318,9 +322,6 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 // Revert reverts current update
 func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert overlay module")
-
-	// Remove updated flag
-	os.Remove(path.Join(module.updateDir, updatedFileName))
 
 	if module.state.UpdateState == idleState {
 		return false, nil
