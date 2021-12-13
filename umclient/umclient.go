@@ -39,7 +39,7 @@ import (
  ******************************************************************************/
 
 const (
-	connectTimeout   = 10 * time.Second
+	connectTimeout   = 30 * time.Second
 	reconnectTimeout = 10 * time.Second
 )
 
