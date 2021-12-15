@@ -174,6 +174,16 @@ func (module *DualPartModule) GetID() (id string) {
 
 // Init initializes module
 func (module *DualPartModule) Init() (err error) {
+	defer func() {
+		if err != nil && module.bootErr == nil {
+			module.bootErr = aoserrors.Wrap(err)
+		}
+
+		if module.bootErr != nil {
+			log.WithFields(log.Fields{"id": module.id}).Errorf("Module boot error: %s", module.bootErr)
+		}
+	}()
+
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init dualpart module")
 
 	if err = module.controller.SetBootOK(); err != nil {

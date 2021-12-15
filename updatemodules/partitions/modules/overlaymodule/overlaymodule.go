@@ -162,6 +162,10 @@ func (module *OverlayModule) Init() (err error) {
 		if err != nil && module.bootErr == nil {
 			module.bootErr = aoserrors.Wrap(err)
 		}
+
+		if module.bootErr != nil {
+			log.WithFields(log.Fields{"id": module.id}).Errorf("Module boot error: %s", module.bootErr)
+		}
 	}()
 
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init overlay module")
