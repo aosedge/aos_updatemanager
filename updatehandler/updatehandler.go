@@ -557,11 +557,11 @@ func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusIn
 			componentError(componentStatus, notFoundErr)
 
 			if stopOnError {
-				return notFoundErr
+				return aoserrors.Wrap(notFoundErr)
 			}
 
 			if err == nil {
-				err = notFoundErr
+				err = aoserrors.Wrap(notFoundErr)
 			}
 
 			continue
@@ -598,11 +598,11 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 		rebootStatuses, opError := handler.doOperation(operationStatuses, operation, stopOnError)
 		if opError != nil {
 			if stopOnError {
-				return opError
+				return aoserrors.Wrap(opError)
 			}
 
 			if err == nil {
-				err = opError
+				err = aoserrors.Wrap(opError)
 			}
 		}
 
@@ -612,11 +612,11 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 
 		if rebootError := handler.doReboot(rebootStatuses, stopOnError); rebootError != nil {
 			if stopOnError {
-				return rebootError
+				return aoserrors.Wrap(rebootError)
 			}
 
 			if err == nil {
-				err = rebootError
+				err = aoserrors.Wrap(rebootError)
 			}
 		}
 
