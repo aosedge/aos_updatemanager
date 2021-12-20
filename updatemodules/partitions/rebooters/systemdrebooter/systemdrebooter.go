@@ -20,8 +20,8 @@ package systemdrebooter
 import (
 	"os"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/coreos/go-systemd/v22/dbus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************

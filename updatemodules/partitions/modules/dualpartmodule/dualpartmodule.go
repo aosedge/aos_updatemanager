@@ -25,10 +25,10 @@ import (
 	"regexp"
 	"syscall"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/fs"
+	"github.com/aoscloud/aos_common/partition"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	"gitpct.epam.com/epmd-aepr/aos_common/fs"
-	"gitpct.epam.com/epmd-aepr/aos_common/partition"
 
 	"aos_updatemanager/updatehandler"
 )

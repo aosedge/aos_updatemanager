@@ -23,10 +23,10 @@ import (
 	"path"
 	"testing"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/fs"
+	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	"gitpct.epam.com/epmd-aepr/aos_common/fs"
-	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 	"gopkg.in/ini.v1"
 
 	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"

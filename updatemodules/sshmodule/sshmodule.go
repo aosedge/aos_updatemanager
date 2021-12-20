@@ -23,9 +23,9 @@ import (
 	"os"
 	"sync"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
 	"github.com/tmc/scp"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 	"golang.org/x/crypto/ssh"
 
 	"aos_updatemanager/updatehandler"

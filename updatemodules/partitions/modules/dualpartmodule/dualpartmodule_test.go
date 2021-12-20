@@ -28,9 +28,9 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	"gitpct.epam.com/epmd-aepr/aos_common/utils/testtools"
 
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 )

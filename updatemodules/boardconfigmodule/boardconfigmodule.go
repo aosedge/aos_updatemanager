@@ -24,8 +24,8 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/updatehandler"
 )

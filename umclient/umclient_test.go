@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	pb "github.com/aoscloud/aos_common/api/updatemanager/v1"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	pb "gitpct.epam.com/epmd-aepr/aos_common/api/updatemanager/v1"
 	"google.golang.org/grpc"
 
 	"aos_updatemanager/config"
