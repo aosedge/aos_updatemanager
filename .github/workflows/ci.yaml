@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.14
+
+      - name: Build
+        run: |
+          sudo apt install -y libefivar-dev libefiboot-dev libblkid-dev
+          go build
+
+      - name: Test
+        run: |
+          sudo apt-get install -y parted dosfstools
+          sudo env "PATH=$PATH" go test -v $(go list ./... | grep -v "/vendor\|ssh*\|efi\|systemdchecker") -failfast
