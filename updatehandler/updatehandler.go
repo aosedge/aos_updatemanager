@@ -25,10 +25,10 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/image"
 	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	"gitpct.epam.com/epmd-aepr/aos_common/image"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umclient"

@@ -20,8 +20,8 @@ package xenstorerebooter
 import (
 	"os"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/joelnb/xenstore-go"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 )
 
 /*******************************************************************************

@@ -20,7 +20,7 @@ package ubootdualparts
 import (
 	"encoding/json"
 
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aoserrors"
 
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
