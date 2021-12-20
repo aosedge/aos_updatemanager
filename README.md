@@ -1,9 +1,8 @@
 # AOS Update Manager
 
-[![pipeline status](https://gitpct.epam.com/epmd-aepr/aos_updatemanager/badges/master/pipeline.svg)](https://gitpct.epam.com/epmd-aepr/aos_updatemanager/commits/master) 
-[![coverage report](https://gitpct.epam.com/epmd-aepr/aos_updatemanager/badges/master/coverage.svg)](https://gitpct.epam.com/epmd-aepr/aos_updatemanager/commits/master)
+[![CI](https://github.com/aoscloud/aos_updatemanager/workflows/CI/badge.svg)](https://github.com/aoscloud/aos_updatemanager/ctions?query=workflow%3ACI)
 
-AOS Update Manager (UM) is responsible for update of different system part. The main functions of UM:
+Aos Update Manager (UM) is responsible for update of different system part. The main functions of UM:
 
 * unpack and validate the update image
 * perform update of different system part
@@ -19,7 +18,6 @@ All requires GO packages exist under `vendor` folder. Content of this folder is 
 
 ```bash
 export GO111MODULE=on
-export GOPRIVATE=gitpct.epam.com/*
 ```
 
 ```golang
