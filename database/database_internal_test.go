@@ -28,9 +28,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/migration"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
-	"gitpct.epam.com/epmd-aepr/aos_common/migration"
 )
 
 /*******************************************************************************

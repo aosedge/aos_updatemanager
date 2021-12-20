@@ -33,8 +33,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoscloud/aos_common/image"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/image"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/umclient"

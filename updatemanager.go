@@ -27,10 +27,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
-	"gitpct.epam.com/epmd-aepr/aos_common/aoserrors"
 
 	"aos_updatemanager/config"
 	"aos_updatemanager/database"
