@@ -1,6 +1,7 @@
 # AOS Update Manager
 
 [![CI](https://github.com/aoscloud/aos_updatemanager/workflows/CI/badge.svg)](https://github.com/aoscloud/aos_updatemanager/ctions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/aoscloud/aos_updatemanager/branch/main/graph/badge.svg?token=fvKMRCJlZv)](https://codecov.io/gh/aoscloud/aos_updatemanager))
 
 Aos Update Manager (UM) is responsible for update of different system part. The main functions of UM:
 

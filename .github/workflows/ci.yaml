@@ -29,4 +29,8 @@ jobs:
       - name: Test
         run: |
           sudo apt-get install -y parted dosfstools
-          sudo env "PATH=$PATH" go test -v $(go list ./... | grep -v "/vendor\|ssh*\|efi\|systemdchecker") -failfast
+          sudo env "PATH=$PATH" go test -v $(go list ./... | grep -v "/vendor\|ssh*\|efi\|systemdchecker") -failfast -coverprofile=coverage.out -covermode=atomic
+          sudo chmod 666 coverage.out
+
+      - name: Code coverage
+        run: bash <(curl -s https://codecov.io/bash)
