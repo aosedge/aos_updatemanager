@@ -1,0 +1,25 @@
+name: WS_CHECK
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  ws_check:
+    runs-on: [self-hosted, linux, x64]
+    env:
+      WSS_API_KEY: ${{ secrets.WSS_API_KEY }}
+      WSS_UM_TOKEN: ${{ secrets.WSS_UM_TOKEN }}
+      WSS_USER_KEY: ${{ secrets.WSS_USER_KEY }}
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v2
+
+      - name: ws_check
+        run: |
+          java -jar /usr/bin/wss-unified-agent.jar \
+           -apiKey $WSS_API_KEY \
+           -projectToken $WSS_UM_TOKEN \
+           -userKey $WSS_USER_KEY \
+           -c ./ci/wss-common.conf -d ./ -scanComment $GITHUB_SHA
