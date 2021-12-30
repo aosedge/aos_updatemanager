@@ -120,15 +120,15 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		if err = rows.Scan(&state); err != nil {
-			return nil, aoserrors.Wrap(err)
-		}
-
-		return state, nil
+	if !rows.Next() {
+		return nil, aoserrors.New(ErrNotExistStr)
 	}
 
-	return nil, aoserrors.New(ErrNotExistStr)
+	if err = rows.Scan(&state); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return state, nil
 }
 
 // SetModuleState sets module state
@@ -160,15 +160,15 @@ func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		if err = rows.Scan(&version); err != nil {
-			return 0, aoserrors.Wrap(err)
-		}
-
-		return version, nil
+	if !rows.Next() {
+		return 0, aoserrors.New(ErrNotExistStr)
 	}
 
-	return 0, aoserrors.New(ErrNotExistStr)
+	if err = rows.Scan(&version); err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+
+	return version, nil
 }
 
 // SetAosVersion sets module Aos version

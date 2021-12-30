@@ -174,7 +174,7 @@ func TestUpdate(t *testing.T) {
 
 	module.Close()
 
-	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 644); err != nil {
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0644); err != nil {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 
@@ -456,7 +456,7 @@ func TestUpdateChecker(t *testing.T) {
 		t.Fatalf("Can't create version file: %s", err)
 	}
 
-	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 644); err != nil {
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0644); err != nil {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 

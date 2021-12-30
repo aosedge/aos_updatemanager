@@ -165,7 +165,7 @@ func (client *Client) Close() (err error) {
 	log.Debug("Close UM client")
 
 	if client.stream != nil {
-		client.stream.CloseSend()
+		err = aoserrors.Wrap(client.stream.CloseSend())
 	}
 
 	if client.connection != nil {
@@ -174,7 +174,7 @@ func (client *Client) Close() (err error) {
 
 	close(client.closeChannel)
 
-	return nil
+	return err
 }
 
 func (state UMState) String() string {

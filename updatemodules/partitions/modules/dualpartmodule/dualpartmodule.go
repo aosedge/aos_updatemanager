@@ -199,7 +199,7 @@ func (module *DualPartModule) Init() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if module.getState(); err != nil {
+	if err = module.getState(); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
