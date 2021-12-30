@@ -34,3 +34,9 @@ jobs:
 
       - name: Code coverage
         run: bash <(curl -s https://codecov.io/bash)
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.43.0
+          skip-go-installation: true
