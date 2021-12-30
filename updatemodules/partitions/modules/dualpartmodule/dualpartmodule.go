@@ -376,6 +376,10 @@ func (module *DualPartModule) getState() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
+	if len(stateJSON) == 0 {
+		return nil
+	}
+
 	if err = json.Unmarshal(stateJSON, &module.state); err != nil {
 		return aoserrors.Wrap(err)
 	}
