@@ -107,7 +107,7 @@ func (module *BoardCfgModule) Close() (err error) {
 
 // Init initializes module
 func (module *BoardCfgModule) Init() (err error) {
-	if module.getState(); err != nil {
+	if err = module.getState(); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

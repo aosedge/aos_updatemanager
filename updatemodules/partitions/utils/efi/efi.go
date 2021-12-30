@@ -63,17 +63,12 @@ import (
 
 const preallocatedItemSize = 10
 
-const (
-	hdFormatPCAT = iota + 1
-	hdFormatGPT
-)
-
 const efiBootAbbrevHD = 2
 const eddDefaultDevice = 0x80
 
 const (
-	hdSignatureNone = iota
-	hdSignatureMBR
+	hdSignatureNone = iota // nolint
+	hdSignatureMBR         // nolint
 	hdSignatureGUID
 )
 
@@ -605,14 +600,18 @@ func (instance *Instance) readBootItems() (err error) {
 	var guid *C.efi_guid_t = nil
 	var name *C.char = nil
 
+	bootItemRegexp, err := regexp.Compile(bootItemNamePattern)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+
 	for {
 		if rc := C.efi_get_next_variable_name(&guid, &name); rc == 0 {
 			break
 		}
 
 		n := C.GoString(name)
-
-		if matched, _ := regexp.Match(bootItemNamePattern, []byte(n)); !matched {
+		if !bootItemRegexp.MatchString(n) {
 			continue
 		}
 

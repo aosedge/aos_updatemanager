@@ -45,13 +45,6 @@ import (
 
 const dbFileName = "updatemanager.db"
 
-const (
-	rootfsModuleID     = "rootfs"
-	bootloaderModuleID = "bootloader"
-)
-
-const kernelCmdLine = "/proc/cmdline"
-
 /*******************************************************************************
  * Vars
  ******************************************************************************/

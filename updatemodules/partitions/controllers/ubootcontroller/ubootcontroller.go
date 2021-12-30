@@ -18,7 +18,6 @@
 package ubootcontroller
 
 import (
-	"errors"
 	"os"
 	"path"
 	"strconv"
@@ -66,12 +65,6 @@ type UbootController struct {
 /*******************************************************************************
  * Variables
  ******************************************************************************/
-
-var (
-	errNotReady   = errors.New("controller not ready")
-	errOutOfRange = errors.New("index out of range")
-	errNotFound   = errors.New("index not found")
-)
 
 /*******************************************************************************
  * Public
@@ -228,7 +221,9 @@ func (controller *UbootController) saveEnv() (err error) {
 
 	imagePath := path.Join(envMountPoint, controller.envFileName)
 
-	controller.cfg.SaveTo(imagePath)
+	if err = controller.cfg.SaveTo(imagePath); err != nil {
+		return aoserrors.Wrap(err)
+	}
 
 	return nil
 }

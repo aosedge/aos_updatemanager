@@ -340,7 +340,7 @@ func (handler *Handler) init() {
 		})
 	}
 
-	doPriorityOperations(operations, false)
+	_ = doPriorityOperations(operations, false)
 
 	handler.getVersions()
 }

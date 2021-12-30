@@ -18,6 +18,7 @@
 package systemdrebooter
 
 import (
+	"context"
 	"os"
 
 	"github.com/aoscloud/aos_common/aoserrors"
@@ -38,7 +39,7 @@ type SystemdRebooter struct {
 
 // Reboot reboots the system
 func (controller *SystemdRebooter) Reboot() (err error) {
-	systemd, err := dbus.NewSystemConnection()
+	systemd, err := dbus.NewSystemConnectionContext(context.Background())
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -46,7 +47,7 @@ func (controller *SystemdRebooter) Reboot() (err error) {
 
 	channel := make(chan string)
 
-	if _, err = systemd.StartUnit("reboot.target", "replace-irreversibly", nil); err != nil {
+	if _, err = systemd.StartUnitContext(context.Background(), "reboot.target", "replace-irreversibly", nil); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

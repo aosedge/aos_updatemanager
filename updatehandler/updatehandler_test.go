@@ -45,8 +45,6 @@ import (
  * Consts
  ******************************************************************************/
 
-const waitStatusTimeout = 5 * time.Second
-
 const (
 	opInit    = "init"
 	opPrepare = "prepare"
@@ -83,7 +81,6 @@ type orderInfo struct {
  ******************************************************************************/
 
 var tmpDir string
-var imagePath string
 
 var components map[string]*testModule
 
@@ -138,11 +135,17 @@ func TestMain(m *testing.M) {
 
 	server := &http.Server{Addr: ":9000", Handler: http.FileServer(http.Dir(tmpDir))}
 
-	go server.ListenAndServe()
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Errorf("Can't serve http server: %s", err)
+		}
+	}()
 
 	ret := m.Run()
 
-	server.Shutdown(context.Background())
+	if err := server.Shutdown(context.Background()); err != nil {
+		log.Errorf("Can't shutdown server: %s", err)
+	}
 
 	if err := os.RemoveAll(tmpDir); err != nil {
 		log.Fatalf("Error removing tmp dir: %s", err)
@@ -525,7 +528,9 @@ func TestUpdateSameAosVersion(t *testing.T) {
 	}
 
 	for _, element := range currentStatus.Components {
-		storage.SetAosVersion(element.ID, element.AosVersion)
+		if err := storage.SetAosVersion(element.ID, element.AosVersion); err != nil {
+			t.Errorf("Can't set Aos version: %s", err)
+		}
 	}
 
 	handler, err := updatehandler.New(cfg, storage, storage)
@@ -590,7 +595,9 @@ func TestUpdateWrongVersion(t *testing.T) {
 	}
 
 	for _, element := range currentStatus.Components {
-		storage.SetAosVersion(element.ID, element.AosVersion)
+		if err := storage.SetAosVersion(element.ID, element.AosVersion); err != nil {
+			t.Errorf("Can't set Aos version: %s", err)
+		}
 	}
 
 	handler, err := updatehandler.New(cfg, storage, storage)

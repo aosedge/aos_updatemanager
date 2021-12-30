@@ -74,12 +74,11 @@ type testChecker struct {
  ******************************************************************************/
 
 var tmpDir string
-var testImage string
 
 var disk *testtools.TestDisk
 
 var stateController = testStateController{}
-var stateStorage = testStateStorage{state: []byte("")}
+var stateStorage = testStateStorage{state: []byte("{}")}
 
 /*******************************************************************************
  * Init

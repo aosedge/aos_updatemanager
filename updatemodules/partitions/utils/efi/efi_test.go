@@ -180,8 +180,7 @@ func TestBootOrder(t *testing.T) {
 
 	// Check that it is deleted
 
-	readBootOrder, err := efiVars.GetBootOrder()
-	if err == nil || err != efi.ErrNotFound {
+	if _, err := efiVars.GetBootOrder(); err == nil || err != efi.ErrNotFound {
 		t.Error("Not found error expected")
 	}
 
@@ -193,7 +192,8 @@ func TestBootOrder(t *testing.T) {
 
 	// Check that it is restored
 
-	if readBootOrder, err = efiVars.GetBootOrder(); err != nil {
+	readBootOrder, err := efiVars.GetBootOrder()
+	if err != nil {
 		t.Fatalf("Can't get EFI boot order: %s", err)
 	}
 
