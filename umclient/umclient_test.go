@@ -265,7 +265,11 @@ func newTestServer(url string) (server *testServer, err error) {
 
 	pb.RegisterUMServiceServer(server.grpcServer, server)
 
-	go server.grpcServer.Serve(listener)
+	go func() {
+		if err := server.grpcServer.Serve(listener); err != nil {
+			log.Errorf("Can't serve grpc server: %s", err)
+		}
+	}()
 
 	return server, nil
 }

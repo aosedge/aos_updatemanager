@@ -42,8 +42,6 @@ const uEnvFile = "uEnv.txt"
  * Variables
  ******************************************************************************/
 
-var tmpDir string
-
 var disk *testtools.TestDisk
 
 var envFileFormat = `

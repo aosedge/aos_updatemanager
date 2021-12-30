@@ -18,6 +18,7 @@
 package systemdchecker
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -75,7 +76,7 @@ func (checker *Checker) Check() (err error) {
 
 		go func() {
 			defer wg.Done()
-			systemErr = aoserrors.Wrap(watchServices(dbus.NewSystemConnection,
+			systemErr = aoserrors.Wrap(watchServices(dbus.NewSystemConnectionContext,
 				checker.cfg.SystemServices, checker.cfg.Timeout.Duration))
 		}()
 	}
@@ -85,7 +86,7 @@ func (checker *Checker) Check() (err error) {
 
 		go func() {
 			defer wg.Done()
-			userErr = aoserrors.Wrap(watchServices(dbus.NewUserConnection, checker.cfg.UserServices, checker.cfg.Timeout.Duration))
+			userErr = aoserrors.Wrap(watchServices(dbus.NewUserConnectionContext, checker.cfg.UserServices, checker.cfg.Timeout.Duration))
 		}()
 	}
 
@@ -106,8 +107,8 @@ func (checker *Checker) Check() (err error) {
  * Private
  **********************************************************************************************************************/
 
-func watchServices(createConnection func() (*dbus.Conn, error), services []string, timeout time.Duration) (err error) {
-	systemd, err := createConnection()
+func watchServices(createConnection func(context.Context) (*dbus.Conn, error), services []string, timeout time.Duration) (err error) {
+	systemd, err := createConnection(context.Background())
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}

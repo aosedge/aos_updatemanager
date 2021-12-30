@@ -25,6 +25,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
 
 	"aos_updatemanager/updatehandler"
@@ -294,7 +295,9 @@ func createBoardImage(imagePath string, version string) (payload string, err err
 
 	payload = fmt.Sprintf(configTemplate, version)
 
-	zw.Write([]byte(payload))
+	if _, err := zw.Write([]byte(payload)); err != nil {
+		return "", aoserrors.Wrap(err)
+	}
 
 	return payload, nil
 }
