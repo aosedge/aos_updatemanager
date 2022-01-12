@@ -283,12 +283,10 @@ func newTestServer(url string) (server *testServer, err error) {
 	return server, nil
 }
 
-func (server *testServer) close() (err error) {
+func (server *testServer) close() {
 	if server.grpcServer != nil {
 		server.grpcServer.Stop()
 	}
-
-	return nil
 }
 
 func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err error) {
