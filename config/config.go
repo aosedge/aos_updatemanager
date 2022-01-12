@@ -39,7 +39,7 @@ type Migration struct {
 
 // Config instance.
 type Config struct {
-	ServerURL     string         `json:"serverURL"`
+	ServerURL     string         `json:"serverUrl"`
 	ID            string         `json:"id"`
 	CACert        string         `json:"caCert"`
 	CertStorage   string         `json:"certStorage"`
