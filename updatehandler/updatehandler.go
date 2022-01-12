@@ -313,7 +313,7 @@ func (handler *Handler) saveState() (err error) {
 }
 
 func (handler *Handler) init() {
-	var operations []priorityOperation
+	operations := make([]priorityOperation, 0, len(handler.components))
 
 	for id, component := range handler.components {
 		handler.componentStatuses[id] = &umclient.ComponentStatusInfo{
@@ -506,7 +506,7 @@ func doPriorityOperations(operations []priorityOperation, stopOnError bool) (err
 
 func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatusInfo,
 	operation componentOperation, stopOnError bool) (rebootStatuses []*umclient.ComponentStatusInfo, err error) {
-	var operations []priorityOperation
+	operations := make([]priorityOperation, 0, len(componentStatuses))
 
 	for _, componentStatus := range componentStatuses {
 		component, ok := handler.components[componentStatus.ID]
@@ -554,7 +554,7 @@ func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatu
 }
 
 func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusInfo, stopOnError bool) (err error) {
-	var operations []priorityOperation
+	operations := make([]priorityOperation, 0, len(componentStatuses))
 
 	for _, componentStatus := range componentStatuses {
 		component, ok := handler.components[componentStatus.ID]
@@ -594,7 +594,7 @@ func (handler *Handler) doReboot(componentStatuses []*umclient.ComponentStatusIn
 }
 
 func (handler *Handler) componentOperation(operation componentOperation, stopOnError bool) (err error) {
-	var operationStatuses []*umclient.ComponentStatusInfo
+	operationStatuses := make([]*umclient.ComponentStatusInfo, 0, len(handler.state.ComponentStatuses))
 
 	for _, operationStatus := range handler.state.ComponentStatuses {
 		operationStatuses = append(operationStatuses, operationStatus)
