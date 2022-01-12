@@ -95,7 +95,11 @@ func New(fileName string) (config *Config, err error) {
 
 // MarshalJSON marshals JSON Duration type
 func (d Duration) MarshalJSON() (b []byte, err error) {
-	return json.Marshal(d.Duration.String())
+	if b, err = json.Marshal(d.Duration.String()); err != nil {
+		return b, aoserrors.Wrap(err)
+	}
+
+	return b, nil
 }
 
 // UnmarshalJSON unmarshals JSON Duration type

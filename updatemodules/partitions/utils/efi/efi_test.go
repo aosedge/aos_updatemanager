@@ -252,7 +252,7 @@ func getCurrentBootPartUUID() (id uint16, partUUID string, err error) {
 	var output []byte
 
 	if output, err = exec.Command("efibootmgr", "-v").CombinedOutput(); err != nil {
-		return 0, "", err
+		return 0, "", aoserrors.Wrap(err)
 	}
 
 	result := strings.Split(string(output), "\n")
@@ -278,7 +278,7 @@ func getCurrentBootPartUUID() (id uint16, partUUID string, err error) {
 
 		id64, err := strconv.ParseUint(idStr, 16, 16)
 		if err != nil {
-			return 0, "", err
+			return 0, "", aoserrors.Wrap(err)
 		}
 
 		return uint16(id64), partUUID, nil

@@ -24,6 +24,8 @@ import (
 	"os"
 	"path"
 	"testing"
+
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -41,7 +43,7 @@ var (
 
 func saveConfigFile(configName string, configContent string) (err error) {
 	if err = ioutil.WriteFile(path.Join("tmp", configName), []byte(configContent), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -103,15 +105,15 @@ func createConfigFile() (err error) {
 
 func setup() (err error) {
 	if err := os.MkdirAll("tmp", 0o755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = createConfigFile(); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if cfg, err = config.New("tmp/aos_updatemanager.cfg"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -119,7 +121,7 @@ func setup() (err error) {
 
 func cleanup() (err error) {
 	if err := os.RemoveAll("tmp"); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil

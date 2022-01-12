@@ -360,7 +360,7 @@ func (module *DualPartModule) Reboot() (err error) {
 	// Close controller before reboot
 	module.controller.Close()
 
-	return module.rebootHandler.Reboot()
+	return aoserrors.Wrap(module.rebootHandler.Reboot())
 }
 
 /*******************************************************************************

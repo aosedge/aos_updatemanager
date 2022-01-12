@@ -624,7 +624,7 @@ func (checker *testChecker) Check() (err error) {
 
 func generateImage(imagePath string, vendorVersion string) (content []fsContent, err error) {
 	if err = os.MkdirAll(filepath.Dir(imagePath), 0o755); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	content = []fsContent{
@@ -641,7 +641,7 @@ func generateImage(imagePath string, vendorVersion string) (content []fsContent,
 		func(mountPoint string) (err error) {
 			return generateContent(mountPoint, content)
 		}, true); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if output, err := exec.Command("mv", imagePath+".gz", imagePath).CombinedOutput(); err != nil {
@@ -656,11 +656,11 @@ func generateContent(contentPath string, content []fsContent) (err error) {
 		filePath := path.Join(contentPath, file.name)
 
 		if err = os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if err = ioutil.WriteFile(filePath, file.content, 0o644); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 	}
 
@@ -670,7 +670,7 @@ func generateContent(contentPath string, content []fsContent) (err error) {
 func getPartitionContent(device string) (content []fsContent, err error) {
 	mountPoint, err := ioutil.TempDir(tmpDir, "mount_")
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 	defer os.RemoveAll(mountPoint)
 
@@ -687,7 +687,7 @@ func getPartitionContent(device string) (content []fsContent, err error) {
 
 	if err = filepath.Walk(mountPoint, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		if info.IsDir() {
@@ -696,20 +696,20 @@ func getPartitionContent(device string) (content []fsContent, err error) {
 
 		relPath, err := filepath.Rel(mountPoint, filePath)
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		file := fsContent{name: "/" + relPath}
 
 		if file.content, err = ioutil.ReadFile(filePath); err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		content = append(content, file)
 
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return content, nil
@@ -729,7 +729,7 @@ func compareContent(srcContent, dstContent []fsContent) (err error) {
 func createVersionFile(device string, version string) (err error) {
 	mountPoint, err := ioutil.TempDir(tmpDir, "mount_")
 	if err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 	defer os.RemoveAll(mountPoint)
 
@@ -745,11 +745,11 @@ func createVersionFile(device string, version string) (err error) {
 	filePath := path.Join(mountPoint, versionFile)
 
 	if err = os.MkdirAll(path.Dir(filePath), 0o755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
