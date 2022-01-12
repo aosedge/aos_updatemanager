@@ -206,7 +206,7 @@ func TestUpdate(t *testing.T) {
 	stateController.bootCurrent = part1
 
 	if err = module.Init(); err != nil {
-		log.Fatalf("Error init module: %s", err)
+		t.Fatalf("Error init module: %s", err)
 	}
 
 	version, err := module.GetVendorVersion()
@@ -326,7 +326,7 @@ func TestRevert(t *testing.T) {
 	stateController.bootCurrent = part1
 
 	if err = module.Init(); err != nil {
-		log.Fatalf("Error init module: %s", err)
+		t.Fatalf("Error init module: %s", err)
 	}
 
 	// Update
@@ -358,7 +358,7 @@ func TestRevert(t *testing.T) {
 	stateController.bootCurrent = part0
 
 	if err = module.Init(); err != nil {
-		log.Fatalf("Error init module: %s", err)
+		t.Fatalf("Error init module: %s", err)
 	}
 
 	// Revert
@@ -459,7 +459,7 @@ func TestRevertOnFail(t *testing.T) {
 	stateController.bootCurrent = part0
 
 	if err = module.Init(); err != nil {
-		log.Fatalf("Error init module: %s", err)
+		t.Fatalf("Error init module: %s", err)
 	}
 
 	// Update
@@ -562,7 +562,7 @@ func TestUpdateChecker(t *testing.T) {
 	updateChecker.err = aoserrors.New("update error")
 
 	if err = module.Init(); err != nil {
-		log.Fatalf("Error init module: %s", err)
+		t.Fatalf("Error init module: %s", err)
 	}
 
 	// Update
