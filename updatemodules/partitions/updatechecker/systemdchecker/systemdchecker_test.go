@@ -127,7 +127,7 @@ func createService(name string, cmd, bus string) (err error) {
 ExecStart=%s
 `
 
-	if err = ioutil.WriteFile(path.Join(tmpDir, name), []byte(fmt.Sprintf(serviceTemplate, cmd)), 0o644); err != nil {
+	if err = ioutil.WriteFile(path.Join(tmpDir, name), []byte(fmt.Sprintf(serviceTemplate, cmd)), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

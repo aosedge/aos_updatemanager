@@ -113,7 +113,7 @@ func TestUpdate(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
@@ -176,7 +176,7 @@ func TestUpdateErrors(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
@@ -215,7 +215,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
