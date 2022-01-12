@@ -393,6 +393,10 @@ func isDatabaseVer0(sqlite *sql.DB) (err error) {
 	}
 	defer rows.Close()
 
+	if rows.Err() != nil {
+		return aoserrors.Wrap(rows.Err())
+	}
+
 	if !rows.Next() {
 		return aoserrors.New(ErrNotExistStr)
 	}
@@ -433,6 +437,10 @@ func isDatabaseVer2(sqlite *sql.DB) (err error) {
 	}
 	defer rows.Close()
 
+	if rows.Err() != nil {
+		return aoserrors.Wrap(rows.Err())
+	}
+
 	if !rows.Next() {
 		return aoserrors.New(ErrNotExistStr)
 	}
@@ -459,6 +467,10 @@ func checkColumn(sqlite *sql.DB, table, column string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 	defer rows.Close()
+
+	if rows.Err() != nil {
+		return aoserrors.Wrap(rows.Err())
+	}
 
 	if !rows.Next() {
 		return aoserrors.New(ErrNotExistStr)

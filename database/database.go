@@ -121,6 +121,10 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 	}
 	defer rows.Close()
 
+	if rows.Err() != nil {
+		return nil, aoserrors.Wrap(rows.Err())
+	}
+
 	if !rows.Next() {
 		return nil, aoserrors.New(ErrNotExistStr)
 	}
@@ -160,6 +164,10 @@ func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 		return 0, aoserrors.Wrap(err)
 	}
 	defer rows.Close()
+
+	if rows.Err() != nil {
+		return 0, aoserrors.Wrap(rows.Err())
+	}
 
 	if !rows.Next() {
 		return 0, aoserrors.New(ErrNotExistStr)
