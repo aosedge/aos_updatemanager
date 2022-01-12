@@ -107,14 +107,14 @@ func TestUpdate(t *testing.T) {
 
 	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
 	if err != nil {
-		log.Fatalf("Can't create ssh module: %s", err)
+		t.Fatalf("Can't create ssh module: %s", err)
 	}
 	defer module.Close()
 
 	imagePath := path.Join(tmpDir, "testfile")
 
 	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+		t.Fatalf("Can't write test file: %s", err)
 	}
 
 	newVersion := "new_version"
@@ -177,7 +177,7 @@ func TestUpdateErrors(t *testing.T) {
 	imagePath := path.Join(tmpDir, "testfile")
 
 	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+		t.Fatalf("Can't write test file: %s", err)
 	}
 
 	if err := module.Prepare(imagePath, "", nil); err != nil {
@@ -216,7 +216,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 	imagePath := path.Join(tmpDir, "testfile")
 
 	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
-		log.Fatalf("Can't write test file: %s", err)
+		t.Fatalf("Can't write test file: %s", err)
 	}
 
 	if err := module.Prepare(imagePath, "", nil); err != nil {

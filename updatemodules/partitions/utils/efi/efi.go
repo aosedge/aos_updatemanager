@@ -173,6 +173,7 @@ func (instance *Instance) GetBootByPartUUID(partUUID string) (id uint16, err err
 
 			var uuidStr *C.char
 
+			// nolint: gocritic
 			if rc := C.efi_guid_to_str((*C.efi_guid_t)(unsafe.Pointer(&hd.signature[0])), &uuidStr); rc < 0 {
 				log.Errorf("Wrong PARTUUID in efi var: %s", getEfiError())
 			}
@@ -382,6 +383,7 @@ func readVar(guid, name string) (data []byte, attributes uint32, err error) {
 		return nil, 0, aoserrors.Wrap(getEfiError())
 	}
 
+	// nolint: gocritic
 	if rc := C.efi_get_variable(efiGUID, C.CString(name), &efiData, &efiSize, &efiAttributes); rc < 0 {
 		return nil, 0, aoserrors.Wrap(getEfiError())
 	}
@@ -566,7 +568,7 @@ func getEfiError() (err error) {
 		errCode  C.int
 	)
 
-	rc := C.efi_error_get(C.uint(0), &filename, &function, &line, &message, &errCode)
+	rc := C.efi_error_get(C.uint(0), &filename, &function, &line, &message, &errCode) // nolint: gocritic
 	if rc < 0 {
 		return aoserrors.New("can't get EFI error")
 	}
@@ -588,7 +590,7 @@ func getEfiError() (err error) {
 
 func bootOrderToString(bootOrder []uint16) (s string) {
 	for _, order := range bootOrder {
-		s = s + fmt.Sprintf("%04X,", order)
+		s += fmt.Sprintf("%04X,", order)
 	}
 
 	return strings.TrimSuffix(s, ",")
@@ -600,13 +602,13 @@ func (instance *Instance) readBootItems() (err error) {
 		name *C.char       = nil
 	)
 
-	bootItemRegexp, err := regexp.Compile(bootItemNamePattern)
+	bootItemRegexp, err := regexp.Compile(bootItemNamePattern) // nolint:gocritic // cathch errror here
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 
 	for {
-		if rc := C.efi_get_next_variable_name(&guid, &name); rc == 0 {
+		if rc := C.efi_get_next_variable_name(&guid, &name); rc == 0 { // nolint: gocritic
 			break
 		}
 
@@ -711,9 +713,10 @@ func parseMediaType(subType uint8, data []byte) (dp interface{}, err error) {
 		}
 
 		return hd, nil
-	}
 
-	return nil, nil
+	default:
+		return nil, nil
+	}
 }
 
 func parseHD(data []byte) (hd hdData, err error) {

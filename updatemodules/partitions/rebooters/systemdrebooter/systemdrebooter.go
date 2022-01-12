@@ -52,7 +52,7 @@ func (controller *SystemdRebooter) Reboot() (err error) {
 
 	<-channel
 
-	os.Exit(0)
+	defer os.Exit(0)
 
 	return nil
 }
