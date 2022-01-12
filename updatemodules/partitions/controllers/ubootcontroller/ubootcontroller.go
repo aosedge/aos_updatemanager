@@ -51,7 +51,7 @@ const (
  * Types
  ******************************************************************************/
 
-// UbootController instance
+// UbootController instance.
 type UbootController struct {
 	sync.Mutex
 
@@ -72,7 +72,7 @@ type UbootController struct {
  * Public
  ******************************************************************************/
 
-// New creates new instance of UbootController
+// New creates new instance of UbootController.
 func New(envDevice string, envFileName string) (controller *UbootController, err error) {
 	log.Debug("Create Uboot controller")
 
@@ -94,7 +94,7 @@ func New(envDevice string, envFileName string) (controller *UbootController, err
 	return controller, nil
 }
 
-// Close closes UbootController
+// Close closes UbootController.
 func (controller *UbootController) Close() {
 	log.Debug("Close Uboot controller")
 
@@ -103,12 +103,12 @@ func (controller *UbootController) Close() {
 	}
 }
 
-// GetCurrentBoot returns current boot part index
+// GetCurrentBoot returns current boot part index.
 func (controller *UbootController) GetCurrentBoot() (index int, err error) {
 	return controller.getVar(aosBootPart)
 }
 
-// GetMainBoot returns boot main part index
+// GetMainBoot returns boot main part index.
 func (controller *UbootController) GetMainBoot() (index int, err error) {
 	if index, err = controller.getVar(aosMainPart); err != nil {
 		return 0, aoserrors.Wrap(err)
@@ -117,7 +117,7 @@ func (controller *UbootController) GetMainBoot() (index int, err error) {
 	return index, nil
 }
 
-// SetMainBoot sets boot main part index
+// SetMainBoot sets boot main part index.
 func (controller *UbootController) SetMainBoot(index int) (err error) {
 	if err = controller.setVar(aosMainPart, strconv.Itoa(index)); err != nil {
 		return aoserrors.Wrap(err)
@@ -126,7 +126,7 @@ func (controller *UbootController) SetMainBoot(index int) (err error) {
 	return aoserrors.Wrap(controller.saveEnv())
 }
 
-// SetBootOK sets boot successful flag
+// SetBootOK sets boot successful flag.
 func (controller *UbootController) SetBootOK() (err error) {
 	if err = controller.setVar(aosBoot1Ok, "1"); err != nil {
 		return aoserrors.Wrap(err)

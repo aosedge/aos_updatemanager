@@ -29,14 +29,14 @@ import (
  * Types
  ******************************************************************************/
 
-// SystemdRebooter reboot system using systemd
+// SystemdRebooter reboot system using systemd.
 type SystemdRebooter struct{}
 
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
-// Reboot reboots the system
+// Reboot reboots the system.
 func (controller *SystemdRebooter) Reboot() (err error) {
 	systemd, err := dbus.NewSystemConnectionContext(context.Background())
 	if err != nil {

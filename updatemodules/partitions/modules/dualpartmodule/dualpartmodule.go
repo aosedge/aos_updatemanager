@@ -82,17 +82,17 @@ const (
  * Types
  ******************************************************************************/
 
-// RebootHandler handler for the reboot command
+// RebootHandler handler for the reboot command.
 type RebootHandler interface {
 	Reboot() (err error)
 }
 
-// UpdateChecker handler for checking update
+// UpdateChecker handler for checking update.
 type UpdateChecker interface {
 	Check() (err error)
 }
 
-// DualPartModule update dual partition module
+// DualPartModule update dual partition module.
 type DualPartModule struct {
 	id string
 
@@ -108,7 +108,7 @@ type DualPartModule struct {
 	bootErr          error
 }
 
-// StateController state controller interface
+// StateController state controller interface.
 type StateController interface {
 	GetCurrentBoot() (index int, err error)
 	GetMainBoot() (index int, err error)
@@ -117,7 +117,7 @@ type StateController interface {
 	Close()
 }
 
-// Storage storage interface
+// Storage storage interface.
 type Storage interface {
 	GetModuleState(id string) (state []byte, err error)
 	SetModuleState(id string, state []byte) (err error)
@@ -135,7 +135,7 @@ type updateState int
  * Public
  ******************************************************************************/
 
-// New creates fs update module instance
+// New creates fs update module instance.
 func New(id string, partitions []string, versionFile string, controller StateController,
 	storage updatehandler.ModuleStorage, rebootHandler RebootHandler,
 	checker UpdateChecker) (updateModule updatehandler.UpdateModule, err error) {
@@ -158,7 +158,7 @@ func New(id string, partitions []string, versionFile string, controller StateCon
 	return module, nil
 }
 
-// Close closes DualPartModule
+// Close closes DualPartModule.
 func (module *DualPartModule) Close() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Close dualpart module")
 
@@ -167,12 +167,12 @@ func (module *DualPartModule) Close() (err error) {
 	return nil
 }
 
-// GetID returns module ID
+// GetID returns module ID.
 func (module *DualPartModule) GetID() (id string) {
 	return module.id
 }
 
-// Init initializes module
+// Init initializes module.
 func (module *DualPartModule) Init() (err error) {
 	defer func() {
 		if err != nil && module.bootErr == nil {
@@ -218,12 +218,12 @@ func (module *DualPartModule) Init() (err error) {
 	return nil
 }
 
-// GetVendorVersion returns vendor version
+// GetVendorVersion returns vendor version.
 func (module *DualPartModule) GetVendorVersion() (version string, err error) {
 	return module.vendorVersion, nil
 }
 
-// Prepare preparing image
+// Prepare preparing image.
 func (module *DualPartModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":            module.id,
@@ -249,7 +249,7 @@ func (module *DualPartModule) Prepare(imagePath string, vendorVersion string, an
 	return nil
 }
 
-// Update updates module
+// Update updates module.
 func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Update dualpart module")
 
@@ -291,7 +291,7 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 	return true, nil
 }
 
-// Revert reverts update
+// Revert reverts update.
 func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert dualpart module")
 
@@ -321,7 +321,7 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	return rebootRequired, nil
 }
 
-// Apply applies update
+// Apply applies update.
 func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply dualpart module")
 
@@ -349,7 +349,7 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	return false, nil
 }
 
-// Reboot performs module reboot
+// Reboot performs module reboot.
 func (module *DualPartModule) Reboot() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debugf("Reboot dualpart module")
 

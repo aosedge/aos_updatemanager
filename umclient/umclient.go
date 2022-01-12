@@ -42,7 +42,7 @@ const (
 	reconnectTimeout = 10 * time.Second
 )
 
-// UM states
+// UM states.
 const (
 	StateIdle = iota
 	StatePrepared
@@ -50,7 +50,7 @@ const (
 	StateFailed
 )
 
-// Component statuses
+// Component statuses.
 const (
 	StatusInstalled = iota
 	StatusInstalling
@@ -61,7 +61,7 @@ const (
  * Types
  ******************************************************************************/
 
-// Client UM client instance
+// Client UM client instance.
 type Client struct {
 	sync.Mutex
 	connection     *grpc.ClientConn
@@ -71,13 +71,13 @@ type Client struct {
 	closeChannel   chan struct{}
 }
 
-// UMState UM state
+// UMState UM state.
 type UMState int32
 
-// ComponentStatus component status
+// ComponentStatus component status.
 type ComponentStatus int32
 
-// ComponentUpdateInfo component update info
+// ComponentUpdateInfo component update info.
 type ComponentUpdateInfo struct {
 	ID            string
 	VendorVersion string
@@ -89,7 +89,7 @@ type ComponentUpdateInfo struct {
 	Size          uint64
 }
 
-// ComponentStatusInfo component status info
+// ComponentStatusInfo component status info.
 type ComponentStatusInfo struct {
 	ID            string
 	VendorVersion string
@@ -98,16 +98,16 @@ type ComponentStatusInfo struct {
 	Error         string
 }
 
-// Status update manager status
+// Status update manager status.
 type Status struct {
 	State      UMState
 	Error      string
 	Components []ComponentStatusInfo
 }
 
-// MessageHandler incoming messages handler
+// MessageHandler incoming messages handler.
 type MessageHandler interface {
-	// Registered indicates the client registed to the server
+	// Registered indicates the client registered on the server
 	Registered()
 	// PrepareUpdate prepares update
 	PrepareUpdate(components []ComponentUpdateInfo)
@@ -125,7 +125,7 @@ type MessageHandler interface {
  * Public
  ******************************************************************************/
 
-// New creates new UM client
+// New creates new UM client.
 func New(config *config.Config, messageHandler MessageHandler, insecure bool) (client *Client, err error) {
 	log.Debug("Create UM client")
 
@@ -160,7 +160,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 	return client, nil
 }
 
-// Close closes UM client
+// Close closes UM client.
 func (client *Client) Close() (err error) {
 	log.Debug("Close UM client")
 

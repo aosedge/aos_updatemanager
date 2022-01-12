@@ -95,6 +95,7 @@ func TestMain(m *testing.M) {
 /*******************************************************************************
  * Tests
  ******************************************************************************/
+
 func TestNewErrors(t *testing.T) {
 	// Check MkdirAll in New statement
 	dbLocal, err := New("/sys/rooooot/test.db", tmpDir, tmpDir)

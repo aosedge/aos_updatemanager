@@ -34,14 +34,14 @@ import (
  * Consts
  ******************************************************************************/
 
-// Name module name
+// Name module name.
 const Name = "ssh"
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
-// SSHModule SSH module
+// SSHModule SSH module.
 type SSHModule struct {
 	id string
 	sync.Mutex
@@ -68,7 +68,7 @@ type moduleState struct {
  * Public
  ******************************************************************************/
 
-// New creates ssh module instance
+// New creates ssh module instance.
 func New(id string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Debug("Create SSH module")
@@ -99,20 +99,20 @@ func New(id string, configJSON json.RawMessage,
 	return sshModule, nil
 }
 
-// Close closes ssh module
+// Close closes ssh module.
 func (module *SSHModule) Close() (err error) {
 	log.WithField("id", module.id).Debug("Close SSH module")
 	return nil
 }
 
-// Init initializes module
+// Init initializes module.
 func (module *SSHModule) Init() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init test module")
 
 	return nil
 }
 
-// Prepare prepares module update
+// Prepare prepares module update.
 func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
@@ -126,7 +126,7 @@ func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotat
 	return nil
 }
 
-// GetID returns module ID
+// GetID returns module ID.
 func (module *SSHModule) GetID() (id string) {
 	module.Lock()
 	defer module.Unlock()
@@ -134,7 +134,7 @@ func (module *SSHModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version
+// GetVendorVersion returns vendor version.
 func (module *SSHModule) GetVendorVersion() (version string, err error) {
 	module.Lock()
 	defer module.Unlock()
@@ -142,7 +142,7 @@ func (module *SSHModule) GetVendorVersion() (version string, err error) {
 	return module.vendorVersion, nil
 }
 
-// Update performs module update
+// Update performs module update.
 func (module *SSHModule) Update() (rebootRequired bool, err error) {
 	module.Lock()
 	defer module.Unlock()
@@ -184,7 +184,7 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 	return false, nil
 }
 
-// Apply applies current update
+// Apply applies current update.
 func (module *SSHModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply SSH module")
 
@@ -202,14 +202,14 @@ func (module *SSHModule) Apply() (rebootRequired bool, err error) {
 	return false, nil
 }
 
-// Revert reverts current update
+// Revert reverts current update.
 func (module *SSHModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert SSH module")
 
 	return false, nil
 }
 
-// Reboot performs module reboot
+// Reboot performs module reboot.
 func (module *SSHModule) Reboot() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot SSH module")
 

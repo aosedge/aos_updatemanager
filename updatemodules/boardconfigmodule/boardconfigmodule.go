@@ -50,7 +50,7 @@ const (
  * Types
  ******************************************************************************/
 
-// BoardCfgModule board configuration update module
+// BoardCfgModule board configuration update module.
 type BoardCfgModule struct {
 	id             string
 	currentVersion string
@@ -60,7 +60,7 @@ type BoardCfgModule struct {
 	rebooter       Rebooter
 }
 
-// Rebooter provides API to perform module reboot
+// Rebooter provides API to perform module reboot.
 type Rebooter interface {
 	Reboot() (err error)
 }
@@ -84,7 +84,7 @@ type updateState int
  * Public
  ******************************************************************************/
 
-// New creates boardconfig module instance
+// New creates boardconfig module instance.
 func New(id string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage, rebooter Rebooter) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Debug("Create boardconfig module")
@@ -98,13 +98,13 @@ func New(id string, configJSON json.RawMessage,
 	return boardModule, nil
 }
 
-// Close closes boardconfig module
+// Close closes boardconfig module.
 func (module *BoardCfgModule) Close() (err error) {
 	log.WithField("id", module.id).Debug("Close boardconfig module")
 	return nil
 }
 
-// Init initializes module
+// Init initializes module.
 func (module *BoardCfgModule) Init() (err error) {
 	if err = module.getState(); err != nil {
 		return aoserrors.Wrap(err)
@@ -121,17 +121,17 @@ func (module *BoardCfgModule) Init() (err error) {
 	return nil
 }
 
-// GetID returns module ID
+// GetID returns module ID.
 func (module *BoardCfgModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version
+// GetVendorVersion returns vendor version.
 func (module *BoardCfgModule) GetVendorVersion() (version string, err error) {
 	return module.currentVersion, nil
 }
 
-// Prepare prepares module
+// Prepare prepares module.
 func (module *BoardCfgModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{"id": module.id, "fileName": imagePath}).Debug("Prepare")
 
@@ -167,7 +167,7 @@ func (module *BoardCfgModule) Prepare(imagePath string, vendorVersion string, an
 	return nil
 }
 
-// Update updates module
+// Update updates module.
 func (module *BoardCfgModule) Update() (rebootRequired bool, err error) {
 	switch {
 	case module.state.State == stateUpdated:
@@ -198,7 +198,7 @@ func (module *BoardCfgModule) Update() (rebootRequired bool, err error) {
 	return module.state.RebootRequired, nil
 }
 
-// Apply applies update
+// Apply applies update.
 func (module *BoardCfgModule) Apply() (rebootRequired bool, err error) {
 	switch {
 	case module.state.State == stateIdle:
@@ -229,7 +229,7 @@ func (module *BoardCfgModule) Apply() (rebootRequired bool, err error) {
 	return module.state.RebootRequired, nil
 }
 
-// Revert reverts update
+// Revert reverts update.
 func (module *BoardCfgModule) Revert() (rebootRequired bool, err error) {
 	switch {
 	case module.state.State == stateIdle:
@@ -266,7 +266,7 @@ func (module *BoardCfgModule) Revert() (rebootRequired bool, err error) {
 	return module.state.RebootRequired, nil
 }
 
-// Reboot performs module reboot
+// Reboot performs module reboot.
 func (module *BoardCfgModule) Reboot() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot")
 

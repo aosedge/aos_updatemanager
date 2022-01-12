@@ -31,13 +31,13 @@ import (
  * Types
  ******************************************************************************/
 
-// Migration struct represents path for db migration
+// Migration struct represents path for db migration.
 type Migration struct {
 	MigrationPath       string `json:"migrationPath"`
 	MergedMigrationPath string `json:"mergedMigrationPath"`
 }
 
-// Config instance
+// Config instance.
 type Config struct {
 	ServerURL     string         `json:"serverURL"`
 	ID            string         `json:"id"`
@@ -49,7 +49,7 @@ type Config struct {
 	Migration     Migration      `json:"migration"`
 }
 
-// ModuleConfig module configuration
+// ModuleConfig module configuration.
 type ModuleConfig struct {
 	ID             string `json:"id"`
 	Plugin         string `json:"plugin"`
@@ -59,7 +59,7 @@ type ModuleConfig struct {
 	Params         json.RawMessage
 }
 
-// Duration represents duration in format "00:00:00"
+// Duration represents duration in format "00:00:00".
 type Duration struct {
 	time.Duration
 }
@@ -68,7 +68,7 @@ type Duration struct {
  * Public
  ******************************************************************************/
 
-// New creates new config object
+// New creates new config object.
 func New(fileName string) (config *Config, err error) {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -93,7 +93,7 @@ func New(fileName string) (config *Config, err error) {
 	return config, nil
 }
 
-// MarshalJSON marshals JSON Duration type
+// MarshalJSON marshals JSON Duration type.
 func (d Duration) MarshalJSON() (b []byte, err error) {
 	if b, err = json.Marshal(d.Duration.String()); err != nil {
 		return b, aoserrors.Wrap(err)
@@ -102,7 +102,7 @@ func (d Duration) MarshalJSON() (b []byte, err error) {
 	return b, nil
 }
 
-// UnmarshalJSON unmarshals JSON Duration type
+// UnmarshalJSON unmarshals JSON Duration type.
 func (d *Duration) UnmarshalJSON(b []byte) (err error) {
 	var v interface{}
 
