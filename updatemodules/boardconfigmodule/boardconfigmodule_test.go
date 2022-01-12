@@ -280,7 +280,7 @@ func (storage *testStorage) SetModuleState(id string, state []byte) (err error) 
 func createBoardConfig(version string) (payload string, err error) {
 	payload = fmt.Sprintf(configTemplate, version)
 
-	if err = ioutil.WriteFile(boardFileName, []byte(payload), 0o644); err != nil {
+	if err = ioutil.WriteFile(boardFileName, []byte(payload), 0o600); err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 

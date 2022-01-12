@@ -153,7 +153,7 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 	config := &ssh.ClientConfig{
 		User:            module.config.User,
 		Auth:            []ssh.AuthMethod{ssh.Password(module.config.Password)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // nolint:gosec // use as example update module
 	}
 
 	client, err := ssh.Dial("tcp", module.config.Host, config)
