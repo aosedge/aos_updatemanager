@@ -75,6 +75,7 @@ func TestMain(m *testing.M) {
 	}
 
 	dbPath := path.Join(tmpDir, "test.db")
+
 	db, err = New(dbPath, tmpDir, tmpDir)
 	if err != nil {
 		log.Fatalf("Can't create database: %s", err)
@@ -117,6 +118,7 @@ func TestUpdateState(t *testing.T) {
 	if err := db.SetUpdateState(setState); err != nil {
 		t.Fatalf("Can't set state: %s", err)
 	}
+
 	getState, err := db.GetUpdateState()
 	if err != nil {
 		t.Fatalf("Can't get state: %s", err)

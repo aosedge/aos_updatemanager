@@ -183,6 +183,7 @@ func TestModules(t *testing.T) {
 		cfg.UpdateModules[2].Plugin != "test3" {
 		t.Error("Wrong plugin value")
 	}
+
 	if cfg.UpdateModules[0].UpdatePriority != 1 || cfg.UpdateModules[1].UpdatePriority != 2 ||
 		cfg.UpdateModules[2].UpdatePriority != 3 {
 		t.Error("Wrong update priority value")

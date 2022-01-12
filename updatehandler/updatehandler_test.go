@@ -472,6 +472,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 	for i, info := range infos {
 		if info.ID == sameVersionComponent.id {
 			infos[i].VendorVersion = sameVersionComponent.vendorVersion
+
 			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
 				ID:            sameVersionComponent.id,
 				AosVersion:    info.AosVersion,
@@ -621,6 +622,7 @@ func TestUpdateWrongVersion(t *testing.T) {
 	for i, info := range infos {
 		if info.ID == lowerVersionComponent.id {
 			infos[i].AosVersion = info.AosVersion - 2
+
 			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
 				ID:            info.ID,
 				AosVersion:    infos[i].AosVersion,
@@ -1120,7 +1122,6 @@ func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Stat
 					currentItem.AosVersion == expectedItem.AosVersion &&
 					currentItem.Status == expectedItem.Status &&
 					strings.Contains(currentItem.Error, expectedItem.Error) {
-
 					index = i
 					break
 				}

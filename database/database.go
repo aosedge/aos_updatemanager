@@ -210,6 +210,7 @@ func newDatabase(
 		if !os.IsNotExist(err) {
 			return db, aoserrors.Wrap(err)
 		}
+
 		if err = os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 			return db, aoserrors.Wrap(err)
 		}
@@ -222,6 +223,7 @@ func newDatabase(
 	}
 
 	db = &Database{sqlite}
+
 	defer func() {
 		if err != nil {
 			db.Close()

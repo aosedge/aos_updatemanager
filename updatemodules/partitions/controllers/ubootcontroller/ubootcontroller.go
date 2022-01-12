@@ -97,6 +97,7 @@ func New(envDevice string, envFileName string) (controller *UbootController, err
 // Close closes UbootController
 func (controller *UbootController) Close() {
 	log.Debug("Close Uboot controller")
+
 	if err := controller.umountEnv(); err != nil {
 		log.Errorf("Error closing Uboot controller: %s", err)
 	}
