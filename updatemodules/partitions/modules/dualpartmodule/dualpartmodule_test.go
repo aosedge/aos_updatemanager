@@ -580,7 +580,7 @@ func TestUpdateChecker(t *testing.T) {
  * Interfaces
  ******************************************************************************/
 
-// State controller
+// State controller.
 func (controller *testStateController) GetCurrentBoot() (index int, err error) {
 	return controller.bootCurrent, nil
 }
@@ -603,7 +603,7 @@ func (controller *testStateController) SetBootOK() (err error) {
 func (controller *testStateController) Close() {
 }
 
-// State storage
+// State storage.
 func (storage *testStateStorage) GetModuleState(id string) (state []byte, err error) {
 	return storage.state, nil
 }
@@ -614,7 +614,7 @@ func (storage *testStateStorage) SetModuleState(id string, state []byte) (err er
 	return nil
 }
 
-// Update checker
+// Update checker.
 func newTestChecker(err error) (checker *testChecker) {
 	return &testChecker{err: err}
 }

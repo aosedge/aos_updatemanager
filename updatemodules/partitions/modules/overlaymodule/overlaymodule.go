@@ -80,7 +80,7 @@ const (
  * Types
  ******************************************************************************/
 
-// OverlayModule overlay module
+// OverlayModule overlay module.
 type OverlayModule struct {
 	id             string
 	versionFile    string
@@ -94,12 +94,12 @@ type OverlayModule struct {
 	vendorVersion  string
 }
 
-// Rebooter performs module reboot
+// Rebooter performs module reboot.
 type Rebooter interface {
 	Reboot() (err error)
 }
 
-// UpdateChecker handler for checking update
+// UpdateChecker handler for checking update.
 type UpdateChecker interface {
 	Check() (err error)
 }
@@ -119,7 +119,7 @@ type moduleMetadata struct {
  * Public
  ******************************************************************************/
 
-// New creates module instance
+// New creates module instance.
 func New(id string, versionFile, updateDir string,
 	storage updatehandler.ModuleStorage, rebooter Rebooter,
 	checker UpdateChecker) (module updatehandler.UpdateModule, err error) {
@@ -149,14 +149,14 @@ func New(id string, versionFile, updateDir string,
 	return overlayModule, nil
 }
 
-// Close closes module
+// Close closes module.
 func (module *OverlayModule) Close() (err error) {
 	log.WithField("id", module.id).Debug("Close overlay module")
 
 	return nil
 }
 
-// Init initializes module
+// Init initializes module.
 func (module *OverlayModule) Init() (err error) {
 	defer func() {
 		if err != nil && module.bootErr == nil {
@@ -203,17 +203,17 @@ func (module *OverlayModule) Init() (err error) {
 	return nil
 }
 
-// GetID returns module ID
+// GetID returns module ID.
 func (module *OverlayModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version
+// GetVendorVersion returns vendor version.
 func (module *OverlayModule) GetVendorVersion() (version string, err error) {
 	return module.vendorVersion, nil
 }
 
-// Prepare prepares module update
+// Prepare prepares module update.
 func (module *OverlayModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":            module.id,
@@ -249,7 +249,7 @@ func (module *OverlayModule) Prepare(imagePath string, vendorVersion string, ann
 	return nil
 }
 
-// Update performs module update
+// Update performs module update.
 func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Update overlay module")
 
@@ -287,7 +287,7 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 	return true, nil
 }
 
-// Apply applies current update
+// Apply applies current update.
 func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply overlay module")
 
@@ -324,7 +324,7 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 	return true, nil
 }
 
-// Revert reverts current update
+// Revert reverts current update.
 func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert overlay module")
 
@@ -349,7 +349,7 @@ func (module *OverlayModule) Revert() (rebootRequired bool, err error) {
 	return rebootRequired, nil
 }
 
-// Reboot performs module reboot
+// Reboot performs module reboot.
 func (module *OverlayModule) Reboot() (err error) {
 	if module.rebooter != nil {
 		log.WithFields(log.Fields{"id": module.id}).Debug("Reboot overlay module")

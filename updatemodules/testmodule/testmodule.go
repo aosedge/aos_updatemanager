@@ -29,14 +29,14 @@ import (
  * Consts
  ******************************************************************************/
 
-// Name module name
+// Name module name.
 const Name = "test"
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
-// TestModule test module
+// TestModule test module.
 type TestModule struct {
 	id string
 }
@@ -45,7 +45,7 @@ type TestModule struct {
  * Public
  ******************************************************************************/
 
-// New creates test module instance
+// New creates test module instance.
 func New(id string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Debug("Create test module")
@@ -55,30 +55,30 @@ func New(id string, configJSON json.RawMessage,
 	return testModule, nil
 }
 
-// Close closes test module
+// Close closes test module.
 func (module *TestModule) Close() (err error) {
 	log.WithField("id", module.id).Debug("Close test module")
 	return nil
 }
 
-// Init initializes module
+// Init initializes module.
 func (module *TestModule) Init() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init test module")
 
 	return nil
 }
 
-// GetID returns module ID
+// GetID returns module ID.
 func (module *TestModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version
+// GetVendorVersion returns vendor version.
 func (module *TestModule) GetVendorVersion() (version string, err error) {
 	return "", aoserrors.New("not supported")
 }
 
-// Prepare prepares module update
+// Prepare prepares module update.
 func (module *TestModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
@@ -88,28 +88,28 @@ func (module *TestModule) Prepare(imagePath string, vendorVersion string, annota
 	return nil
 }
 
-// Update performs module update
+// Update performs module update.
 func (module *TestModule) Update() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Update test module")
 
 	return false, nil
 }
 
-// Apply applies current update
+// Apply applies current update.
 func (module *TestModule) Apply() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Apply test module")
 
 	return false, nil
 }
 
-// Revert reverts current update
+// Revert reverts current update.
 func (module *TestModule) Revert() (rebootRequired bool, err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Revert test module")
 
 	return false, nil
 }
 
-// Reboot performs module reboot
+// Reboot performs module reboot.
 func (module *TestModule) Reboot() (err error) {
 	log.WithFields(log.Fields{"id": module.id}).Debug("Reboot test module")
 

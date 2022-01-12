@@ -38,14 +38,14 @@ const defaultTimeout = 30 * time.Second
  * Types
  **********************************************************************************************************************/
 
-// Config watch services configuration
+// Config watch services configuration.
 type Config struct {
 	SystemServices []string        `json:"systemServices"`
 	UserServices   []string        `json:"userServices"`
 	Timeout        config.Duration `json:"timeout"`
 }
 
-// Checker systemd checker instance
+// Checker systemd checker instance.
 type Checker struct {
 	cfg Config
 }
@@ -54,7 +54,7 @@ type Checker struct {
  * Public
  **********************************************************************************************************************/
 
-// New creates new systemd checker instance
+// New creates new systemd checker instance.
 func New(cfg Config) (checker *Checker) {
 	if cfg.Timeout.Duration == 0 {
 		cfg.Timeout.Duration = defaultTimeout
@@ -63,7 +63,7 @@ func New(cfg Config) (checker *Checker) {
 	return &Checker{cfg: cfg}
 }
 
-// Check performs update validation
+// Check performs update validation.
 func (checker *Checker) Check() (err error) {
 	var (
 		wg                 sync.WaitGroup

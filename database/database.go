@@ -45,17 +45,17 @@ const dbVersion = 2
  * Vars
  ******************************************************************************/
 
-// ErrNotExistStr is returned when requested entry not exist in DB
+// ErrNotExistStr is returned when requested entry not exist in DB.
 var ErrNotExistStr = "entry doesn't exist"
 
-// ErrMigrationFailedStr is returned if migration was failed and db returned to the previous state
+// ErrMigrationFailedStr is returned if migration was failed and db returned to the previous state.
 var ErrMigrationFailedStr = "database migration failed"
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
-// Database structure with database information
+// Database structure with database information.
 type Database struct {
 	sql *sql.DB
 }
@@ -64,7 +64,7 @@ type Database struct {
  * Public
  ******************************************************************************/
 
-// New creates new database handle
+// New creates new database handle.
 func New(name string, migrationPath string, mergedMigrationPath string) (db *Database, err error) {
 	if db, err = newDatabase(name, migrationPath, mergedMigrationPath, dbVersion); err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -73,7 +73,7 @@ func New(name string, migrationPath string, mergedMigrationPath string) (db *Dat
 	return db, nil
 }
 
-// SetUpdateState stores update state
+// SetUpdateState stores update state.
 func (db *Database) SetUpdateState(state []byte) (err error) {
 	result, err := db.sql.Exec("UPDATE config SET updateState = ?", state)
 	if err != nil {
@@ -92,7 +92,7 @@ func (db *Database) SetUpdateState(state []byte) (err error) {
 	return nil
 }
 
-// GetUpdateState returns update state
+// GetUpdateState returns update state.
 func (db *Database) GetUpdateState() (state []byte, err error) {
 	stmt, err := db.sql.Prepare("SELECT updateState FROM config")
 	if err != nil {
@@ -112,7 +112,7 @@ func (db *Database) GetUpdateState() (state []byte, err error) {
 	return state, nil
 }
 
-// GetModuleState returns module state
+// GetModuleState returns module state.
 func (db *Database) GetModuleState(id string) (state []byte, err error) {
 	rows, err := db.sql.Query("SELECT state FROM modules WHERE id = ?", id)
 	if err != nil {
@@ -131,7 +131,7 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 	return state, nil
 }
 
-// SetModuleState sets module state
+// SetModuleState sets module state.
 func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	result, err := db.sql.Exec("UPDATE modules SET state = ? WHERE id= ?", state, id)
 	if err != nil {
@@ -152,7 +152,7 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
-// GetAosVersion returns module Aos version
+// GetAosVersion returns module Aos version.
 func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 	rows, err := db.sql.Query("SELECT aosVersion FROM modules WHERE id = ?", id)
 	if err != nil {
@@ -171,7 +171,7 @@ func (db *Database) GetAosVersion(id string) (version uint64, err error) {
 	return version, nil
 }
 
-// SetAosVersion sets module Aos version
+// SetAosVersion sets module Aos version.
 func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 	result, err := db.sql.Exec("UPDATE modules SET aosVersion = ? WHERE id= ?", version, id)
 	if err != nil {
@@ -192,7 +192,7 @@ func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 	return nil
 }
 
-// Close closes database
+// Close closes database.
 func (db *Database) Close() {
 	db.sql.Close()
 }

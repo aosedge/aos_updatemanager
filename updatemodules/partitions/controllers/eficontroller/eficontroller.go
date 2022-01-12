@@ -36,7 +36,7 @@ const defaultLoader = "/EFI/BOOT/bootx64.efi"
  * Types
  ******************************************************************************/
 
-// Controller instance
+// Controller instance.
 type Controller struct {
 	efi       *efi.Instance
 	loader    string
@@ -51,7 +51,7 @@ type Controller struct {
  * Public
  ******************************************************************************/
 
-// New creates new instance of EFI controller
+// New creates new instance of EFI controller.
 func New(partitions []string, loader string) (controller *Controller, err error) {
 	log.Debug("Create EFI controller")
 
@@ -72,14 +72,14 @@ func New(partitions []string, loader string) (controller *Controller, err error)
 	return controller, nil
 }
 
-// Close closes EFI controller
+// Close closes EFI controller.
 func (controller *Controller) Close() {
 	log.Debug("Close EFI controller")
 
 	controller.efi.Close()
 }
 
-// GetCurrentBoot returns current boot part index
+// GetCurrentBoot returns current boot part index.
 func (controller *Controller) GetCurrentBoot() (index int, err error) {
 	bootCurrent, err := controller.efi.GetBootCurrent()
 	if err != nil {
@@ -98,7 +98,7 @@ func (controller *Controller) GetCurrentBoot() (index int, err error) {
 	return 0, nil
 }
 
-// GetMainBoot returns boot main part index
+// GetMainBoot returns boot main part index.
 func (controller *Controller) GetMainBoot() (index int, err error) {
 	bootOrder, err := controller.efi.GetBootOrder()
 	if err != nil {
@@ -120,7 +120,7 @@ func (controller *Controller) GetMainBoot() (index int, err error) {
 	return 0, aoserrors.New("boot item not found")
 }
 
-// SetMainBoot sets boot main part index
+// SetMainBoot sets boot main part index.
 func (controller *Controller) SetMainBoot(index int) (err error) {
 	if index >= len(controller.bootItems) {
 		return aoserrors.New("wrong main boot index")
@@ -133,7 +133,7 @@ func (controller *Controller) SetMainBoot(index int) (err error) {
 	return nil
 }
 
-// SetBootOK sets boot successful flag
+// SetBootOK sets boot successful flag.
 func (controller *Controller) SetBootOK() (err error) {
 	bootOrder, err := controller.efi.GetBootOrder()
 	if err != nil {
