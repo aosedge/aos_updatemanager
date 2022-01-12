@@ -93,6 +93,8 @@ const loadOptionActive = 0x00000001
 
 const writeAttribute = 0o600
 
+const dpHeaderSize = 4
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
@@ -677,11 +679,11 @@ func parseDP(dpData []byte) (dps []interface{}, err error) {
 			return nil, aoserrors.Wrap(err)
 		}
 
-		if dpLen < 4 {
+		if dpLen < dpHeaderSize {
 			return nil, aoserrors.New("invalid dp size")
 		}
 
-		data := make([]byte, dpLen-4)
+		data := make([]byte, dpLen-dpHeaderSize)
 
 		if _, err = io.ReadFull(buffer, data); err != nil {
 			return nil, aoserrors.Wrap(err)
