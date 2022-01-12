@@ -23,7 +23,6 @@ import (
 	"aos_updatemanager/updatehandler"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -283,7 +282,7 @@ func TestPrepareFail(t *testing.T) {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
-	failedErr := errors.New("prepare error")
+	failedErr := aoserrors.New("prepare error")
 	failedComponent := components["id2"]
 	failedComponent.status = failedErr
 
@@ -384,7 +383,7 @@ func TestUpdateFailed(t *testing.T) {
 
 	// Update
 
-	failedErr := errors.New("update error")
+	failedErr := aoserrors.New("update error")
 	failedComponent := components["id2"]
 	failedComponent.status = failedErr
 
@@ -694,7 +693,7 @@ func TestUpdateBadImage(t *testing.T) {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
-	failedErr := errors.New("checksum sha512 mistmatch")
+	failedErrStr := "checksum sha512 mistmatch"
 	failedComponent := components["id2"]
 
 	newStatus := currentStatus
@@ -705,7 +704,7 @@ func TestUpdateBadImage(t *testing.T) {
 
 		if info.ID == failedComponent.id {
 			status = umclient.StatusError
-			errStr = failedErr.Error()
+			errStr = failedErrStr
 			infos[i].Sha512 = []byte{1, 2, 3, 4, 5, 6}
 		}
 
@@ -719,7 +718,7 @@ func TestUpdateBadImage(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StateFailed
-	newStatus.Error = failedErr.Error()
+	newStatus.Error = failedErrStr
 	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
@@ -736,7 +735,7 @@ func TestUpdateBadImage(t *testing.T) {
 				AosVersion:    info.AosVersion,
 				VendorVersion: info.VendorVersion,
 				Status:        umclient.StatusError,
-				Error:         failedErr.Error(),
+				Error:         failedErrStr,
 			})
 		}
 	}
@@ -1088,7 +1087,7 @@ func checkComponentOps(compOps map[string][]string) (err error) {
 		}
 
 		if !reflect.DeepEqual(ops, orderOps) {
-			return fmt.Errorf("wrong component %s ops: %v", id, orderOps)
+			return aoserrors.Errorf("wrong component %s ops: %v", id, orderOps)
 		}
 	}
 
@@ -1098,7 +1097,7 @@ func checkComponentOps(compOps map[string][]string) (err error) {
 func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Status) (err error) {
 	select {
 	case <-time.After(5 * time.Second):
-		return errors.New("wait operation timeout")
+		return aoserrors.New("wait operation timeout")
 
 	case currentStatus := <-handler.StatusChannel():
 		if expectedStatus == nil {
@@ -1106,11 +1105,11 @@ func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Stat
 		}
 
 		if currentStatus.State != expectedStatus.State {
-			return fmt.Errorf("wrong current state: %s", currentStatus.State)
+			return aoserrors.Errorf("wrong current state: %s", currentStatus.State)
 		}
 
 		if !strings.Contains(currentStatus.Error, expectedStatus.Error) {
-			return fmt.Errorf("wrong error value: %s", currentStatus.Error)
+			return aoserrors.Errorf("wrong error value: %s", currentStatus.Error)
 		}
 
 		for _, expectedItem := range expectedStatus.Components {
@@ -1128,14 +1127,14 @@ func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Stat
 			}
 
 			if index == len(expectedStatus.Components) {
-				return fmt.Errorf("expected item not found: %v", expectedItem)
+				return aoserrors.Errorf("expected item not found: %v", expectedItem)
 			}
 
 			currentStatus.Components = append(currentStatus.Components[:index], currentStatus.Components[index+1:]...)
 		}
 
 		if len(currentStatus.Components) != 0 {
-			return fmt.Errorf("unexpected item found: %v", currentStatus.Components[0])
+			return aoserrors.Errorf("unexpected item found: %v", currentStatus.Components[0])
 		}
 
 		return nil
