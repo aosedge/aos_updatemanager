@@ -174,7 +174,7 @@ func (client *Client) Close() (err error) {
 
 	close(client.closeChannel)
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (state UMState) String() string {

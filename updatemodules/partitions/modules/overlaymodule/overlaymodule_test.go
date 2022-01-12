@@ -526,11 +526,11 @@ func (checker *testChecker) Check() (err error) {
 
 func createImage(imagePath string) (err error) {
 	if err = os.MkdirAll(path.Dir(imagePath), 0o755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(imagePath, []byte("this is update image"), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -538,11 +538,11 @@ func createImage(imagePath string) (err error) {
 
 func createVersionFile(version string) (err error) {
 	if err = os.MkdirAll(path.Dir(versionFile), 0o755); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	if err = ioutil.WriteFile(versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o644); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
