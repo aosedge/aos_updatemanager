@@ -18,6 +18,7 @@
 package boardconfigmodule
 
 import (
+	"aos_updatemanager/updatehandler"
 	"compress/gzip"
 	"encoding/json"
 	"io"
@@ -26,8 +27,6 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -344,7 +343,7 @@ func extractFileFromGz(destination, source string) (err error) {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.OpenFile(destination, os.O_RDWR|os.O_CREATE, 0755)
+	dstFile, err := os.OpenFile(destination, os.O_RDWR|os.O_CREATE, 0o755)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}

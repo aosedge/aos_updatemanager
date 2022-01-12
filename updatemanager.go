@@ -18,6 +18,10 @@
 package main
 
 import (
+	"aos_updatemanager/config"
+	"aos_updatemanager/database"
+	"aos_updatemanager/umclient"
+	"aos_updatemanager/updatehandler"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -32,10 +36,6 @@ import (
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
-	"aos_updatemanager/config"
-	"aos_updatemanager/database"
-	"aos_updatemanager/umclient"
-	"aos_updatemanager/updatehandler"
 	_ "aos_updatemanager/updatemodules"
 )
 
@@ -68,7 +68,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 }
 
 /*******************************************************************************
@@ -93,7 +94,8 @@ func newJournalHook() (hook *journalHook) {
 			log.ErrorLevel: journal.PriErr,
 			log.FatalLevel: journal.PriCrit,
 			log.PanicLevel: journal.PriEmerg,
-		}}
+		},
+	}
 
 	return hook
 }

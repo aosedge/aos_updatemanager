@@ -63,8 +63,10 @@ import (
 
 const preallocatedItemSize = 10
 
-const efiBootAbbrevHD = 2
-const eddDefaultDevice = 0x80
+const (
+	efiBootAbbrevHD  = 2
+	eddDefaultDevice = 0x80
+)
 
 const (
 	hdSignatureNone = iota // nolint
@@ -89,7 +91,7 @@ const (
 
 const loadOptionActive = 0x00000001
 
-const writeAttribute = 0644
+const writeAttribute = 0o644
 
 /*******************************************************************************
  * Vars
@@ -228,7 +230,6 @@ func (instance *Instance) SetBootNext(id uint16) (err error) {
 
 	return aoserrors.Wrap(writeU16(efiGlobalGUID, efiBootNextName, []uint16{id},
 		C.EFI_VARIABLE_NON_VOLATILE|C.EFI_VARIABLE_BOOTSERVICE_ACCESS|C.EFI_VARIABLE_RUNTIME_ACCESS, writeAttribute))
-
 }
 
 // DeleteBootNext deletes boot next
@@ -481,8 +482,8 @@ func (instance *Instance) findFreeNum() (num uint16, err error) {
 }
 
 func (instance *Instance) makeBootVar(isActive int, devicePath string, partition int, loader string,
-	entryName string) (item bootItem, err error) {
-
+	entryName string) (item bootItem, err error,
+) {
 	if item.id, err = instance.findFreeNum(); err != nil {
 		return bootItem{}, aoserrors.Wrap(err)
 	}
@@ -512,9 +513,7 @@ func (instance *Instance) makeBootVar(isActive int, devicePath string, partition
 }
 
 func writeVar(guid, name string, data []byte, attributes uint32, mode os.FileMode) (err error) {
-	var (
-		efiGUID C.efi_guid_t
-	)
+	var efiGUID C.efi_guid_t
 
 	if rc := C.efi_str_to_guid(C.CString(guid), &efiGUID); rc < 0 {
 		return aoserrors.Wrap(getEfiError())
@@ -545,9 +544,7 @@ func writeU16(guid, name string, data []uint16, attributes uint32, mode os.FileM
 }
 
 func deleteVar(guid, name string) (err error) {
-	var (
-		efiGUID C.efi_guid_t
-	)
+	var efiGUID C.efi_guid_t
 
 	if rc := C.efi_str_to_guid(C.CString(guid), &efiGUID); rc < 0 {
 		return aoserrors.Wrap(getEfiError())

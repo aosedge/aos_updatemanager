@@ -18,14 +18,13 @@
 package sshmodule_test
 
 import (
+	"aos_updatemanager/updatemodules/sshmodule"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatemodules/sshmodule"
 )
 
 /*******************************************************************************
@@ -50,7 +49,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -113,7 +113,7 @@ func TestUpdate(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
@@ -176,7 +176,7 @@ func TestUpdateErrors(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 
@@ -215,7 +215,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0644); err != nil {
+	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o644); err != nil {
 		log.Fatalf("Can't write test file: %s", err)
 	}
 

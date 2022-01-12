@@ -18,6 +18,9 @@
 package updatehandler_test
 
 import (
+	"aos_updatemanager/config"
+	"aos_updatemanager/umclient"
+	"aos_updatemanager/updatehandler"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,10 +38,6 @@ import (
 
 	"github.com/aoscloud/aos_common/image"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/config"
-	"aos_updatemanager/umclient"
-	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -98,7 +97,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -131,7 +131,9 @@ func TestMain(m *testing.M) {
 		UpdateModules: []config.ModuleConfig{
 			{ID: "id1", Plugin: "testmodule"},
 			{ID: "id2", Plugin: "testmodule"},
-			{ID: "id3", Plugin: "testmodule"}}}
+			{ID: "id3", Plugin: "testmodule"},
+		},
+	}
 
 	server := &http.Server{Addr: ":9000", Handler: http.FileServer(http.Dir(tmpDir))}
 
@@ -439,7 +441,6 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 	order = nil
 
 	handler, err := updatehandler.New(cfg, storage, storage)
-
 	if err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
@@ -549,7 +550,8 @@ func TestUpdateSameAosVersion(t *testing.T) {
 		AosVersion:    2,
 		VendorVersion: "",
 		Status:        umclient.StatusError,
-		Error:         "component already has required Aos version: 2"}
+		Error:         "component already has required Aos version: 2",
+	}
 
 	newStatus := currentStatus
 	newStatus.Components = append(newStatus.Components, errorComponent)
@@ -747,7 +749,9 @@ func TestUpdatePriority(t *testing.T) {
 		UpdateModules: []config.ModuleConfig{
 			{ID: "id1", Plugin: "testmodule", UpdatePriority: 3, RebootPriority: 1},
 			{ID: "id2", Plugin: "testmodule", UpdatePriority: 2, RebootPriority: 2},
-			{ID: "id3", Plugin: "testmodule", UpdatePriority: 1, RebootPriority: 3}}}
+			{ID: "id3", Plugin: "testmodule", UpdatePriority: 1, RebootPriority: 3},
+		},
+	}
 
 	components = make(map[string]*testModule)
 	storage := newTestStorage()
@@ -806,9 +810,16 @@ func TestUpdatePriority(t *testing.T) {
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus, nil,
 		[]orderInfo{
-			{"id1", opUpdate}, {"id2", opUpdate}, {"id3", opUpdate},
-			{"id3", opReboot}, {"id2", opReboot}, {"id1", opReboot},
-			{"id1", opUpdate}, {"id2", opUpdate}, {"id3", opUpdate}})
+			{"id1", opUpdate},
+			{"id2", opUpdate},
+			{"id3", opUpdate},
+			{"id3", opReboot},
+			{"id2", opReboot},
+			{"id1", opReboot},
+			{"id1", opUpdate},
+			{"id2", opUpdate},
+			{"id3", opUpdate},
+		})
 
 	// Apply
 
@@ -830,9 +841,16 @@ func TestUpdatePriority(t *testing.T) {
 
 	testOperation(t, handler, handler.ApplyUpdate, &finalStatus, nil,
 		[]orderInfo{
-			{"id1", opApply}, {"id2", opApply}, {"id3", opApply},
-			{"id3", opReboot}, {"id2", opReboot}, {"id1", opReboot},
-			{"id1", opApply}, {"id2", opApply}, {"id3", opApply}})
+			{"id1", opApply},
+			{"id2", opApply},
+			{"id3", opApply},
+			{"id3", opReboot},
+			{"id2", opReboot},
+			{"id1", opReboot},
+			{"id1", opApply},
+			{"id2", opApply},
+			{"id3", opApply},
+		})
 }
 
 func TestVendorVersionInUpdate(t *testing.T) {
