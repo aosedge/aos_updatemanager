@@ -43,8 +43,10 @@ const migrationDir = "migration"
  * Variables
  ******************************************************************************/
 
-var tmpDir string
-var db *Database
+var (
+	tmpDir string
+	db     *Database
+)
 
 /*******************************************************************************
  * Init
@@ -54,7 +56,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -99,8 +102,8 @@ func TestNewErrors(t *testing.T) {
 		t.Fatal("expecting error with no access rights")
 	}
 
-	//Trying to create test.db with no access rights
-	//Check fail of the createConfigTable
+	// Trying to create test.db with no access rights
+	// Check fail of the createConfigTable
 	dbLocal, err = New("/sys/test.db", tmpDir, tmpDir)
 	if err == nil {
 		dbLocal.Close()
@@ -375,6 +378,7 @@ func createDatabaseV1(name string) (err error) {
 
 	return nil
 }
+
 func isDatabaseVer0(sqlite *sql.DB) (err error) {
 	if err = checkColumn(sqlite, "config", "version"); err != nil {
 		return aoserrors.Wrap(err)
@@ -401,7 +405,6 @@ func isDatabaseVer0(sqlite *sql.DB) (err error) {
 	}
 
 	return nil
-
 }
 
 func isDatabaseVer1(sqlite *sql.DB) (err error) {

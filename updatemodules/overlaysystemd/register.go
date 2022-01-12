@@ -18,14 +18,13 @@
 package overlaysystemd
 
 import (
-	"encoding/json"
-
-	"github.com/aoscloud/aos_common/aoserrors"
-
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
 	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
 	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
+	"encoding/json"
+
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 /*******************************************************************************

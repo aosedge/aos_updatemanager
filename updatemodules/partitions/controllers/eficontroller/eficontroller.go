@@ -18,13 +18,12 @@
 package eficontroller
 
 import (
+	"aos_updatemanager/updatemodules/partitions/utils/efi"
 	"fmt"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/partition"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatemodules/partitions/utils/efi"
 )
 
 /*******************************************************************************

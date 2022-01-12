@@ -18,6 +18,7 @@
 package ubootcontroller_test
 
 import (
+	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 	"io/ioutil"
 	"os"
 	"path"
@@ -28,8 +29,6 @@ import (
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
-
-	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 )
 
 /*******************************************************************************
@@ -59,7 +58,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -244,7 +244,7 @@ func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) 
 
 func createEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
-		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0644)
+		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0o644)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}
@@ -257,7 +257,7 @@ func createEnvFile(part testtools.PartInfo) (err error) {
 
 func createIncorrectEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
-		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0644)
+		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0o644)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}

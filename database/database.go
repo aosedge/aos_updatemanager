@@ -25,7 +25,7 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/migration"
-	_ "github.com/mattn/go-sqlite3" //ignore lint
+	_ "github.com/mattn/go-sqlite3" // ignore lint
 	log "github.com/sirupsen/logrus"
 )
 
@@ -209,7 +209,7 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 		if !os.IsNotExist(err) {
 			return db, aoserrors.Wrap(err)
 		}
-		if err = os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+		if err = os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 			return db, aoserrors.Wrap(err)
 		}
 	}
@@ -258,7 +258,6 @@ func newDatabase(name string, migrationPath string, mergedMigrationPath string, 
 	}
 
 	return db, nil
-
 }
 
 func (db *Database) isTableExist(name string) (result bool, err error) {

@@ -18,6 +18,8 @@
 package umclient_test
 
 import (
+	"aos_updatemanager/config"
+	"aos_updatemanager/umclient"
 	"encoding/json"
 	"io"
 	"net"
@@ -30,9 +32,6 @@ import (
 	pb "github.com/aoscloud/aos_common/api/updatemanager/v1"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-
-	"aos_updatemanager/config"
-	"aos_updatemanager/umclient"
 )
 
 /*******************************************************************************
@@ -48,8 +47,10 @@ const (
 	revertUpdateMessage  = "revert"
 )
 
-const waitMessageTimeout = 5 * time.Second
-const waitRegisteredTimeout = 30 * time.Second
+const (
+	waitMessageTimeout    = 5 * time.Second
+	waitRegisteredTimeout = 30 * time.Second
+)
 
 /*******************************************************************************
  * Types
@@ -81,7 +82,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -116,12 +118,16 @@ func TestMessages(t *testing.T) {
 	// Prepare update
 
 	components := []umclient.ComponentUpdateInfo{
-		{ID: "test1", VendorVersion: "1.0", AosVersion: 1, URL: "url1",
+		{
+			ID: "test1", VendorVersion: "1.0", AosVersion: 1, URL: "url1",
 			Annotations: json.RawMessage(`{"id1"}`), Sha256: []byte("sha256Val1"),
-			Sha512: []byte("sha512Val1"), Size: 12341},
-		{ID: "test2", VendorVersion: "2.0", AosVersion: 2, URL: "url2",
+			Sha512: []byte("sha512Val1"), Size: 12341,
+		},
+		{
+			ID: "test2", VendorVersion: "2.0", AosVersion: 2, URL: "url2",
 			Annotations: json.RawMessage(`{"id1"}`), Sha256: []byte("sha256Val2"),
-			Sha512: []byte("sha512Val2"), Size: 12342},
+			Sha512: []byte("sha512Val2"), Size: 12342,
+		},
 	}
 
 	if err = server.prepareUpdate(components); err != nil {
@@ -354,7 +360,8 @@ func (server *testServer) prepareUpdate(components []umclient.ComponentUpdateInf
 	}
 
 	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_PrepareUpdate{
-		PrepareUpdate: &pb.PrepareUpdate{Components: pbComponents}}}); err != nil {
+		PrepareUpdate: &pb.PrepareUpdate{Components: pbComponents},
+	}}); err != nil {
 		return err
 	}
 

@@ -35,8 +35,10 @@ import (
  * Constants
  ******************************************************************************/
 
-const envMountPoint = "/tmp/aos/env"
-const envMountTimeout = 10 * time.Minute
+const (
+	envMountPoint   = "/tmp/aos/env"
+	envMountTimeout = 10 * time.Minute
+)
 
 const (
 	aosBoot1Ok  = "aos_boot1_ok"

@@ -18,6 +18,7 @@
 package efi_test
 
 import (
+	"aos_updatemanager/updatemodules/partitions/utils/efi"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,8 +30,6 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatemodules/partitions/utils/efi"
 )
 
 /*******************************************************************************
@@ -47,7 +46,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -91,7 +91,6 @@ func TestCreateBootEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error executing command: %s", err)
 	}
-
 }
 
 func TestGetByPartUUID(t *testing.T) {
