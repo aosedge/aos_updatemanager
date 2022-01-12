@@ -403,7 +403,7 @@ func readU16(guid, name string) (data []uint16, err error) {
 		var id uint16
 
 		if err = binary.Read(dataBuffer, binary.LittleEndian, &id); err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				return nil, aoserrors.Wrap(err)
 			}
 
