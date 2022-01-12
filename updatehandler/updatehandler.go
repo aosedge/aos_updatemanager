@@ -267,7 +267,8 @@ func (handler *Handler) Close() {
  * Private
  ******************************************************************************/
 
-func (handler *Handler) createComponent(plugin, id string, params json.RawMessage, storage ModuleStorage) (module UpdateModule, err error) {
+func (handler *Handler) createComponent(
+	plugin, id string, params json.RawMessage, storage ModuleStorage) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, aoserrors.Errorf("plugin %s not found", plugin)
