@@ -75,6 +75,7 @@ func TestCreateBootEntry(t *testing.T) {
 	}
 
 	found := 0
+
 	for _, orderID := range ids {
 		if orderID == id {
 			found = 1

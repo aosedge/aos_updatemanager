@@ -101,6 +101,7 @@ func TestMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
+
 	defer server.close()
 
 	handler := newMessageHandler()
@@ -222,6 +223,7 @@ func TestServerDisconnect(t *testing.T) {
 	if server, err = newTestServer(serverURL); err != nil {
 		t.Fatalf("Can't create test server: %s", err)
 	}
+
 	defer server.close()
 
 	if err = server.waitClientRegistered(); err != nil {
