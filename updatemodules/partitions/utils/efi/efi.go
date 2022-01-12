@@ -91,7 +91,7 @@ const (
 
 const loadOptionActive = 0x00000001
 
-const writeAttribute = 0o644
+const writeAttribute = 0o600
 
 /*******************************************************************************
  * Vars

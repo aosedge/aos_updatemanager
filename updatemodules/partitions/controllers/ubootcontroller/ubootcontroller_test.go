@@ -246,7 +246,7 @@ func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) 
 
 func createEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
-		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0o644)
+		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0o600)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}
@@ -259,7 +259,7 @@ func createEnvFile(part testtools.PartInfo) (err error) {
 
 func createIncorrectEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
-		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0o644)
+		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0o600)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}

@@ -274,7 +274,7 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 	}
 
 	if err = ioutil.WriteFile(path.Join(module.updateDir, doUpdateFileName),
-		[]byte(module.state.UpdateType), 0o644); err != nil {
+		[]byte(module.state.UpdateType), 0o600); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -311,7 +311,7 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 	}
 
 	if err = ioutil.WriteFile(path.Join(module.updateDir, doApplyFileName),
-		[]byte(module.state.UpdateType), 0o644); err != nil {
+		[]byte(module.state.UpdateType), 0o600); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 

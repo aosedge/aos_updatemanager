@@ -660,7 +660,7 @@ func generateContent(contentPath string, content []fsContent) (err error) {
 			return aoserrors.Wrap(err)
 		}
 
-		if err = ioutil.WriteFile(filePath, file.content, 0o644); err != nil {
+		if err = ioutil.WriteFile(filePath, file.content, 0o600); err != nil {
 			return aoserrors.Wrap(err)
 		}
 	}
@@ -753,7 +753,7 @@ func createVersionFile(device string, version string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o644); err != nil {
+	if err = ioutil.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

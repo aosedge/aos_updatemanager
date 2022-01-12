@@ -176,7 +176,7 @@ func TestUpdate(t *testing.T) {
 
 	module.Close()
 
-	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0o644); err != nil {
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0o600); err != nil {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 
@@ -456,7 +456,7 @@ func TestUpdateChecker(t *testing.T) {
 		t.Fatalf("Can't create version file: %s", err)
 	}
 
-	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0o644); err != nil {
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0o600); err != nil {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 
@@ -529,7 +529,7 @@ func createImage(imagePath string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(imagePath, []byte("this is update image"), 0o644); err != nil {
+	if err = ioutil.WriteFile(imagePath, []byte("this is update image"), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -541,7 +541,7 @@ func createVersionFile(version string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o644); err != nil {
+	if err = ioutil.WriteFile(versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
