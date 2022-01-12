@@ -21,6 +21,7 @@ import (
 	"aos_updatemanager/updatehandler"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -363,10 +364,10 @@ func extractFileFromGz(destination, source string) (err error) {
 func copyData(dst io.Writer, src io.Reader) (err error) {
 	buf := make([]byte, ioBufferSize)
 
-	for err != io.EOF {
+	for !errors.Is(err, io.EOF) {
 		var readCount int
 
-		if readCount, err = src.Read(buf); err != nil && err != io.EOF {
+		if readCount, err = src.Read(buf); err != nil && !errors.Is(err, io.EOF) {
 			return aoserrors.Wrap(err)
 		}
 

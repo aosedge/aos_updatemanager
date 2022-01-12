@@ -21,6 +21,7 @@ import (
 	"aos_updatemanager/config"
 	"aos_updatemanager/umclient"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -298,7 +299,7 @@ func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err 
 	for {
 		pbStatus, err := server.stream.Recv()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 

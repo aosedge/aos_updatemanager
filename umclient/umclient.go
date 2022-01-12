@@ -21,6 +21,7 @@ import (
 	"aos_updatemanager/config"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -229,7 +230,7 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 					client.messageHandler.Registered()
 
 					if err = client.processMessages(); err != nil {
-						if err == io.EOF {
+						if errors.Is(err, io.EOF) {
 							log.Debug("Connection is closed")
 						} else {
 							log.Errorf("Connection error: %s", aoserrors.Wrap(err))
