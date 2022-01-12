@@ -75,6 +75,7 @@ func (checker *Checker) Check() (err error) {
 
 		go func() {
 			defer wg.Done()
+
 			systemErr = aoserrors.Wrap(watchServices(dbus.NewSystemConnectionContext,
 				checker.cfg.SystemServices, checker.cfg.Timeout.Duration))
 		}()
@@ -85,6 +86,7 @@ func (checker *Checker) Check() (err error) {
 
 		go func() {
 			defer wg.Done()
+
 			userErr = aoserrors.Wrap(
 				watchServices(dbus.NewUserConnectionContext, checker.cfg.UserServices, checker.cfg.Timeout.Duration))
 		}()

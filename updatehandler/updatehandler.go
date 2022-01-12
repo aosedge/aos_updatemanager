@@ -451,8 +451,11 @@ func doPriorityOperations(operations []priorityOperation, stopOnError bool) (err
 
 	sort.Slice(operations, func(i, j int) bool { return operations[i].priority > operations[j].priority })
 
-	var wg sync.WaitGroup
-	var groupErr error
+	var (
+		wg       sync.WaitGroup
+		groupErr error
+	)
+
 	priority := operations[0].priority
 
 	for _, item := range operations {

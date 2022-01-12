@@ -509,6 +509,7 @@ func TestRevertOnFail(t *testing.T) {
 
 func TestUpdateChecker(t *testing.T) {
 	updateChecker := newTestChecker(nil)
+
 	module, err := dualpartmodule.New("test", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
@@ -672,11 +673,13 @@ func getPartitionContent(device string) (content []fsContent, err error) {
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
+
 	defer os.RemoveAll(mountPoint)
 
 	if output, err := exec.Command("mount", device, mountPoint).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("%s (%s)", err, (string(output)))
 	}
+
 	defer func() {
 		if output, err := exec.Command("umount", mountPoint).CombinedOutput(); err != nil {
 			log.Errorf("Can't unmount folder %s: %s", mountPoint, fmt.Errorf("%s (%s)", err, (string(output))))
@@ -731,11 +734,13 @@ func createVersionFile(device string, version string) (err error) {
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
+
 	defer os.RemoveAll(mountPoint)
 
 	if output, err := exec.Command("mount", device, mountPoint).CombinedOutput(); err != nil {
 		return fmt.Errorf("%s (%s)", err, (string(output)))
 	}
+
 	defer func() {
 		if output, err := exec.Command("umount", mountPoint).CombinedOutput(); err != nil {
 			log.Errorf("Can't unmount folder %s: %s", mountPoint, fmt.Errorf("%s (%s)", err, (string(output))))

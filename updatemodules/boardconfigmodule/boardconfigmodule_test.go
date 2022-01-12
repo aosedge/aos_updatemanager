@@ -96,6 +96,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("Can't create module: %s", err)
 	}
+
 	module.Close()
 
 	ret := m.Run()

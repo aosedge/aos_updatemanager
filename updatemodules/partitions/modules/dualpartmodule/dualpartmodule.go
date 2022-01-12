@@ -410,6 +410,7 @@ func (module *DualPartModule) getModuleVersion(part string) (version string, err
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
+
 	defer os.RemoveAll(mountDir)
 
 	partInfo, err := partition.GetPartInfo(part)
@@ -420,6 +421,7 @@ func (module *DualPartModule) getModuleVersion(part string) (version string, err
 	if err = fs.Mount(partInfo.Device, mountDir, partInfo.FSType, syscall.MS_RDONLY, ""); err != nil {
 		return "", aoserrors.Wrap(err)
 	}
+
 	defer func() {
 		if err := fs.Umount(mountDir); err != nil {
 			log.Errorf("can't unmount partitions: %s", aoserrors.Wrap(err))

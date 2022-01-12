@@ -570,6 +570,7 @@ func getEfiError() (err error) {
 	if rc < 0 {
 		return aoserrors.New("can't get EFI error")
 	}
+
 	if rc == 0 {
 		return aoserrors.New("unknown error")
 	}
@@ -594,8 +595,10 @@ func bootOrderToString(bootOrder []uint16) (s string) {
 }
 
 func (instance *Instance) readBootItems() (err error) {
-	var guid *C.efi_guid_t = nil
-	var name *C.char = nil
+	var (
+		guid *C.efi_guid_t = nil
+		name *C.char       = nil
+	)
 
 	bootItemRegexp, err := regexp.Compile(bootItemNamePattern)
 	if err != nil {

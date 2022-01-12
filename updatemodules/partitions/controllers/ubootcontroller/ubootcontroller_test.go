@@ -222,11 +222,13 @@ func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) 
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
+
 	defer os.RemoveAll(mountPoint)
 
 	if err = fs.Mount(part.Device, mountPoint, part.Type, 0, ""); err != nil {
 		return aoserrors.Wrap(err)
 	}
+
 	defer func() {
 		if err = fs.Umount(mountPoint); err != nil {
 			log.Error("Unable to unmount partition")
@@ -270,6 +272,7 @@ func createIncorrectEnvFile(part testtools.PartInfo) (err error) {
 
 func readConfig(part testtools.PartInfo) (cfg *ini.File, err error) {
 	var conf *ini.File
+
 	err = processEnvFile(part, func(fileName string) (err error) {
 		conf, err = ini.Load(fileName)
 		return aoserrors.Wrap(err)
