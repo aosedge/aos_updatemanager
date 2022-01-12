@@ -18,10 +18,9 @@
 package boardconfigmodule
 
 import (
-	"encoding/json"
-
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
+	"encoding/json"
 )
 
 /*******************************************************************************

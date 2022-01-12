@@ -18,6 +18,7 @@
 package dualpartmodule_test
 
 import (
+	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -31,8 +32,6 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 )
 
 /*******************************************************************************
@@ -77,8 +76,10 @@ var tmpDir string
 
 var disk *testtools.TestDisk
 
-var stateController = testStateController{}
-var stateStorage = testStateStorage{state: []byte("{}")}
+var (
+	stateController = testStateController{}
+	stateStorage    = testStateStorage{state: []byte("{}")}
+)
 
 /*******************************************************************************
  * Init
@@ -88,7 +89,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -591,6 +593,7 @@ func (controller *testStateController) SetMainBoot(index int) (err error) {
 
 	return nil
 }
+
 func (controller *testStateController) SetBootOK() (err error) {
 	controller.bootOK = true
 	return nil
@@ -620,7 +623,7 @@ func (checker *testChecker) Check() (err error) {
 }
 
 func generateImage(imagePath string, vendorVersion string) (content []fsContent, err error) {
-	if err = os.MkdirAll(filepath.Dir(imagePath), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(imagePath), 0o755); err != nil {
 		return nil, err
 	}
 
@@ -652,11 +655,11 @@ func generateContent(contentPath string, content []fsContent) (err error) {
 	for _, file := range content {
 		filePath := path.Join(contentPath, file.name)
 
-		if err = os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		if err = os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 			return err
 		}
 
-		if err = ioutil.WriteFile(filePath, file.content, 0644); err != nil {
+		if err = ioutil.WriteFile(filePath, file.content, 0o644); err != nil {
 			return err
 		}
 	}
@@ -741,11 +744,11 @@ func createVersionFile(device string, version string) (err error) {
 
 	filePath := path.Join(mountPoint, versionFile)
 
-	if err = os.MkdirAll(path.Dir(filePath), 0755); err != nil {
+	if err = os.MkdirAll(path.Dir(filePath), 0o755); err != nil {
 		return err
 	}
 
-	if err = ioutil.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0644); err != nil {
+	if err = ioutil.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o644); err != nil {
 		return err
 	}
 

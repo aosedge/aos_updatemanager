@@ -18,6 +18,8 @@
 package updatehandler
 
 import (
+	"aos_updatemanager/config"
+	"aos_updatemanager/umclient"
 	"context"
 	"encoding/json"
 	"net/url"
@@ -29,9 +31,6 @@ import (
 	"github.com/aoscloud/aos_common/image"
 	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/config"
-	"aos_updatemanager/umclient"
 )
 
 /*******************************************************************************
@@ -384,7 +383,8 @@ func (handler *Handler) sendStatus() {
 			"vendorVersion": componentStatus.VendorVersion,
 			"aosVersion":    componentStatus.AosVersion,
 			"status":        componentStatus.Status,
-			"error":         componentStatus.Error}).Debug("Component status")
+			"error":         componentStatus.Error,
+		}).Debug("Component status")
 
 		updateStatus, ok := handler.state.ComponentStatuses[id]
 		if ok {
@@ -395,7 +395,8 @@ func (handler *Handler) sendStatus() {
 				"vendorVersion": updateStatus.VendorVersion,
 				"aosVersion":    updateStatus.AosVersion,
 				"status":        updateStatus.Status,
-				"error":         updateStatus.Error}).Debug("Component status")
+				"error":         updateStatus.Error,
+			}).Debug("Component status")
 		}
 	}
 
@@ -656,7 +657,7 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		}
 	}
 
-	if err = os.MkdirAll(handler.downloadDir, 0755); err != nil {
+	if err = os.MkdirAll(handler.downloadDir, 0o755); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -678,7 +679,8 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 	if err = image.CheckFileInfo(context.Background(), filePath, image.FileInfo{
 		Sha256: updateInfo.Sha256,
 		Sha512: updateInfo.Sha512,
-		Size:   updateInfo.Size}); err != nil {
+		Size:   updateInfo.Size,
+	}); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -731,7 +733,8 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 			"id":            updateInfo.ID,
 			"vendorVersion": updateInfo.VendorVersion,
 			"aosVersion":    updateInfo.AosVersion,
-			"url":           updateInfo.URL}).Debug("Prepare component")
+			"url":           updateInfo.URL,
+		}).Debug("Prepare component")
 
 		return false, handler.prepareComponent(module, updateInfo)
 	}, true); err != nil {

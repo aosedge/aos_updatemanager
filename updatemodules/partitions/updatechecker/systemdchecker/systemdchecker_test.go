@@ -18,6 +18,8 @@
 package systemdchecker_test
 
 import (
+	"aos_updatemanager/config"
+	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,9 +30,6 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/config"
-	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /***********************************************************************************************************************
@@ -47,7 +46,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -88,7 +88,8 @@ func TestServicesActivated(t *testing.T) {
 	}
 
 	if err := systemdchecker.New(systemdchecker.Config{
-		SystemServices: serviceList, Timeout: config.Duration{Duration: 10 * time.Second}}).Check(); err != nil {
+		SystemServices: serviceList, Timeout: config.Duration{Duration: 10 * time.Second},
+	}).Check(); err != nil {
 		t.Errorf("Watch services error: %s", err)
 	}
 }
@@ -104,7 +105,8 @@ func TestServicesFailed(t *testing.T) {
 	}
 
 	if err := systemdchecker.New(systemdchecker.Config{
-		SystemServices: serviceList, Timeout: config.Duration{Duration: 10 * time.Second}}).Check(); err == nil {
+		SystemServices: serviceList, Timeout: config.Duration{Duration: 10 * time.Second},
+	}).Check(); err == nil {
 		t.Error("Error expected")
 	}
 }
@@ -124,7 +126,7 @@ func createService(name string, cmd, bus string) (err error) {
 [Service]
 ExecStart=%s
 `
-	if err = ioutil.WriteFile(path.Join(tmpDir, name), []byte(fmt.Sprintf(serviceTemplate, cmd)), 0644); err != nil {
+	if err = ioutil.WriteFile(path.Join(tmpDir, name), []byte(fmt.Sprintf(serviceTemplate, cmd)), 0o644); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

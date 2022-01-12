@@ -18,6 +18,7 @@
 package overlaymodule_test
 
 import (
+	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -28,8 +29,6 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
 )
 
 /*******************************************************************************
@@ -52,9 +51,11 @@ type testChecker struct {
  * Var
  ******************************************************************************/
 
-var tmpDir string
-var versionFile string
-var updateDir string
+var (
+	tmpDir      string
+	versionFile string
+	updateDir   string
+)
 
 /*******************************************************************************
  * Init
@@ -64,7 +65,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -174,7 +176,7 @@ func TestUpdate(t *testing.T) {
 
 	module.Close()
 
-	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0644); err != nil {
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0o644); err != nil {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 
@@ -288,7 +290,6 @@ func TestUpdateFail(t *testing.T) {
 	// Create and init module
 
 	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil)
-
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -397,7 +398,6 @@ func TestUpdateChecker(t *testing.T) {
 	// Create and init module
 
 	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, newTestChecker(nil))
-
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -456,7 +456,7 @@ func TestUpdateChecker(t *testing.T) {
 		t.Fatalf("Can't create version file: %s", err)
 	}
 
-	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0644); err != nil {
+	if err = ioutil.WriteFile(path.Join(updateDir, "updated"), nil, 0o644); err != nil {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 
@@ -525,11 +525,11 @@ func (checker *testChecker) Check() (err error) {
 }
 
 func createImage(imagePath string) (err error) {
-	if err = os.MkdirAll(path.Dir(imagePath), 0755); err != nil {
+	if err = os.MkdirAll(path.Dir(imagePath), 0o755); err != nil {
 		return err
 	}
 
-	if err = ioutil.WriteFile(imagePath, []byte("this is update image"), 0644); err != nil {
+	if err = ioutil.WriteFile(imagePath, []byte("this is update image"), 0o644); err != nil {
 		return err
 	}
 
@@ -537,11 +537,11 @@ func createImage(imagePath string) (err error) {
 }
 
 func createVersionFile(version string) (err error) {
-	if err = os.MkdirAll(path.Dir(versionFile), 0755); err != nil {
+	if err = os.MkdirAll(path.Dir(versionFile), 0o755); err != nil {
 		return err
 	}
 
-	if err = ioutil.WriteFile(versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0644); err != nil {
+	if err = ioutil.WriteFile(versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o644); err != nil {
 		return err
 	}
 

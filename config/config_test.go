@@ -18,28 +18,29 @@
 package config_test
 
 import (
+	"aos_updatemanager/config"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"testing"
-
-	"aos_updatemanager/config"
 )
 
 /*******************************************************************************
  * Vars
  ******************************************************************************/
 
-var cfg *config.Config
-var wrongConfigName = "aos_wrongconfig.cfg"
+var (
+	cfg             *config.Config
+	wrongConfigName = "aos_wrongconfig.cfg"
+)
 
 /*******************************************************************************
  * Private
  ******************************************************************************/
 
 func saveConfigFile(configName string, configContent string) (err error) {
-	if err = ioutil.WriteFile(path.Join("tmp", configName), []byte(configContent), 0644); err != nil {
+	if err = ioutil.WriteFile(path.Join("tmp", configName), []byte(configContent), 0o644); err != nil {
 		return err
 	}
 
@@ -101,7 +102,7 @@ func createConfigFile() (err error) {
 }
 
 func setup() (err error) {
-	if err := os.MkdirAll("tmp", 0755); err != nil {
+	if err := os.MkdirAll("tmp", 0o755); err != nil {
 		return err
 	}
 
@@ -209,7 +210,7 @@ func TestNewErrors(t *testing.T) {
 		t.Errorf("No error was returned for nonexisting config")
 	}
 
-	//Creating wrong config
+	// Creating wrong config
 	if err := createWrongConfigFile(); err != nil {
 		t.Errorf("Unable to create wrong config file. Err %s", err)
 	}

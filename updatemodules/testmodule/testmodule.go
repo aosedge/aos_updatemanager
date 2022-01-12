@@ -18,12 +18,11 @@
 package testmodule
 
 import (
+	"aos_updatemanager/updatehandler"
 	"encoding/json"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -83,7 +82,8 @@ func (module *TestModule) GetVendorVersion() (version string, err error) {
 func (module *TestModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
-		"imagePath": imagePath}).Debug("Prepare test module")
+		"imagePath": imagePath,
+	}).Debug("Prepare test module")
 
 	return nil
 }

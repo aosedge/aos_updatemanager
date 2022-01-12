@@ -18,15 +18,14 @@
 package ubootdualparts
 
 import (
-	"encoding/json"
-
-	"github.com/aoscloud/aos_common/aoserrors"
-
 	"aos_updatemanager/updatehandler"
 	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
 	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
+	"encoding/json"
+
+	"github.com/aoscloud/aos_common/aoserrors"
 )
 
 /*******************************************************************************
@@ -53,7 +52,6 @@ func init() {
 	updatehandler.RegisterPlugin("ubootdualpart",
 		func(id string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
-
 			var config moduleConfig
 
 			if err = json.Unmarshal(configJSON, &config); err != nil {

@@ -30,8 +30,7 @@ import (
  ******************************************************************************/
 
 // SystemdRebooter reboot system using systemd
-type SystemdRebooter struct {
-}
+type SystemdRebooter struct{}
 
 /*******************************************************************************
  * Public

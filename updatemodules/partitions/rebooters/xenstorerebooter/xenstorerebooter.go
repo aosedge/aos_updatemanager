@@ -28,17 +28,18 @@ import (
  * Consts
  ******************************************************************************/
 
-const xenBus = "/dev/xen/xenbus"
-const featureReboot = "control/user-reboot"
-const requestReboot = "2"
+const (
+	xenBus        = "/dev/xen/xenbus"
+	featureReboot = "control/user-reboot"
+	requestReboot = "2"
+)
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
 // XenstoreRebooter reboot system using xenstore entry
-type XenstoreRebooter struct {
-}
+type XenstoreRebooter struct{}
 
 /*******************************************************************************
  * Public

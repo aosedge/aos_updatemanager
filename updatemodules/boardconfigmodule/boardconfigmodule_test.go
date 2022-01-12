@@ -18,6 +18,8 @@
 package boardconfigmodule_test
 
 import (
+	"aos_updatemanager/updatehandler"
+	"aos_updatemanager/updatemodules/boardconfigmodule"
 	"compress/gzip"
 	"fmt"
 	"io/ioutil"
@@ -27,9 +29,6 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/boardconfigmodule"
 )
 
 /*******************************************************************************
@@ -59,8 +58,10 @@ type testStorage struct {
 
 var module updatehandler.UpdateModule
 
-var boardFileName string
-var tmpDir string
+var (
+	boardFileName string
+	tmpDir        string
+)
 
 /*******************************************************************************
  * Init
@@ -70,7 +71,8 @@ func init() {
 	log.SetFormatter(&log.TextFormatter{
 		DisableTimestamp: false,
 		TimestampFormat:  "2006-01-02 15:04:05.000",
-		FullTimestamp:    true})
+		FullTimestamp:    true,
+	})
 	log.SetLevel(log.DebugLevel)
 	log.SetOutput(os.Stdout)
 }
@@ -276,7 +278,7 @@ func (storage *testStorage) SetModuleState(id string, state []byte) (err error) 
 func createBoardConfig(version string) (payload string, err error) {
 	payload = fmt.Sprintf(configTemplate, version)
 
-	if err = ioutil.WriteFile(boardFileName, []byte(payload), 0644); err != nil {
+	if err = ioutil.WriteFile(boardFileName, []byte(payload), 0o644); err != nil {
 		return "", err
 	}
 

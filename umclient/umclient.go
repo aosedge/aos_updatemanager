@@ -18,6 +18,7 @@
 package umclient
 
 import (
+	"aos_updatemanager/config"
 	"context"
 	"encoding/json"
 	"io"
@@ -30,8 +31,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"aos_updatemanager/config"
 )
 
 /*******************************************************************************
@@ -137,7 +136,8 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 	client = &Client{
 		messageHandler: messageHandler,
 		umID:           config.ID,
-		closeChannel:   make(chan struct{})}
+		closeChannel:   make(chan struct{}),
+	}
 
 	if err = client.createConnection(config, insecure); err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -179,12 +179,14 @@ func (client *Client) Close() (err error) {
 
 func (state UMState) String() string {
 	return [...]string{
-		"idle", "prepared", "updated", "failed"}[state]
+		"idle", "prepared", "updated", "failed",
+	}[state]
 }
 
 func (status ComponentStatus) String() string {
 	return [...]string{
-		"installed", "installing", "error"}[status]
+		"installed", "installing", "error",
+	}[status]
 }
 
 /*******************************************************************************

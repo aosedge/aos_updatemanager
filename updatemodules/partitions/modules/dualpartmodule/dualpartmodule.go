@@ -18,6 +18,7 @@
 package dualpartmodule
 
 import (
+	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -29,8 +30,6 @@ import (
 	"github.com/aoscloud/aos_common/fs"
 	"github.com/aoscloud/aos_common/partition"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/updatehandler"
 )
 
 // The sequence diagram of update:
@@ -149,7 +148,8 @@ func New(id string, partitions []string, versionFile string, controller StateCon
 		storage:       storage,
 		rebootHandler: rebootHandler,
 		checker:       checker,
-		versionFile:   versionFile}
+		versionFile:   versionFile,
+	}
 
 	if len(partitions) != 2 {
 		return nil, aoserrors.New("num of configured partitions should be 2")
@@ -228,7 +228,8 @@ func (module *DualPartModule) Prepare(imagePath string, vendorVersion string, an
 	log.WithFields(log.Fields{
 		"id":            module.id,
 		"imagePath":     imagePath,
-		"vendorVersion": vendorVersion}).Debug("Prepare dualpart module")
+		"vendorVersion": vendorVersion,
+	}).Debug("Prepare dualpart module")
 
 	if module.state.State != idleState && module.state.State != preparedState {
 		return aoserrors.Errorf("wrong state during Prepare command. Expected %d, got %d", idleState,
@@ -356,7 +357,7 @@ func (module *DualPartModule) Reboot() (err error) {
 		return nil
 	}
 
-	//Close controller before reboot
+	// Close controller before reboot
 	module.controller.Close()
 
 	return module.rebootHandler.Reboot()

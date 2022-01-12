@@ -18,6 +18,7 @@
 package systemdchecker
 
 import (
+	"aos_updatemanager/config"
 	"context"
 	"sync"
 	"time"
@@ -25,8 +26,6 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/coreos/go-systemd/v22/dbus"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/config"
 )
 
 /***********************************************************************************************************************

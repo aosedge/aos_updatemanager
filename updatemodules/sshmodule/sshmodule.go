@@ -18,6 +18,7 @@
 package sshmodule
 
 import (
+	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,8 +28,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tmc/scp"
 	"golang.org/x/crypto/ssh"
-
-	"aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************
@@ -117,7 +116,8 @@ func (module *SSHModule) Init() (err error) {
 func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
-		"imagePath": imagePath}).Debug("Prepare SSH module")
+		"imagePath": imagePath,
+	}).Debug("Prepare SSH module")
 
 	module.filePath = imagePath
 
@@ -153,7 +153,8 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 	config := &ssh.ClientConfig{
 		User:            module.config.User,
 		Auth:            []ssh.AuthMethod{ssh.Password(module.config.Password)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey()}
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
 
 	client, err := ssh.Dial("tcp", module.config.Host, config)
 	if err != nil {

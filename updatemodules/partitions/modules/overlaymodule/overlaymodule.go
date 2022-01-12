@@ -18,6 +18,8 @@
 package overlaymodule
 
 import (
+	"aos_updatemanager/database"
+	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -27,9 +29,6 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
-
-	"aos_updatemanager/database"
-	"aos_updatemanager/updatehandler"
 )
 
 // Success update sequence diagram:
@@ -132,7 +131,8 @@ func New(id string, versionFile, updateDir string,
 
 	overlayModule := &OverlayModule{
 		id: id, versionFile: versionFile, updateDir: updateDir, storage: storage,
-		rebooter: rebooter, checker: checker}
+		rebooter: rebooter, checker: checker,
+	}
 
 	if overlayModule.versionFile == "" {
 		return nil, aoserrors.New("version file is not set")
@@ -218,7 +218,8 @@ func (module *OverlayModule) Prepare(imagePath string, vendorVersion string, ann
 	log.WithFields(log.Fields{
 		"id":            module.id,
 		"imagePath":     imagePath,
-		"vendorVersion": vendorVersion}).Debug("Prepare overlay module")
+		"vendorVersion": vendorVersion,
+	}).Debug("Prepare overlay module")
 
 	if module.state.UpdateState != idleState && module.state.UpdateState != preparedState {
 		return aoserrors.Errorf("wrong state: %s", module.state.UpdateState)
@@ -273,7 +274,7 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 	}
 
 	if err = ioutil.WriteFile(path.Join(module.updateDir, doUpdateFileName),
-		[]byte(module.state.UpdateType), 0644); err != nil {
+		[]byte(module.state.UpdateType), 0o644); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -310,7 +311,7 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 	}
 
 	if err = ioutil.WriteFile(path.Join(module.updateDir, doApplyFileName),
-		[]byte(module.state.UpdateType), 0644); err != nil {
+		[]byte(module.state.UpdateType), 0o644); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -427,7 +428,7 @@ func (module *OverlayModule) clearUpdateDir() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = os.MkdirAll(module.updateDir, 0755); err != nil {
+	if err = os.MkdirAll(module.updateDir, 0o755); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
