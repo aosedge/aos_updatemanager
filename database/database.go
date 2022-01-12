@@ -201,7 +201,8 @@ func (db *Database) Close() {
  * Private
  ******************************************************************************/
 
-func newDatabase(name string, migrationPath string, mergedMigrationPath string, version uint) (db *Database, err error) {
+func newDatabase(
+	name string, migrationPath string, mergedMigrationPath string, version uint) (db *Database, err error) {
 	log.WithField("name", name).Debug("Open database")
 
 	// Check and create db path

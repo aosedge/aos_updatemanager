@@ -172,22 +172,27 @@ func TestModules(t *testing.T) {
 		t.Fatalf("Wrong modules len: %d", len(cfg.UpdateModules))
 	}
 
-	if cfg.UpdateModules[0].ID != "id1" || cfg.UpdateModules[1].ID != "id2" || cfg.UpdateModules[2].ID != "id3" {
+	if cfg.UpdateModules[0].ID != "id1" || cfg.UpdateModules[1].ID != "id2" ||
+		cfg.UpdateModules[2].ID != "id3" {
 		t.Error("Wrong module id")
 	}
 
-	if cfg.UpdateModules[0].Plugin != "test1" || cfg.UpdateModules[1].Plugin != "test2" || cfg.UpdateModules[2].Plugin != "test3" {
+	if cfg.UpdateModules[0].Plugin != "test1" || cfg.UpdateModules[1].Plugin != "test2" ||
+		cfg.UpdateModules[2].Plugin != "test3" {
 		t.Error("Wrong plugin value")
 	}
-	if cfg.UpdateModules[0].UpdatePriority != 1 || cfg.UpdateModules[1].UpdatePriority != 2 || cfg.UpdateModules[2].UpdatePriority != 3 {
+	if cfg.UpdateModules[0].UpdatePriority != 1 || cfg.UpdateModules[1].UpdatePriority != 2 ||
+		cfg.UpdateModules[2].UpdatePriority != 3 {
 		t.Error("Wrong update priority value")
 	}
 
-	if cfg.UpdateModules[0].RebootPriority != 1 || cfg.UpdateModules[1].RebootPriority != 2 || cfg.UpdateModules[2].RebootPriority != 3 {
+	if cfg.UpdateModules[0].RebootPriority != 1 || cfg.UpdateModules[1].RebootPriority != 2 ||
+		cfg.UpdateModules[2].RebootPriority != 3 {
 		t.Error("Wrong reboot priority value")
 	}
 
-	if cfg.UpdateModules[0].Disabled != false || cfg.UpdateModules[1].Disabled != false || cfg.UpdateModules[2].Disabled != true {
+	if cfg.UpdateModules[0].Disabled != false || cfg.UpdateModules[1].Disabled != false ||
+		cfg.UpdateModules[2].Disabled != true {
 		t.Error("Disabled value")
 	}
 }
