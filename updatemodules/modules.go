@@ -18,7 +18,7 @@
 package updatemodules
 
 import (
-	// include all supported plugins
+	// include all supported plugins.
 	_ "aos_updatemanager/updatemodules/boardconfigmodule"
 	_ "aos_updatemanager/updatemodules/efidualpart"
 	_ "aos_updatemanager/updatemodules/overlaysystemd"

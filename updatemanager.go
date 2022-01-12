@@ -49,7 +49,7 @@ const dbFileName = "updatemanager.db"
  * Vars
  ******************************************************************************/
 
-// GitSummary provided by govvv at compile-time
+// GitSummary provided by govvv at compile-time.
 var GitSummary string
 
 /*******************************************************************************

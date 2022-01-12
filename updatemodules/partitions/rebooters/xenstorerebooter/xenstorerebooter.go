@@ -38,14 +38,14 @@ const (
  * Types
  ******************************************************************************/
 
-// XenstoreRebooter reboot system using xenstore entry
+// XenstoreRebooter reboot system using xenstore entry.
 type XenstoreRebooter struct{}
 
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
-// Reboot requests to reboot system by writing xenstore entry
+// Reboot requests to reboot system by writing xenstore entry.
 func (reboot *XenstoreRebooter) Reboot() (err error) {
 	xenClient, err := xenstore.NewXenBusClient(xenBus)
 	if err != nil {

@@ -63,7 +63,7 @@ var plugins = make(map[string]NewPlugin)
  * Types
  ******************************************************************************/
 
-// Handler update handler
+// Handler update handler.
 type Handler struct {
 	sync.Mutex
 
@@ -77,7 +77,7 @@ type Handler struct {
 	statusChannel chan umclient.Status
 }
 
-// UpdateModule interface for module plugin
+// UpdateModule interface for module plugin.
 type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
@@ -99,7 +99,7 @@ type UpdateModule interface {
 	Close() (err error)
 }
 
-// StateStorage provides API to store/retreive persistent data
+// StateStorage provides API to store/retrieve persistent data.
 type StateStorage interface {
 	SetUpdateState(state []byte) (err error)
 	GetUpdateState() (state []byte, err error)
@@ -107,13 +107,13 @@ type StateStorage interface {
 	GetAosVersion(id string) (version uint64, err error)
 }
 
-// ModuleStorage provides API store/retrive module persistent data
+// ModuleStorage provides API store/retrieve module persistent data.
 type ModuleStorage interface {
 	SetModuleState(id string, state []byte) (err error)
 	GetModuleState(id string) (state []byte, err error)
 }
 
-// NewPlugin update module new function
+// NewPlugin update module new function.
 type NewPlugin func(id string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
 
 type handlerState struct {
@@ -140,14 +140,14 @@ type priorityOperation struct {
  * Public
  ******************************************************************************/
 
-// RegisterPlugin registers update plugin
+// RegisterPlugin registers update plugin.
 func RegisterPlugin(plugin string, newFunc NewPlugin) {
 	log.WithField("plugin", plugin).Info("Register update plugin")
 
 	plugins[plugin] = newFunc
 }
 
-// New returns pointer to new Handler
+// New returns pointer to new Handler.
 func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) (handler *Handler, err error) {
 	log.Debug("Create update handler")
 
@@ -205,7 +205,7 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 	return handler, nil
 }
 
-// Registered indicates the client registed to the server
+// Registered indicates the client registered on the server.
 func (handler *Handler) Registered() {
 	handler.Lock()
 	defer handler.Unlock()
@@ -213,7 +213,7 @@ func (handler *Handler) Registered() {
 	handler.sendStatus()
 }
 
-// PrepareUpdate prepares update
+// PrepareUpdate prepares update.
 func (handler *Handler) PrepareUpdate(components []umclient.ComponentUpdateInfo) {
 	log.Info("Prepare update")
 
@@ -222,7 +222,7 @@ func (handler *Handler) PrepareUpdate(components []umclient.ComponentUpdateInfo)
 	}
 }
 
-// StartUpdate starts update
+// StartUpdate starts update.
 func (handler *Handler) StartUpdate() {
 	log.Info("Start update")
 
@@ -231,7 +231,7 @@ func (handler *Handler) StartUpdate() {
 	}
 }
 
-// ApplyUpdate applies update
+// ApplyUpdate applies update.
 func (handler *Handler) ApplyUpdate() {
 	log.Info("Apply update")
 
@@ -240,7 +240,7 @@ func (handler *Handler) ApplyUpdate() {
 	}
 }
 
-// RevertUpdate reverts update
+// RevertUpdate reverts update.
 func (handler *Handler) RevertUpdate() {
 	log.Info("Revert update")
 
@@ -249,12 +249,12 @@ func (handler *Handler) RevertUpdate() {
 	}
 }
 
-// StatusChannel returns status channel
+// StatusChannel returns status channel.
 func (handler *Handler) StatusChannel() (status <-chan umclient.Status) {
 	return handler.statusChannel
 }
 
-// Close closes update handler
+// Close closes update handler.
 func (handler *Handler) Close() {
 	log.Debug("Close update handler")
 
@@ -710,7 +710,7 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 	infos := event.Args[0].([]umclient.ComponentUpdateInfo)
 
 	if len(infos) == 0 {
-		handler.state.Error = "Prepare componenet list is empty"
+		handler.state.Error = "Prepare component list is empty"
 		handler.fsm.SetState(stateFailed)
 
 		return
