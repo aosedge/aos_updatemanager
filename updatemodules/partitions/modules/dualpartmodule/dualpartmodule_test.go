@@ -646,7 +646,7 @@ func generateImage(imagePath string, vendorVersion string) (content []fsContent,
 	}
 
 	if output, err := exec.Command("mv", imagePath+".gz", imagePath).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	return content, nil
@@ -677,12 +677,12 @@ func getPartitionContent(device string) (content []fsContent, err error) {
 	defer os.RemoveAll(mountPoint)
 
 	if output, err := exec.Command("mount", device, mountPoint).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s (%s)", err, (string(output)))
+		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	defer func() {
 		if output, err := exec.Command("umount", mountPoint).CombinedOutput(); err != nil {
-			log.Errorf("Can't unmount folder %s: %s", mountPoint, fmt.Errorf("%s (%s)", err, (string(output))))
+			log.Errorf("Can't unmount folder %s: %s", mountPoint, aoserrors.Errorf("%s (%s)", err, (string(output))))
 		}
 	}()
 
@@ -738,12 +738,12 @@ func createVersionFile(device string, version string) (err error) {
 	defer os.RemoveAll(mountPoint)
 
 	if output, err := exec.Command("mount", device, mountPoint).CombinedOutput(); err != nil {
-		return fmt.Errorf("%s (%s)", err, (string(output)))
+		return aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
 	defer func() {
 		if output, err := exec.Command("umount", mountPoint).CombinedOutput(); err != nil {
-			log.Errorf("Can't unmount folder %s: %s", mountPoint, fmt.Errorf("%s (%s)", err, (string(output))))
+			log.Errorf("Can't unmount folder %s: %s", mountPoint, aoserrors.Errorf("%s (%s)", err, (string(output))))
 		}
 	}()
 

@@ -19,6 +19,7 @@ package eficontroller
 
 import (
 	"aos_updatemanager/updatemodules/partitions/utils/efi"
+	"errors"
 	"fmt"
 
 	"github.com/aoscloud/aos_common/aoserrors"
@@ -194,7 +195,7 @@ func (controller *Controller) checkPartitions(partitions []string) (err error) {
 
 		id, err := controller.efi.GetBootByPartUUID(info.PartUUID)
 		if err != nil {
-			if err != efi.ErrNotFound {
+			if !errors.Is(err, efi.ErrNotFound) {
 				return aoserrors.Wrap(err)
 			}
 
