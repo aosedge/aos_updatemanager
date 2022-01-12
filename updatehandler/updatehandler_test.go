@@ -36,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/image"
 	log "github.com/sirupsen/logrus"
 )
@@ -993,7 +994,7 @@ func (module *testModule) Init() (err error) {
 	order = append(order, orderInfo{id: module.id, op: opInit})
 	mutex.Unlock()
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (module *testModule) GetVendorVersion() (version string, err error) {
@@ -1008,7 +1009,7 @@ func (module *testModule) Prepare(imagePath string, vendorVersion string, annota
 	order = append(order, orderInfo{id: module.id, op: opPrepare})
 	mutex.Unlock()
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (module *testModule) Update() (rebootRequired bool, err error) {
@@ -1061,14 +1062,14 @@ func (module *testModule) Reboot() (err error) {
 	order = append(order, orderInfo{id: module.id, op: opReboot})
 	mutex.Unlock()
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func (module *testModule) Close() (err error) {
 	err = module.status
 	module.status = nil
 
-	return err
+	return aoserrors.Wrap(err)
 }
 
 func checkComponentOps(compOps map[string][]string) (err error) {
@@ -1142,10 +1143,14 @@ func waitForStatus(handler *updatehandler.Handler, expectedStatus *umclient.Stat
 
 func createImage(imagePath string) (fileInfo image.FileInfo, err error) {
 	if err := exec.Command("dd", "if=/dev/null", "of="+imagePath, "bs=1M", "count=8").Run(); err != nil {
-		return fileInfo, err
+		return fileInfo, aoserrors.Wrap(err)
 	}
 
-	return image.CreateFileInfo(context.Background(), imagePath)
+	if fileInfo, err = image.CreateFileInfo(context.Background(), imagePath); err != nil {
+		return fileInfo, aoserrors.Wrap(err)
+	}
+
+	return fileInfo, nil
 }
 
 func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo,
@@ -1155,7 +1160,7 @@ func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo,
 
 		imageInfo, err := createImage(imagePath)
 		if err != nil {
-			return nil, err
+			return nil, aoserrors.Wrap(err)
 		}
 
 		info := umclient.ComponentUpdateInfo{

@@ -279,7 +279,7 @@ func createBoardConfig(version string) (payload string, err error) {
 	payload = fmt.Sprintf(configTemplate, version)
 
 	if err = ioutil.WriteFile(boardFileName, []byte(payload), 0o644); err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 
 	return payload, nil
@@ -288,7 +288,7 @@ func createBoardConfig(version string) (payload string, err error) {
 func createBoardImage(imagePath string, version string) (payload string, err error) {
 	file, err := os.Create(imagePath)
 	if err != nil {
-		return "", err
+		return "", aoserrors.Wrap(err)
 	}
 	defer file.Close()
 

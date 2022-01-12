@@ -264,7 +264,7 @@ func newTestServer(url string) (server *testServer, err error) {
 
 	listener, err := net.Listen("tcp", url)
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
 
 	server.grpcServer = grpc.NewServer()
@@ -300,7 +300,7 @@ func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err 
 				return nil
 			}
 
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		status := umclient.Status{
@@ -362,7 +362,7 @@ func (server *testServer) prepareUpdate(components []umclient.ComponentUpdateInf
 	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_PrepareUpdate{
 		PrepareUpdate: &pb.PrepareUpdate{Components: pbComponents},
 	}}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -370,7 +370,7 @@ func (server *testServer) prepareUpdate(components []umclient.ComponentUpdateInf
 
 func (server *testServer) startUpdate() (err error) {
 	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_StartUpdate{}}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -378,7 +378,7 @@ func (server *testServer) startUpdate() (err error) {
 
 func (server *testServer) applyUpdate() (err error) {
 	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_ApplyUpdate{}}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
@@ -386,7 +386,7 @@ func (server *testServer) applyUpdate() (err error) {
 
 func (server *testServer) revertUpdate() (err error) {
 	if err = server.stream.Send(&pb.CMMessages{CMMessage: &pb.CMMessages_RevertUpdate{}}); err != nil {
-		return err
+		return aoserrors.Wrap(err)
 	}
 
 	return nil
