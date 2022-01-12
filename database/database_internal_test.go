@@ -221,18 +221,18 @@ func TestMultiThread(t *testing.T) {
 }
 
 func TestMigrationToV1(t *testing.T) {
-	migrationDb := path.Join(tmpDir, "test_migration.db")
+	migrationDB := path.Join(tmpDir, "test_migration.db")
 
-	if err := os.RemoveAll(migrationDb); err != nil {
+	if err := os.RemoveAll(migrationDB); err != nil {
 		t.Fatalf("Error deleting migration DB: %s", err)
 	}
 
-	if err := createDatabaseV0(migrationDb); err != nil {
+	if err := createDatabaseV0(migrationDB); err != nil {
 		t.Fatalf("Can't create initial database: %s", err)
 	}
 
 	// Migration upward
-	db, err := newDatabase(migrationDb, migrationDir, migrationDir, 1)
+	db, err := newDatabase(migrationDB, migrationDir, migrationDir, 1)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
 	}
@@ -244,7 +244,7 @@ func TestMigrationToV1(t *testing.T) {
 	db.Close()
 
 	// Migration downward
-	db, err = newDatabase(migrationDb, migrationDir, migrationDir, 0)
+	db, err = newDatabase(migrationDB, migrationDir, migrationDir, 0)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
 	}
@@ -257,18 +257,18 @@ func TestMigrationToV1(t *testing.T) {
 }
 
 func TestMigrationToV2(t *testing.T) {
-	migrationDb := path.Join(tmpDir, "test_migration.db")
+	migrationDB := path.Join(tmpDir, "test_migration.db")
 
-	if err := os.RemoveAll(migrationDb); err != nil {
+	if err := os.RemoveAll(migrationDB); err != nil {
 		t.Fatalf("Error deleting migration DB: %s", err)
 	}
 
-	if err := createDatabaseV1(migrationDb); err != nil {
+	if err := createDatabaseV1(migrationDB); err != nil {
 		t.Fatalf("Can't create initial database: %s", err)
 	}
 
 	// Migration upward
-	db, err := newDatabase(migrationDb, migrationDir, migrationDir, 2)
+	db, err := newDatabase(migrationDB, migrationDir, migrationDir, 2)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
 	}
@@ -280,7 +280,7 @@ func TestMigrationToV2(t *testing.T) {
 	db.Close()
 
 	// Migration downward
-	db, err = newDatabase(migrationDb, "migration", "mergedMigration", 1)
+	db, err = newDatabase(migrationDB, "migration", "mergedMigration", 1)
 	if err != nil {
 		t.Fatalf("Can't create database: %s", err)
 	}
