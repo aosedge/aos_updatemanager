@@ -19,6 +19,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -102,7 +103,7 @@ func (db *Database) GetUpdateState() (state []byte, err error) {
 
 	err = stmt.QueryRow().Scan(&state)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, aoserrors.New(ErrNotExistStr)
 		}
 

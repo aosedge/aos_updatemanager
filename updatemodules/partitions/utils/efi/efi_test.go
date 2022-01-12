@@ -19,6 +19,7 @@ package efi_test
 
 import (
 	"aos_updatemanager/updatemodules/partitions/utils/efi"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -180,7 +181,7 @@ func TestBootOrder(t *testing.T) {
 
 	// Check that it is deleted
 
-	if _, err := efiVars.GetBootOrder(); err == nil || err != efi.ErrNotFound {
+	if _, err := efiVars.GetBootOrder(); err == nil || !errors.Is(err, efi.ErrNotFound) {
 		t.Error("Not found error expected")
 	}
 
@@ -240,7 +241,7 @@ func TestBootNext(t *testing.T) {
 		t.Fatalf("Can't delete boot next: %s", err)
 	}
 
-	if _, err = efiVars.GetBootNext(); err == nil || err != efi.ErrNotFound {
+	if _, err = efiVars.GetBootNext(); err == nil || !errors.Is(err, efi.ErrNotFound) {
 		t.Error("Not found error expected")
 	}
 }
