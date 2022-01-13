@@ -275,7 +275,7 @@ func TestRevert(t *testing.T) {
 		t.Errorf("Can't get partition content: %s", err)
 	}
 
-	updateVersion := "v3.0"
+	updateVersion := "v3.0" // nolint:goconst
 
 	imagePath := path.Join(tmpDir, "image.gz")
 
