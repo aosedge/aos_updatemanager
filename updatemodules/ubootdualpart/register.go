@@ -18,14 +18,15 @@
 package ubootdualparts
 
 import (
-	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
-	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
-	"aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
-	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 	"encoding/json"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /*******************************************************************************

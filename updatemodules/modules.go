@@ -19,11 +19,11 @@ package updatemodules
 
 import (
 	// include all supported plugins.
-	_ "aos_updatemanager/updatemodules/boardconfigmodule"
-	_ "aos_updatemanager/updatemodules/efidualpart"
-	_ "aos_updatemanager/updatemodules/overlaysystemd"
-	_ "aos_updatemanager/updatemodules/overlayxenstore"
-	_ "aos_updatemanager/updatemodules/sshmodule"
-	_ "aos_updatemanager/updatemodules/testmodule"
-	_ "aos_updatemanager/updatemodules/ubootdualpart"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/boardconfigmodule"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/efidualpart"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/overlaysystemd"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/overlayxenstore"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/sshmodule"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/testmodule"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules/ubootdualpart"
 )

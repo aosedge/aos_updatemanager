@@ -18,8 +18,6 @@
 package overlaymodule
 
 import (
-	"aos_updatemanager/database"
-	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -29,6 +27,9 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/database"
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 // Success update sequence diagram:

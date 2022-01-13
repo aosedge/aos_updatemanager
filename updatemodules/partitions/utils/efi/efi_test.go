@@ -18,7 +18,6 @@
 package efi_test
 
 import (
-	"aos_updatemanager/updatemodules/partitions/utils/efi"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +30,8 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/utils/efi"
 )
 
 /*******************************************************************************

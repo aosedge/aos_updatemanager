@@ -18,7 +18,7 @@
 package testmodule
 
 import (
-	"aos_updatemanager/updatehandler"
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

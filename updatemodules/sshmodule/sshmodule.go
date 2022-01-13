@@ -18,7 +18,6 @@
 package sshmodule
 
 import (
-	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,6 +27,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tmc/scp"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

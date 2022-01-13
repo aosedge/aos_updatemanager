@@ -18,13 +18,14 @@
 package sshmodule_test
 
 import (
-	"aos_updatemanager/updatemodules/sshmodule"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatemodules/sshmodule"
 )
 
 /*******************************************************************************

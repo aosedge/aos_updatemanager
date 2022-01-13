@@ -18,7 +18,6 @@
 package boardconfigmodule
 
 import (
-	"aos_updatemanager/updatehandler"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -28,6 +27,8 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

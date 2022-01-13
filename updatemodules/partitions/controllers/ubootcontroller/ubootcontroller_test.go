@@ -18,7 +18,6 @@
 package ubootcontroller_test
 
 import (
-	"aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 	"io/ioutil"
 	"os"
 	"path"
@@ -29,6 +28,8 @@ import (
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
+
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 )
 
 /*******************************************************************************
