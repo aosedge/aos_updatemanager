@@ -717,6 +717,7 @@ func parseMediaType(subType uint8, data []byte) (dp interface{}, err error) {
 		return hd, nil
 
 	default:
+		// nolint:nilnil // we parse only known fields
 		return nil, nil
 	}
 }
