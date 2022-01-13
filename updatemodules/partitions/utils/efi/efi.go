@@ -442,7 +442,7 @@ func makeLinuxLoadOption(optionActive int, optionDisk string, optionPart int, op
 	dp := make([]byte, needed)
 
 	if dataSize != 0 {
-		if needed = C.efi_generate_file_device_path_from_esp_go((*C.uint8_t)(unsafe.Pointer(&dp[0])), C.ssize_t(needed),
+		if needed = C.efi_generate_file_device_path_from_esp_go((*C.uint8_t)(unsafe.Pointer(&dp[0])), needed,
 			C.CString(optionDisk), C.int(optionPart), C.CString(optionLoader), C.uint32_t(options),
 			C.uint32_t(eddDeviceNum)); needed < 0 {
 			return nil, 0, aoserrors.Errorf("generate file device path failed")
@@ -452,11 +452,11 @@ func makeLinuxLoadOption(optionActive int, optionDisk string, optionPart int, op
 		data = make([]byte, dataSize)
 
 		needed = C.efi_loadopt_create((*C.uint8_t)(unsafe.Pointer(&data[0])), C.ssize_t(dataSize), C.uint32_t(attributes),
-			C.efidp(C.CBytes(dp)), C.ssize_t(needed), (*C.uchar)(unsafe.Pointer(C.CString(optionLabel))),
+			C.efidp(C.CBytes(dp)), needed, (*C.uchar)(unsafe.Pointer(C.CString(optionLabel))),
 			(*C.uint8_t)(C.CBytes(optionalData)), C.size_t(optionalSize))
 	} else {
 		needed = C.efi_loadopt_create((*C.uint8_t)(unsafe.Pointer(nil)), C.ssize_t(0), C.uint32_t(attributes),
-			C.efidp(C.CBytes(dp)), C.ssize_t(needed), (*C.uchar)(unsafe.Pointer(C.CString(optionLabel))),
+			C.efidp(C.CBytes(dp)), needed, (*C.uchar)(unsafe.Pointer(C.CString(optionLabel))),
 			(*C.uint8_t)(C.CBytes(optionalData)), C.size_t(optionalSize))
 	}
 
