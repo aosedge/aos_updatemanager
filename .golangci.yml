@@ -1,0 +1,52 @@
+linters:
+  enable-all: true
+  disable:
+    - varnamelen
+    - exhaustivestruct
+    - gochecknoinits
+    - gci
+    - exhaustive
+    - nlreturn
+    - cyclop
+    - nestif
+    - ireturn
+    # deprecated
+    - interfacer
+    - golint
+    - scopelint
+    - maligned
+
+linters-settings:
+  revive:
+    rules:
+      - name: line-length-limit
+        disabled: true
+        arguments: [120]
+
+  funlen:
+    lines: 100
+
+  gosec:
+    excludes:
+      - G204
+
+  gomnd:
+    settings:
+      mnd:
+        ignored-numbers: 0o600,0o755,10,16,32,64
+
+  gofumpt:
+    lang-version: "1.14"
+
+issues:
+  include:
+    - EXC0002
+
+  exclude-rules:
+    - path: _test.go
+      linters:
+        - funlen
+        - gocyclo
+        - gochecknoglobals
+        - gocognit
+        - paralleltest
