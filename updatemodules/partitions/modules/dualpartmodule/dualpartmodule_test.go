@@ -164,9 +164,7 @@ func TestUpdate(t *testing.T) {
 	stateController.bootCurrent = part0
 	stateController.bootOK = false
 
-	id := module.GetID()
-
-	if id != "test" {
+	if id := module.GetID(); id != "test" {
 		t.Errorf("Wrong module id: %s", id)
 	}
 
