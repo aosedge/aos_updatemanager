@@ -18,8 +18,6 @@
 package boardconfigmodule_test
 
 import (
-	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/boardconfigmodule"
 	"compress/gzip"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +27,9 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/boardconfigmodule"
 )
 
 /*******************************************************************************

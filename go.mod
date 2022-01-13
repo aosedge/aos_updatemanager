@@ -1,4 +1,4 @@
-module aos_updatemanager
+module github.com/aoscloud/aos_updatemanager
 
 go 1.14
 

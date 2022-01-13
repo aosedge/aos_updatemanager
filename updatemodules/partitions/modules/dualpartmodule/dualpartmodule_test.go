@@ -18,7 +18,6 @@
 package dualpartmodule_test
 
 import (
-	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -32,6 +31,8 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 )
 
 /*******************************************************************************

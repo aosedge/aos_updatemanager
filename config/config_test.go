@@ -18,7 +18,6 @@
 package config_test
 
 import (
-	"aos_updatemanager/config"
 	"io/ioutil"
 	"log"
 	"os"
@@ -26,6 +25,8 @@ import (
 	"testing"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+
+	"github.com/aoscloud/aos_updatemanager/config"
 )
 
 /*******************************************************************************

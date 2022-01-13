@@ -18,9 +18,10 @@
 package boardconfigmodule
 
 import (
-	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
 	"encoding/json"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
 )
 
 /*******************************************************************************

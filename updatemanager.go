@@ -18,10 +18,6 @@
 package main
 
 import (
-	"aos_updatemanager/config"
-	"aos_updatemanager/database"
-	"aos_updatemanager/umclient"
-	"aos_updatemanager/updatehandler"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -36,7 +32,11 @@ import (
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
-	_ "aos_updatemanager/updatemodules"
+	"github.com/aoscloud/aos_updatemanager/config"
+	"github.com/aoscloud/aos_updatemanager/database"
+	"github.com/aoscloud/aos_updatemanager/umclient"
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	_ "github.com/aoscloud/aos_updatemanager/updatemodules"
 )
 
 /*******************************************************************************

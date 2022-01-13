@@ -18,13 +18,14 @@
 package overlaysystemd
 
 import (
-	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
-	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
-	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 	"encoding/json"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /*******************************************************************************

@@ -18,7 +18,6 @@
 package dualpartmodule
 
 import (
-	"aos_updatemanager/updatehandler"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -30,6 +29,8 @@ import (
 	"github.com/aoscloud/aos_common/fs"
 	"github.com/aoscloud/aos_common/partition"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 // The sequence diagram of update:

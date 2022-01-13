@@ -18,7 +18,6 @@
 package umclient
 
 import (
-	"aos_updatemanager/config"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,6 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/aoscloud/aos_updatemanager/config"
 )
 
 /*******************************************************************************
