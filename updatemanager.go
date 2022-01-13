@@ -130,7 +130,7 @@ func (hook *journalHook) Levels() []log.Level {
 /*******************************************************************************
  * ******************************************************************************/
 
-func main() {
+func main() { //nolint:funlen
 	// Initialize command line flags
 	configFile := flag.String("c", "aos_updatemanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)

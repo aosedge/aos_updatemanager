@@ -220,35 +220,33 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 	log.Debug("Connected to CM")
 
 	go func() {
+		err := client.register()
+
 		for {
-			err := client.register()
+			if err != nil && len(client.closeChannel) == 0 {
+				log.Errorf("Error register to CM: %s", aoserrors.Wrap(err))
+			} else {
+				client.messageHandler.Registered()
 
-			for {
-				if err != nil && len(client.closeChannel) == 0 {
-					log.Errorf("Error register to CM: %s", aoserrors.Wrap(err))
-				} else {
-					client.messageHandler.Registered()
-
-					if err = client.processMessages(); err != nil {
-						if errors.Is(err, io.EOF) {
-							log.Debug("Connection is closed")
-						} else {
-							log.Errorf("Connection error: %s", aoserrors.Wrap(err))
-						}
+				if err = client.processMessages(); err != nil {
+					if errors.Is(err, io.EOF) {
+						log.Debug("Connection is closed")
+					} else {
+						log.Errorf("Connection error: %s", aoserrors.Wrap(err))
 					}
 				}
+			}
 
-				log.Debugf("Reconnect to CM in %v...", reconnectTimeout)
+			log.Debugf("Reconnect to CM in %v...", reconnectTimeout)
 
-				select {
-				case <-client.closeChannel:
-					log.Debugf("Disconnected from CM")
+			select {
+			case <-client.closeChannel:
+				log.Debugf("Disconnected from CM")
 
-					return
+				return
 
-				case <-time.After(reconnectTimeout):
-					err = client.register()
-				}
+			case <-time.After(reconnectTimeout):
+				err = client.register()
 			}
 		}
 	}()
