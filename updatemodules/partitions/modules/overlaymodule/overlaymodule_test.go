@@ -32,6 +32,12 @@ import (
 )
 
 /*******************************************************************************
+ * Constants
+ ******************************************************************************/
+
+const fullStr = "full"
+
+/*******************************************************************************
  * Types
  ******************************************************************************/
 
@@ -158,7 +164,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Can't read update file: %s", err)
 	}
 
-	if string(updateContent) != "full" {
+	if string(updateContent) != fullStr {
 		t.Errorf("Wrong update file content: %s", updateContent)
 	}
 
@@ -217,7 +223,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Can't read apply file: %s", err)
 	}
 
-	if string(applyContent) != "full" {
+	if string(applyContent) != fullStr {
 		t.Errorf("Wrong apply file content: %s", applyContent)
 	}
 
@@ -326,7 +332,7 @@ func TestUpdateFail(t *testing.T) {
 		t.Errorf("Can't read update file: %s", err)
 	}
 
-	if string(updateContent) != "full" {
+	if string(updateContent) != fullStr {
 		t.Errorf("Wrong update file content: %s", updateContent)
 	}
 
@@ -434,7 +440,7 @@ func TestUpdateChecker(t *testing.T) {
 		t.Errorf("Can't read update file: %s", err)
 	}
 
-	if string(updateContent) != "full" {
+	if string(updateContent) != fullStr {
 		t.Errorf("Wrong update file content: %s", updateContent)
 	}
 
