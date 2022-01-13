@@ -708,7 +708,10 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 	handler.state.ComponentStatuses = make(map[string]*umclient.ComponentStatusInfo)
 	handler.state.CurrentVendorVersions = make(map[string]string)
 
-	infos := event.Args[0].([]umclient.ComponentUpdateInfo)
+	infos, ok := event.Args[0].([]umclient.ComponentUpdateInfo)
+	if !ok {
+		log.Error("Incorrect args type in prepare state")
+	}
 
 	if len(infos) == 0 {
 		handler.state.Error = "Prepare component list is empty"
