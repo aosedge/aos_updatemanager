@@ -141,7 +141,7 @@ func main() {
 
 	// Show version
 	if *showVersion {
-		fmt.Printf("Version: %s\n", GitSummary)
+		fmt.Printf("Version: %s\n", GitSummary) // nolint:forbidigo // logs are't initialized
 		return
 	}
 
