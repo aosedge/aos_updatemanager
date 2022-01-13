@@ -114,8 +114,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	id := module.GetID()
-	if id != "boardConfig" {
+	if id := module.GetID(); id != "boardConfig" {
 		t.Errorf("Wrong module ID: %s", id)
 	}
 }
