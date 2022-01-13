@@ -18,8 +18,6 @@
 package systemdchecker_test
 
 import (
-	"aos_updatemanager/config"
-	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -30,6 +28,9 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/config"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /***********************************************************************************************************************

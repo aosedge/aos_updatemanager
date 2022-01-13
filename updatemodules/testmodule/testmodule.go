@@ -18,11 +18,12 @@
 package testmodule
 
 import (
-	"aos_updatemanager/updatehandler"
 	"encoding/json"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

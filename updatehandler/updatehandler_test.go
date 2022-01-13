@@ -18,9 +18,6 @@
 package updatehandler_test
 
 import (
-	"aos_updatemanager/config"
-	"aos_updatemanager/umclient"
-	"aos_updatemanager/updatehandler"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,6 +35,10 @@ import (
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/image"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/config"
+	"github.com/aoscloud/aos_updatemanager/umclient"
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

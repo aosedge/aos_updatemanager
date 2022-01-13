@@ -18,14 +18,15 @@
 package efidualpart
 
 import (
-	"aos_updatemanager/updatehandler"
-	"aos_updatemanager/updatemodules/partitions/controllers/eficontroller"
-	"aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
-	"aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
-	"aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 	"encoding/json"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+
+	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/controllers/eficontroller"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /*******************************************************************************

@@ -18,8 +18,6 @@
 package updatehandler
 
 import (
-	"aos_updatemanager/config"
-	"aos_updatemanager/umclient"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,6 +30,9 @@ import (
 	"github.com/aoscloud/aos_common/image"
 	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/aoscloud/aos_updatemanager/config"
+	"github.com/aoscloud/aos_updatemanager/umclient"
 )
 
 /*******************************************************************************
