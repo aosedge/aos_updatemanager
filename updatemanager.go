@@ -60,6 +60,12 @@ type journalHook struct {
 	severityMap map[log.Level]journal.Priority
 }
 
+type updateManager struct {
+	db      *database.Database
+	updater *updatehandler.Handler
+	client  *umclient.Client
+}
+
 /*******************************************************************************
  * Init
  ******************************************************************************/
@@ -70,6 +76,65 @@ func init() {
 		TimestampFormat:  "2006-01-02 15:04:05.000",
 		FullTimestamp:    true,
 	})
+}
+
+/*******************************************************************************
+ * Update manager
+ ******************************************************************************/
+
+func newUpdateManager(cfg *config.Config) (um *updateManager, err error) {
+	defer func() {
+		if err != nil {
+			um.close()
+			um = nil
+		}
+	}()
+
+	um = &updateManager{}
+
+	// Create DB
+	dbFile := path.Join(cfg.WorkingDir, dbFileName)
+
+	um.db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
+	if err != nil {
+		if strings.Contains(err.Error(), database.ErrMigrationFailedStr) {
+			log.Warning("Unable to perform db migration")
+
+			cleanup(dbFile)
+
+			um.db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
+		}
+
+		if err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+	}
+
+	um.updater, err = updatehandler.New(cfg, um.db, um.db)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	um.client, err = umclient.New(cfg, um.updater, false)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return um, nil
+}
+
+func (um *updateManager) close() {
+	if um.db != nil {
+		um.db.Close()
+	}
+
+	if um.updater != nil {
+		um.updater.Close()
+	}
+
+	if um.client != nil {
+		um.client.Close()
+	}
 }
 
 /*******************************************************************************
@@ -128,9 +193,10 @@ func (hook *journalHook) Levels() []log.Level {
 }
 
 /*******************************************************************************
- * ******************************************************************************/
+ *  Main
+ ******************************************************************************/
 
-func main() { //nolint:funlen
+func main() {
 	// Initialize command line flags
 	configFile := flag.String("c", "aos_updatemanager.cfg", "path to config file")
 	strLogLevel := flag.String("v", "info", `log level: "debug", "info", "warn", "error", "fatal", "panic"`)
@@ -166,36 +232,12 @@ func main() { //nolint:funlen
 		log.Fatalf("Can' open config file: %s", aoserrors.Wrap(err))
 	}
 
-	// Create DB
-	dbFile := path.Join(cfg.WorkingDir, dbFileName)
-
-	db, err := database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
+	um, err := newUpdateManager(cfg)
 	if err != nil {
-		if strings.Contains(err.Error(), database.ErrMigrationFailedStr) {
-			log.Warning("Unable to perform db migration")
-
-			cleanup(dbFile)
-
-			db, err = database.New(dbFile, cfg.Migration.MigrationPath, cfg.Migration.MergedMigrationPath)
-		}
-
-		if err != nil {
-			log.Fatalf("Can't create database: %s", aoserrors.Wrap(err))
-		}
+		log.Fatalf("Can't create update manager: %s", err)
 	}
-	defer db.Close()
 
-	updater, err := updatehandler.New(cfg, db, db)
-	if err != nil {
-		log.Fatalf("Can't create updater: %s", aoserrors.Wrap(err))
-	}
-	defer updater.Close()
-
-	client, err := umclient.New(cfg, updater, false)
-	if err != nil {
-		log.Fatalf("Can't create UM client: %s", aoserrors.Wrap(err))
-	}
-	defer client.Close()
+	defer um.close()
 
 	// Notify systemd
 	if _, err = daemon.SdNotify(false, daemon.SdNotifyReady); err != nil {
