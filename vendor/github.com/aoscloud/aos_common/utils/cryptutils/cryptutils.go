@@ -25,24 +25,30 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
-	"path"
 	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/ThalesIgnite/crypto11"
+	"github.com/google/go-tpm/tpmutil"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/utils/tpmkey"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Consts
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-const (
-	// PEMExt PEM format extension
-	PEMExt = "pem"
-)
+// PEMExt PEM format extension.
+const PEMExt = "pem"
 
-// PEM block types
+// PEM block types.
 const (
 	PEMBlockRSAPrivateKey      = "RSA PRIVATE KEY"
 	PEMBlockECPrivateKey       = "EC PRIVATE KEY"
@@ -50,116 +56,239 @@ const (
 	PEMBlockCertificateRequest = "CERTIFICATE REQUEST"
 )
 
-// Crypto algorithm
+// Crypto algorithm.
 const (
 	AlgRSA = "rsa"
 	AlgECC = "ecc"
 )
 
-// URL schemes
+// URL schemes.
 const (
 	SchemeFile   = "file"
 	SchemeTPM    = "tpm"
 	SchemePKCS11 = "pkcs11"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
+ * Types
+ **********************************************************************************************************************/
+
+// CryptoContext crypt context.
+type CryptoContext struct {
+	sync.Mutex
+
+	rootCertPool  *x509.CertPool
+	tpmDevices    map[string]io.ReadWriteCloser
+	pkcs11Ctx     map[pkcs11Descriptor]*crypto11.Context
+	pkcs11Library string
+}
+
+type pkcs11Descriptor struct {
+	library string
+	token   string
+}
+
+/***********************************************************************************************************************
+ * Vars
+ **********************************************************************************************************************/
+
+// nolint:gochecknoglobals
+var (
+	// DefaultTPMDevice used if not specified in the URL.
+	DefaultTPMDevice io.ReadWriteCloser
+	// DefaultPKCS11Library used if not specified in the URL.
+	DefaultPKCS11Library string
+)
+
+/***********************************************************************************************************************
  * Public
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-// GetCaCertPool returns CA cert pool
-func GetCaCertPool(rootCaFilePath string) (caCertPool *x509.CertPool, err error) {
-	pemCA, err := ioutil.ReadFile(rootCaFilePath)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
+// NewCryptoContext creates new crypto context.
+func NewCryptoContext(rootCA string) (cryptoContext *CryptoContext, err error) {
+	cryptoContext = &CryptoContext{
+		pkcs11Ctx:  make(map[pkcs11Descriptor]*crypto11.Context),
+		tpmDevices: make(map[string]io.ReadWriteCloser),
 	}
 
-	caCertPool = x509.NewCertPool()
-
-	if !caCertPool.AppendCertsFromPEM(pemCA) {
-		return nil, aoserrors.New("failed to add CA's certificate")
+	if rootCA != "" {
+		if cryptoContext.rootCertPool, err = getCaCertPool(rootCA); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
 	}
 
-	return caCertPool, nil
+	return cryptoContext, nil
 }
 
-// GetClientMutualTLSConfig returns client mutual TLS configuration
-func GetClientMutualTLSConfig(CACert, certStorageDir string) (config *tls.Config, err error) {
-	certPool, err := GetCaCertPool(CACert)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
+// Close closes crypto context.
+func (cryptoContext *CryptoContext) Close() (err error) {
+	cryptoContext.Lock()
+	defer cryptoContext.Unlock()
+
+	for _, tpmDevice := range cryptoContext.tpmDevices {
+		if tpmErr := tpmDevice.Close(); tpmErr != nil {
+			if err == nil {
+				err = aoserrors.Wrap(tpmErr)
+			}
+		}
 	}
 
-	clientCert, err := getKeyPairFromDir(certStorageDir)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
+	for _, pkcs11Ctx := range cryptoContext.pkcs11Ctx {
+		if ctxErr := pkcs11Ctx.Close(); ctxErr != nil {
+			if err == nil {
+				err = aoserrors.Wrap(ctxErr)
+			}
+		}
 	}
 
-	config = &tls.Config{
-		Certificates: []tls.Certificate{clientCert},
-		RootCAs:      certPool,
-	}
-
-	return config, nil
+	return err
 }
 
-// GetClientTLSConfig returns client TLS configuration
-func GetClientTLSConfig(CACert string) (config *tls.Config, err error) {
-	certPool, err := GetCaCertPool(CACert)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	config = &tls.Config{
-		RootCAs: certPool,
-	}
-
-	return config, nil
+// GetCACertPool returns crypt context CA cert pool.
+func (cryptoContext *CryptoContext) GetCACertPool() *x509.CertPool {
+	return cryptoContext.rootCertPool
 }
 
-// GetServerMutualTLSConfig returns server mutual TLS configuration
-func GetServerMutualTLSConfig(CACert, certStorageDir string) (config *tls.Config, err error) {
-	certPool, err := GetCaCertPool(CACert)
+// LoadCertificateByURL loads certificate by URL.
+func (cryptoContext *CryptoContext) LoadCertificateByURL(certURLStr string) ([]*x509.Certificate, error) {
+	certURL, err := url.Parse(certURLStr)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	serverCert, err := getKeyPairFromDir(certStorageDir)
+	switch certURL.Scheme {
+	case SchemeFile:
+		certs, err := LoadCertificateFromFile(certURL.Path)
+		if err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+		return certs, nil
+
+	case SchemePKCS11:
+		certs, err := cryptoContext.loadCertificateFromPKCS11(certURL)
+		if err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+		return certs, aoserrors.Wrap(err)
+
+	default:
+		return nil, aoserrors.Errorf("unsupported schema %s for certificate", certURL.Scheme)
+	}
+}
+
+// LoadPrivateKeyByURL loads private key by URL.
+func (cryptoContext *CryptoContext) LoadPrivateKeyByURL(keyURLStr string) (privKey crypto.PrivateKey,
+	supportPKCS1v15SessionKey bool, err error) {
+	keyURL, err := url.Parse(keyURLStr)
+	if err != nil {
+		return nil, false, aoserrors.Wrap(err)
+	}
+
+	switch keyURL.Scheme {
+	case SchemeFile:
+		if privKey, err = LoadPrivateKeyFromFile(keyURL.Path); err != nil {
+			return nil, false, aoserrors.Wrap(err)
+		}
+
+		supportPKCS1v15SessionKey = true
+
+	case SchemeTPM:
+		if privKey, err = cryptoContext.loadPrivateKeyFromTPM(keyURL); err != nil {
+			return nil, false, aoserrors.Wrap(err)
+		}
+
+	case SchemePKCS11:
+		if privKey, err = cryptoContext.loadPrivateKeyFromPKCS11(keyURL); err != nil {
+			return nil, false, aoserrors.Wrap(err)
+		}
+
+	default:
+		return nil, false, aoserrors.Errorf("unsupported schema %s for private key", keyURL.Scheme)
+	}
+
+	return privKey, supportPKCS1v15SessionKey, nil
+}
+
+// GetServerMutualTLSConfig returns server mutual TLS configuration.
+func (cryptoContext *CryptoContext) GetServerMutualTLSConfig(certURLStr, keyURLStr string) (*tls.Config, error) {
+	tlsCertificate, err := cryptoContext.getTLSCertificate(certURLStr, keyURLStr)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	config = &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
+	return &tls.Config{
+		Certificates: []tls.Certificate{tlsCertificate},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    certPool,
-	}
-
-	return config, nil
+		ClientCAs:    cryptoContext.rootCertPool,
+		MinVersion:   tls.VersionTLS12,
+	}, nil
 }
 
-// GetServerTLSConfig returns server TLS configuration
-func GetServerTLSConfig(certStorageDir string) (config *tls.Config, err error) {
-	serverCert, err := getKeyPairFromDir(certStorageDir)
+// GetServerTLSConfig returns server TLS configuration.
+func (cryptoContext *CryptoContext) GetServerTLSConfig(certURLStr, keyURLStr string) (*tls.Config, error) {
+	tlsCertificate, err := cryptoContext.getTLSCertificate(certURLStr, keyURLStr)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	config = &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
+	return &tls.Config{
+		Certificates: []tls.Certificate{tlsCertificate},
 		ClientAuth:   tls.NoClientCert,
-	}
-
-	return config, nil
+		MinVersion:   tls.VersionTLS12,
+	}, nil
 }
 
-// PEMToX509Key parses PEM data to x509 key structures
+// GetClientMutualTLSConfig returns client mTLS config.
+func (cryptoContext *CryptoContext) GetClientMutualTLSConfig(certURLStr, keyURLStr string) (*tls.Config, error) {
+	tlsCertificate, err := cryptoContext.getTLSCertificate(certURLStr, keyURLStr)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return &tls.Config{
+		RootCAs:      cryptoContext.rootCertPool,
+		Certificates: []tls.Certificate{tlsCertificate},
+		MinVersion:   tls.VersionTLS12,
+	}, nil
+}
+
+// GetClientTLSConfig returns client TLS config.
+func (cryptoContext *CryptoContext) GetClientTLSConfig() (*tls.Config, error) {
+	return &tls.Config{RootCAs: cryptoContext.rootCertPool, MinVersion: tls.VersionTLS12}, nil
+}
+
+// PEMToX509Cert parses PEM data to x509 certificate structures.
+func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
+	var block *pem.Block
+
+	for {
+		block, data = pem.Decode(data)
+		if block == nil {
+			break
+		}
+
+		if block.Type == PEMBlockCertificate {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, aoserrors.Wrap(err)
+			}
+
+			certs = append(certs, cert)
+		}
+	}
+
+	if len(certs) == 0 {
+		return nil, aoserrors.Errorf("wrong certificate PEM format")
+	}
+
+	return certs, nil
+}
+
+// PEMToX509Key parses PEM data to x509 key structures.
 func PEMToX509Key(data []byte) (key crypto.PrivateKey, err error) {
 	block, _ := pem.Decode(data)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
 	if block != nil {
 		data = block.Bytes
 	}
@@ -189,23 +318,88 @@ func PEMToX509Key(data []byte) (key crypto.PrivateKey, err error) {
 	return key, nil
 }
 
-// LoadKey loads key from file
-func LoadKey(fileName string) (key crypto.PrivateKey, err error) {
+// PEMToX509PrivateKey parses PEM data to x509 private key structures.
+func PEMToX509PrivateKey(data []byte) (key crypto.PrivateKey, err error) {
+	block, _ := pem.Decode(data)
+	if block != nil {
+		data = block.Bytes
+	}
+
+	switch {
+	case block == nil:
+		if key, err = parseKey(data); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+	case block.Type == PEMBlockRSAPrivateKey:
+		if key, err = x509.ParsePKCS1PrivateKey(data); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+	case block.Type == PEMBlockECPrivateKey:
+		if key, err = x509.ParseECPrivateKey(data); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+	default:
+		if key, err = parseKey(data); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+	}
+
+	return key, nil
+}
+
+// LoadCertificateFromFile loads certificate from file.
+func LoadCertificateFromFile(fileName string) ([]*x509.Certificate, error) {
 	data, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if key, err = PEMToX509Key(data); err != nil {
+	certs, err := PEMToX509Cert(data)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return certs, nil
+}
+
+// SaveCertificateToFile saves certificate to file.
+func SaveCertificateToFile(fileName string, certs []*x509.Certificate) error {
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+	defer file.Close()
+
+	for _, cert := range certs {
+		if err = pem.Encode(file, &pem.Block{Type: PEMBlockCertificate, Bytes: cert.Raw}); err != nil {
+			return aoserrors.Wrap(err)
+		}
+	}
+
+	return nil
+}
+
+// LoadPrivateKeyFromFile loads private key from file.
+func LoadPrivateKeyFromFile(fileName string) (crypto.PrivateKey, error) {
+	data, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	key, err := PEMToX509PrivateKey(data)
+	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
 	return key, nil
 }
 
-// SaveKey saves key to file
-func SaveKey(fileName string, key crypto.PrivateKey) (err error) {
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0600)
+// SavePrivateKeyToFile saves private key to file.
+func SavePrivateKeyToFile(fileName string, key crypto.PrivateKey) error {
+	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -213,7 +407,10 @@ func SaveKey(fileName string, key crypto.PrivateKey) (err error) {
 
 	switch privateKey := key.(type) {
 	case *rsa.PrivateKey:
-		if err = pem.Encode(file, &pem.Block{Type: PEMBlockRSAPrivateKey, Bytes: x509.MarshalPKCS1PrivateKey(privateKey)}); err != nil {
+		if err = pem.Encode(file, &pem.Block{
+			Type:  PEMBlockRSAPrivateKey,
+			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+		}); err != nil {
 			return aoserrors.Wrap(err)
 		}
 
@@ -234,66 +431,8 @@ func SaveKey(fileName string, key crypto.PrivateKey) (err error) {
 	return nil
 }
 
-// PEMToX509Cert parses PEM data to x509 certificate structures
-func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
-	var block *pem.Block
-
-	for {
-		block, data = pem.Decode(data)
-		if block == nil {
-			break
-		}
-
-		if block.Type == PEMBlockCertificate {
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return nil, aoserrors.Wrap(err)
-			}
-
-			certs = append(certs, cert)
-		}
-	}
-
-	if len(certs) == 0 {
-		return nil, aoserrors.Errorf("wrong certificate PEM format")
-	}
-
-	return certs, nil
-}
-
-// LoadCertificate loads certificate from file
-func LoadCertificate(fileName string) (certs []*x509.Certificate, err error) {
-	data, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if certs, err = PEMToX509Cert(data); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	return certs, nil
-}
-
-// SaveCertificate saves certificate to file
-func SaveCertificate(fileName string, certs []*x509.Certificate) (err error) {
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-	defer file.Close()
-
-	for _, cert := range certs {
-		if err = pem.Encode(file, &pem.Block{Type: PEMBlockCertificate, Bytes: cert.Raw}); err != nil {
-			return aoserrors.Wrap(err)
-		}
-	}
-
-	return nil
-}
-
-// CheckCertificate checks if certificate matches key
-func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) (err error) {
+// CheckCertificate checks if certificate matches key.
+func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) error {
 	signer, ok := key.(crypto.Signer)
 	if !ok {
 		return aoserrors.New("private key does not implement public key interface")
@@ -311,72 +450,217 @@ func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) (err error)
 	return nil
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-func getKeyPairFromDir(dir string) (cert tls.Certificate, err error) {
-	content, err := ioutil.ReadDir(dir)
+func getCaCertPool(rootCaFilePath string) (*x509.CertPool, error) {
+	pemCA, err := ioutil.ReadFile(rootCaFilePath)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	caCertPool := x509.NewCertPool()
+
+	if !caCertPool.AppendCertsFromPEM(pemCA) {
+		return nil, aoserrors.New("failed to add CA's certificate")
+	}
+
+	return caCertPool, nil
+}
+
+func getRawCertificate(certs []*x509.Certificate) [][]byte {
+	rawCerts := make([][]byte, 0, len(certs))
+
+	for _, cert := range certs {
+		rawCerts = append(rawCerts, cert.Raw)
+	}
+
+	return rawCerts
+}
+
+func (cryptoContext *CryptoContext) getTLSCertificate(certURLStr, keyURLStr string) (tls.Certificate, error) {
+	certs, err := cryptoContext.LoadCertificateByURL(certURLStr)
 	if err != nil {
 		return tls.Certificate{}, aoserrors.Wrap(err)
 	}
 
-	// Collect keys
-
-	keyMap := make(map[string]crypto.PrivateKey)
-
-	for _, item := range content {
-		absItemPath := path.Join(dir, item.Name())
-
-		if item.IsDir() {
-			continue
-		}
-
-		key, err := LoadKey(absItemPath)
-		if err != nil {
-			continue
-		}
-
-		keyMap[absItemPath] = key
+	key, _, err := cryptoContext.LoadPrivateKeyByURL(keyURLStr)
+	if err != nil {
+		return tls.Certificate{}, aoserrors.Wrap(err)
 	}
 
-	for _, item := range content {
-		absItemPath := path.Join(dir, item.Name())
-
-		if item.IsDir() {
-			continue
-		}
-
-		certs, err := LoadCertificate(absItemPath)
-		if err != nil {
-			continue
-		}
-
-		if len(certs) < 1 {
-			continue
-		}
-
-		for keyFilePath, key := range keyMap {
-			if CheckCertificate(certs[0], key) == nil {
-				cert, err = tls.LoadX509KeyPair(absItemPath, keyFilePath)
-				return cert, aoserrors.Wrap(err)
-			}
-		}
-	}
-
-	return tls.Certificate{}, aoserrors.New("no appropriate key & certificate pair found")
+	return tls.Certificate{Certificate: getRawCertificate(certs), PrivateKey: key}, nil
 }
 
-func parseKey(data []byte) (key crypto.PrivateKey, err error) {
-	if key, err = x509.ParsePKCS1PrivateKey(data); err == nil {
+func parsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin string) {
+	opaqueValues := make(map[string]string)
+
+	for _, field := range strings.Split(pkcs11Url.Opaque, ";") {
+		items := strings.Split(field, "=")
+		if len(items) < 2 {
+			continue
+		}
+
+		opaqueValues[items[0]] = items[1]
+	}
+
+	for name, value := range opaqueValues {
+		switch name {
+		case "token":
+			token = value
+
+		case "object":
+			label = value
+
+		case "id":
+			id = value
+		}
+	}
+
+	library = DefaultPKCS11Library
+
+	for name, item := range pkcs11Url.Query() {
+		if len(item) == 0 {
+			continue
+		}
+
+		switch name {
+		case "module-path":
+			library = item[0]
+
+		case "pin-value":
+			userPin = item[0]
+		}
+	}
+
+	return library, token, label, id, userPin
+}
+
+func (cryptoContext *CryptoContext) getPKCS11Context(library, token, userPin string) (*crypto11.Context, error) {
+	cryptoContext.Lock()
+	defer cryptoContext.Unlock()
+
+	if library == "" && cryptoContext.pkcs11Library == "" {
+		return nil, aoserrors.New("PKCS11 library is not defined")
+	}
+
+	if library == "" {
+		library = cryptoContext.pkcs11Library
+	}
+
+	pkcs11Desc := pkcs11Descriptor{library: library, token: token}
+
+	pkcs11Ctx, ok := cryptoContext.pkcs11Ctx[pkcs11Desc]
+	if !ok {
+		var err error
+
+		if pkcs11Ctx, err = crypto11.Configure(&crypto11.Config{
+			Path: library, TokenLabel: token, Pin: userPin,
+		}); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+		cryptoContext.pkcs11Ctx[pkcs11Desc] = pkcs11Ctx
+	}
+
+	return pkcs11Ctx, nil
+}
+
+func (cryptoContext *CryptoContext) loadCertificateFromPKCS11(certURL *url.URL) ([]*x509.Certificate, error) {
+	library, token, label, id, userPin := parsePKCS11Url(certURL)
+
+	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	certs, err := pkcs11Ctx.FindCertificateChain([]byte(id), []byte(label), nil)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	if len(certs) == 0 {
+		return nil, aoserrors.Errorf("certificate chain label: %s, id: %s not found", label, id)
+	}
+
+	return certs, nil
+}
+
+func (cryptoContext *CryptoContext) getTPMDevice(device string) (io.ReadWriteCloser, error) {
+	cryptoContext.Lock()
+	defer cryptoContext.Unlock()
+
+	if device == "" {
+		if DefaultTPMDevice == nil {
+			return nil, aoserrors.New("default TPM device is not defined")
+		}
+
+		return DefaultTPMDevice, nil
+	}
+
+	tpmDevice, ok := cryptoContext.tpmDevices[device]
+	if ok {
+		return tpmDevice, nil
+	}
+
+	tpmDevice, err := tpmutil.OpenTPM(device)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return tpmDevice, nil
+}
+
+func (cryptoContext *CryptoContext) loadPrivateKeyFromTPM(keyURL *url.URL) (crypto.PrivateKey, error) {
+	tpmDevice, err := cryptoContext.getTPMDevice(keyURL.Hostname())
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	handle, err := strconv.ParseUint(keyURL.Opaque, 0, 32)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	privKey, err := tpmkey.CreateFromPersistent(tpmDevice, tpmutil.Handle(handle))
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return privKey, nil
+}
+
+func (cryptoContext *CryptoContext) loadPrivateKeyFromPKCS11(keyURL *url.URL) (crypto.PrivateKey, error) {
+	library, token, label, id, userPin := parsePKCS11Url(keyURL)
+
+	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	key, err := pkcs11Ctx.FindKeyPair([]byte(id), []byte(label))
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	if key == nil {
+		return nil, aoserrors.Errorf("private key label: %s, id: %s not found", label, id)
+	}
+
+	return key, nil
+}
+
+func parseKey(data []byte) (crypto.PrivateKey, error) {
+	if key, err := x509.ParsePKCS1PrivateKey(data); err == nil {
 		return key, nil
 	}
 
-	if key, err = x509.ParseECPrivateKey(data); err == nil {
+	if key, err := x509.ParseECPrivateKey(data); err == nil {
 		return key, nil
 	}
 
-	if key, err = x509.ParsePKCS8PrivateKey(data); err == nil {
+	if key, err := x509.ParsePKCS8PrivateKey(data); err == nil {
 		return key, nil
 	}
 

@@ -31,22 +31,13 @@ import (
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 )
 
-// CreateCSR creates CSR
-func CreateCSR(key crypto.PrivateKey) (csr []byte, err error) {
-	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
-	if err != nil {
-		return nil, err
-	}
+/***********************************************************************************************************************
+ * Consts
+ **********************************************************************************************************************/
 
-	csr = pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificateRequest, Bytes: csrDER})
+const filePerm = 0o600
 
-	return csr, nil
-}
-
-// GetCACertificate returns CA certificate
-func GetCACertificate() (cert []byte) {
-	return []byte(
-		`-----BEGIN CERTIFICATE-----
+const caCertificate = `-----BEGIN CERTIFICATE-----
 MIIDYTCCAkmgAwIBAgIUefLO+XArcR2jeqrgGqQlTM20N/swDQYJKoZIhvcNAQEL
 BQAwQDELMAkGA1UEBhMCVUExEzARBgNVBAgMClNvbWUtU3RhdGUxDTALBgNVBAcM
 BEt5aXYxDTALBgNVBAoMBEVQQU0wHhcNMjAwNzAzMTU0NzEzWhcNMjAwODAyMTU0
@@ -66,13 +57,9 @@ xokm39qQ2HFKJXbzixE/4F792lUWU49g4tvClrkRrVISBxy1xPAQZ38dep9NMhHe
 puBh64yKH073veYqAlkv4p+m0VDJsSRhrhHnC1n37P6UIy3FhyxfsnQ4JTbDsjyH
 d43D/UeLrvqwwJvRWqwa1XCbkxyhBQ+/2Soq/ym+EFTgJJcT/UjXZMU6C3NF7oLa
 2bbVjCU=
------END CERTIFICATE-----`)
-}
+-----END CERTIFICATE-----`
 
-// GetCAKey returns CA key
-func GetCAKey() (cert []byte) {
-	return []byte(
-		`-----BEGIN RSA PRIVATE KEY-----
+const caKey = `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAxAB1EDIf5LpBIJgCrT0qfm6E2AFIRw7BRN1MfVb0FKBdocBs
 dCZjSnLYSdehDj8H7F0WwUtGlbt28NpdyAyONfUH9ifnaUXY4t1NpHBwDn/nBTaE
 AoCziW6UtFLUTPjxxG62PJXDMHvQQHvw6D/v1JtmesTvdGETiBQarX/uX3lWtB5X
@@ -98,13 +85,9 @@ MhsPYdUIHRuItwxWNBv+2EWpTnUkPx9BReRgLYDEj9hVDtXU9uVkG8aA6Fhdr5Zt
 M+fwQQKBgAbcuUeR9RseENAYl2fTf6ZaZ6pbK2HHo3qOqaY5vWpMESUOsAuC46qj
 anwM76TcEbTBHgEWMDYiAYURXPVXisouoD6jsTcMDErwM/3kqMQ7rD6VM9uK7UF+
 M0dV7SSA2lMvENr54k6V7zdaxnRDu8GL+OHtiZxeBG1P4pKhvf9l
------END RSA PRIVATE KEY-----`)
-}
+-----END RSA PRIVATE KEY-----`
 
-// CreateCertificate creates certificate
-func CreateCertificate(workDir string, csr []byte) (cert []byte, err error) {
-	csrConf :=
-		`[req]
+const csrConf = `[req]
 prompt = no
 distinguished_name = dn
 req_extensions = req_ext
@@ -136,10 +119,39 @@ DNS.5 = rabbitmq
 DNS.6 = localhost
 IP.1 = 127.0.0.1`
 
+/***********************************************************************************************************************
+ * Public
+ **********************************************************************************************************************/
+
+// CreateCSR creates CSR.
+func CreateCSR(key crypto.PrivateKey) (csr []byte, err error) {
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	csr = pem.EncodeToMemory(&pem.Block{Type: cryptutils.PEMBlockCertificateRequest, Bytes: csrDER})
+
+	return csr, nil
+}
+
+// GetCACertificate returns CA certificate.
+func GetCACertificate() (cert []byte) {
+	return []byte(caCertificate)
+}
+
+// GetCAKey returns CA key.
+func GetCAKey() (cert []byte) {
+	return []byte(caKey)
+}
+
+// CreateCertificate creates certificate.
+func CreateCertificate(workDir string, csr []byte) (cert []byte, err error) {
 	tmpDir, err := ioutil.TempDir(workDir, "cert*")
 	if err != nil {
-		return nil, err
+		return nil, aoserrors.Wrap(err)
 	}
+
 	defer os.RemoveAll(tmpDir)
 
 	caCertFile := path.Join(tmpDir, "ca.crt")
@@ -148,25 +160,26 @@ IP.1 = 127.0.0.1`
 	csrConfFile := path.Join(tmpDir, "csr.conf")
 	unitCertFile := path.Join(tmpDir, "unit.der")
 
-	if err = ioutil.WriteFile(csrFile, []byte(csr), 0644); err != nil {
+	if err = ioutil.WriteFile(csrFile, csr, filePerm); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(caCertFile, []byte(GetCACertificate()), 0644); err != nil {
+	if err = ioutil.WriteFile(caCertFile, GetCACertificate(), filePerm); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(caKeyFile, []byte(GetCAKey()), 0644); err != nil {
+	if err = ioutil.WriteFile(caKeyFile, GetCAKey(), filePerm); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(csrConfFile, []byte(csrConf), 0644); err != nil {
+	if err = ioutil.WriteFile(csrConfFile, []byte(csrConf), filePerm); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
 	var out []byte
 
-	if out, err = exec.Command("openssl", "req", "-inform", "PEM", "-in", csrFile, "-out", csrFile+".pem").CombinedOutput(); err != nil {
+	if out, err = exec.Command("openssl", "req", "-inform", "PEM", "-in",
+		csrFile, "-out", csrFile+".pem").CombinedOutput(); err != nil {
 		return nil, aoserrors.Errorf("message: %s, %s", string(out), err)
 	}
 
@@ -186,7 +199,8 @@ IP.1 = 127.0.0.1`
 		return nil, aoserrors.Wrap(err)
 	}
 
-	cert = append(certData, caData...)
+	certData = append(certData, caData...)
+	certData = append(certData, '\n')
 
-	return append(cert, '\n'), nil
+	return certData, nil
 }

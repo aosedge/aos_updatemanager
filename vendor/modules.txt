@@ -1,6 +1,9 @@
-# github.com/aoscloud/aos_common v0.0.0-20211220123623-d23b9d38e838
+# github.com/ThalesIgnite/crypto11 v1.2.5 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
+github.com/ThalesIgnite/crypto11
+# github.com/aoscloud/aos_common v0.0.0-20220218172038-8cf168776e9c
 ## explicit
 github.com/aoscloud/aos_common/aoserrors
+github.com/aoscloud/aos_common/api/iamanager/v2
 github.com/aoscloud/aos_common/api/updatemanager/v1
 github.com/aoscloud/aos_common/fs
 github.com/aoscloud/aos_common/image
@@ -9,6 +12,7 @@ github.com/aoscloud/aos_common/partition
 github.com/aoscloud/aos_common/utils/contextreader
 github.com/aoscloud/aos_common/utils/cryptutils
 github.com/aoscloud/aos_common/utils/testtools
+github.com/aoscloud/aos_common/utils/tpmkey
 # github.com/cavaliercoder/grab v2.0.0+incompatible
 github.com/cavaliercoder/grab
 # github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
@@ -34,7 +38,12 @@ github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
+github.com/golang/protobuf/ptypes/empty
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/google/go-tpm v0.3.2
+github.com/google/go-tpm/tpm2
+github.com/google/go-tpm/tpmutil
+github.com/google/go-tpm/tpmutil/tbs
 # github.com/hashicorp/errwrap v1.0.0
 github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.1.0
@@ -57,9 +66,15 @@ github.com/lunixbochs/struc
 # github.com/mattn/go-sqlite3 v1.14.9
 ## explicit
 github.com/mattn/go-sqlite3
+# github.com/miekg/pkcs11 v1.0.3-0.20190429190417-a667d056470f
+github.com/miekg/pkcs11
+# github.com/pkg/errors v0.9.1
+github.com/pkg/errors
 # github.com/sirupsen/logrus v1.8.1
 ## explicit
 github.com/sirupsen/logrus
+# github.com/thales-e-security/pool v0.0.2
+github.com/thales-e-security/pool
 # github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 ## explicit
 github.com/tmc/scp
@@ -173,7 +188,9 @@ google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/descriptorpb
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
+google.golang.org/protobuf/types/known/emptypb
 google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/ini.v1 v1.63.2
 ## explicit
 gopkg.in/ini.v1
+# github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
