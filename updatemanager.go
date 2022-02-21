@@ -28,12 +28,14 @@ import (
 	"syscall"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/utils/cryptutils"
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aoscloud/aos_updatemanager/config"
 	"github.com/aoscloud/aos_updatemanager/database"
+	"github.com/aoscloud/aos_updatemanager/iamclient"
 	"github.com/aoscloud/aos_updatemanager/umclient"
 	"github.com/aoscloud/aos_updatemanager/updatehandler"
 	_ "github.com/aoscloud/aos_updatemanager/updatemodules"
@@ -61,9 +63,11 @@ type journalHook struct {
 }
 
 type updateManager struct {
-	db      *database.Database
-	updater *updatehandler.Handler
-	client  *umclient.Client
+	db            *database.Database
+	updater       *updatehandler.Handler
+	client        *umclient.Client
+	cryptoContext *cryptutils.CryptoContext
+	iam           *iamclient.Client
 }
 
 /*******************************************************************************
@@ -115,7 +119,17 @@ func newUpdateManager(cfg *config.Config) (um *updateManager, err error) {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	um.client, err = umclient.New(cfg, um.updater, false)
+	um.cryptoContext, err = cryptutils.NewCryptoContext(cfg.CACert)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	um.iam, err = iamclient.New(cfg, false)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	um.client, err = umclient.New(cfg, um.updater, um.iam, um.cryptoContext, false)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -134,6 +148,10 @@ func (um *updateManager) close() {
 
 	if um.client != nil {
 		um.client.Close()
+	}
+
+	if um.cryptoContext != nil {
+		um.cryptoContext.Close()
 	}
 }
 
