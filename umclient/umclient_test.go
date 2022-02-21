@@ -108,7 +108,7 @@ func TestMessages(t *testing.T) {
 
 	handler := newMessageHandler()
 
-	client, err := umclient.New(&config.Config{ServerURL: serverURL, ID: "um"}, handler, true)
+	client, err := umclient.New(&config.Config{ServerURL: serverURL, ID: "um"}, handler, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create UM client: %s", err)
 	}
@@ -208,7 +208,7 @@ func TestServerDisconnect(t *testing.T) {
 
 	handler := newMessageHandler()
 
-	client, err := umclient.New(&config.Config{ServerURL: serverURL, ID: "um"}, handler, true)
+	client, err := umclient.New(&config.Config{ServerURL: serverURL, ID: "um"}, handler, nil, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create UM client: %s", err)
 	}
