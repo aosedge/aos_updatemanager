@@ -19,6 +19,7 @@ package partition
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -138,7 +139,7 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 		blkcache C.blkid_cache
 	)
 
-	if ret := C.blkid_get_cache(&blkcache, C.CString("/dev/null")); ret != 0 {
+	if ret := C.blkid_get_cache(&blkcache, C.CString("/dev/null")); ret != 0 { // nolint:gocritic // wrong warning?
 		return PartInfo{}, aoserrors.New("can't get blkid cache")
 	}
 
@@ -155,7 +156,7 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 		tagValue *C.char
 	)
 
-	for C.blkid_tag_next(iter, &tagType, &tagValue) == 0 {
+	for C.blkid_tag_next(iter, &tagType, &tagValue) == 0 { // nolint:gocritic // wrong warning?
 		switch C.GoString(tagType) {
 		case tagTypeLabel:
 			partInfo.Label = C.GoString(tagValue)
@@ -211,7 +212,7 @@ func GetPartitionNum(partitionPath string) (num int, err error) {
 	}
 
 	sysPath := fmt.Sprintf("/sys/class/block/%s/partition", partition)
-	//Check if file exists
+	// Check if file exists
 	if _, err := os.Stat(sysPath); err != nil {
 		return 0, aoserrors.Wrap(err)
 	}
@@ -237,10 +238,10 @@ func copyData(dst io.Writer, src io.Reader) (copied int64, duration time.Duratio
 	startTime := time.Now()
 	buf := make([]byte, ioBufferSize)
 
-	for err != io.EOF {
+	for !errors.Is(err, io.EOF) {
 		var readCount int
 
-		if readCount, err = src.Read(buf); err != nil && err != io.EOF {
+		if readCount, err = src.Read(buf); err != nil && !errors.Is(err, io.EOF) {
 			return copied, duration, aoserrors.Wrap(err)
 		}
 
@@ -251,7 +252,7 @@ func copyData(dst io.Writer, src io.Reader) (copied int64, duration time.Duratio
 				return copied, duration, aoserrors.Wrap(err)
 			}
 
-			copied = copied + int64(writeCount)
+			copied += int64(writeCount)
 		}
 
 		if time.Now().After(startTime.Add(duration).Add(copyBreathInterval)) {

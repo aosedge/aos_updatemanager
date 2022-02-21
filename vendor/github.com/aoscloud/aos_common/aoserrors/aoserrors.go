@@ -18,71 +18,78 @@
 package aoserrors
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
+ * Consts
+ **********************************************************************************************************************/
+
+const callerLevel = 2
+
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-// Custom error type with caller info
-type tracedError struct {
-	msg string
+// Error Aos error type.
+type Error struct {
+	pc   uintptr
+	line int
+	err  error
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Public
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-func New(message string) (err error) {
-	pc, _, line, ok := runtime.Caller(1)
-	callerInfo := formatCallerInfoString(pc, line, ok)
-
-	return &tracedError{
-		msg: fmt.Sprintf("%s %s", message, callerInfo),
-	}
+// New creates new Aos error from string message.
+func New(message string) error {
+	return createAosError(errors.New(message)) // nolint:goerr113 // convert to Aos error
 }
 
-func Errorf(format string, args ...interface{}) (err error) {
-	pc, _, line, ok := runtime.Caller(1)
-	callerInfo := formatCallerInfoString(pc, line, ok)
-	message := fmt.Sprintf(format, args...)
-
-	return &tracedError{
-		msg: fmt.Sprintf("%s %s", message, callerInfo),
-	}
+// Errorf creates new formatted Aos error.
+func Errorf(format string, args ...interface{}) error {
+	return createAosError(fmt.Errorf(format, args...)) // nolint:goerr113 // convert to Aos error
 }
 
-func (err *tracedError) Error() (str string) {
-	return err.msg
-}
-
-func Wrap(err error) (retErr error) {
-	if err == nil {
+// Wrap wraps existing error.
+func Wrap(fromErr error) error {
+	if fromErr == nil {
 		return nil
 	}
 
-	if _, ok := err.(*tracedError); ok {
-		return err
+	if errors.As(fromErr, new(*Error)) {
+		return fromErr
 	}
 
-	pc, _, line, ok := runtime.Caller(1)
-	callerInfo := formatCallerInfoString(pc, line, ok)
-
-	return &tracedError{
-		msg: fmt.Sprintf("%s %s", err, callerInfo),
-	}
+	return createAosError(fromErr)
 }
 
-/*******************************************************************************
- * Private
- ******************************************************************************/
-
-func formatCallerInfoString(pc uintptr, line int, ok bool) (str string) {
-	if ok {
-		return fmt.Sprintf("[%s:%d]", runtime.FuncForPC(pc).Name(), line)
-	} else {
+// Error returns Aos error message.
+func (aosErr *Error) Error() string {
+	f := runtime.FuncForPC(aosErr.pc)
+	if f == nil {
 		return "[unknown:???]"
 	}
+
+	return fmt.Sprintf("%s [%s:%d]", aosErr.err.Error(), f.Name(), aosErr.line)
+}
+
+// Unwrap unwraps error.
+func (aosErr *Error) Unwrap() error {
+	return aosErr.err
+}
+
+/***********************************************************************************************************************
+ * Private
+ **********************************************************************************************************************/
+
+func createAosError(fromErr error) *Error {
+	aosErr := &Error{err: fromErr}
+
+	aosErr.pc, _, aosErr.line, _ = runtime.Caller(callerLevel)
+
+	return aosErr
 }

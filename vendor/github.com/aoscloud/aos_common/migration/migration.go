@@ -19,6 +19,7 @@ package migration
 
 import (
 	"database/sql"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,19 +27,25 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/golang-migrate/migrate/v4/source/file" // use blank import to init migrate
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3" //ignore lint
+	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 )
 
-/*******************************************************************************
- * Public
- ******************************************************************************/
+/***********************************************************************************************************************
+ * Consts
+ **********************************************************************************************************************/
 
-// DoMigrate does migration on provided database
+const folderPerm = 0o755
+
+/***********************************************************************************************************************
+ * Public
+ **********************************************************************************************************************/
+
+// DoMigrate does migration on provided database.
 func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err error) {
 	log.Debugf("Db Migration start migration to %d", int(migrateVersion))
 
@@ -48,7 +55,7 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 	}
 
 	version, dirty, err := m.Version()
-	if err == migrate.ErrNilVersion {
+	if errors.Is(err, migrate.ErrNilVersion) {
 		version = 0
 
 		log.Debugf("Migration version was not set. Setting initial version %d", version)
@@ -60,7 +67,7 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 		return aoserrors.Wrap(err)
 	}
 
-	if dirty == true {
+	if dirty {
 		return aoserrors.New("can't update, db is dirty")
 	}
 
@@ -68,12 +75,13 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 
 	if version == migrateVersion {
 		log.Debugf("No migration needed. db version is: %d", int(migrateVersion))
+
 		return nil
 	}
 
-	err = m.Migrate(migrateVersion)
-	if err == migrate.ErrNoChange {
+	if err = m.Migrate(migrateVersion); errors.Is(err, migrate.ErrNoChange) {
 		log.Debugf("No migration needed. db version is: %d", int(migrateVersion))
+
 		return nil
 	}
 
@@ -84,7 +92,7 @@ func DoMigrate(sql *sql.DB, migrationPath string, migrateVersion uint) (err erro
 	return aoserrors.Wrap(err)
 }
 
-// SetDatabaseVersion sets the database version
+// SetDatabaseVersion sets the database version.
 func SetDatabaseVersion(sql *sql.DB, migrationPath string, version uint) (err error) {
 	m, err := getMigrationFromInstance(sql, migrationPath)
 	if err != nil {
@@ -98,7 +106,7 @@ func SetDatabaseVersion(sql *sql.DB, migrationPath string, version uint) (err er
 	return nil
 }
 
-// MergeMigrationFiles merged the migration files with the previous state
+// MergeMigrationFiles merged the migration files with the previous state.
 func MergeMigrationFiles(migrationPath string, mergedMigrationPath string) (err error) {
 	absMigrationPath, err := filepath.Abs(migrationPath)
 	if err != nil {
@@ -114,8 +122,8 @@ func MergeMigrationFiles(migrationPath string, mergedMigrationPath string) (err 
 		return aoserrors.Wrap(err)
 	}
 
-	//Create target directories if needed
-	if err = os.MkdirAll(absMergedMigrationPath, 0755); err != nil {
+	// Create target directories if needed
+	if err = os.MkdirAll(absMergedMigrationPath, folderPerm); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -126,24 +134,24 @@ func MergeMigrationFiles(migrationPath string, mergedMigrationPath string) (err 
 	return nil
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func copyFiles(source, destination string) (err error) {
 	err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		var relPath string = strings.Replace(path, source, "", 1)
+		relPath := strings.Replace(path, source, "", 1)
 		if relPath == "" {
 			return nil
 		}
 
 		if _, err := os.Stat(filepath.Join(destination, relPath)); err == nil {
-			//File exists on destination
+			// File exists on destination
 			return nil
 		}
 
 		if info.IsDir() {
-			return aoserrors.Wrap(os.Mkdir(filepath.Join(destination, relPath), 0755))
+			return aoserrors.Wrap(os.Mkdir(filepath.Join(destination, relPath), folderPerm))
 		}
 
 		return aoserrors.Wrap(copyFile(filepath.Join(source, relPath), filepath.Join(destination, relPath)))
@@ -174,6 +182,7 @@ func copyFile(src string, dst string) (err error) {
 	}
 	defer destination.Close()
 	_, err = io.Copy(destination, source)
+
 	return aoserrors.Wrap(err)
 }
 

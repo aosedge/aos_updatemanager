@@ -2,8 +2,10 @@ module github.com/aoscloud/aos_updatemanager
 
 go 1.14
 
+replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
+
 require (
-	github.com/aoscloud/aos_common v0.0.0-20211220123623-d23b9d38e838
+	github.com/aoscloud/aos_common v0.0.0-20220218172038-8cf168776e9c
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
