@@ -123,12 +123,20 @@ type MessageHandler interface {
 	StatusChannel() (channel <-chan Status)
 }
 
+// CertificateProvider interface to get certificate.
+type CertificateProvider interface {
+	GetCertificate(certType string, cryptocontext *cryptutils.CryptoContext) (certURL, ketURL string, err error)
+}
+
 /*******************************************************************************
  * Public
  ******************************************************************************/
 
 // New creates new UM client.
-func New(config *config.Config, messageHandler MessageHandler, insecure bool) (client *Client, err error) {
+func New(
+	config *config.Config, messageHandler MessageHandler,
+	provider CertificateProvider,
+	cryptocontext *cryptutils.CryptoContext, insecure bool) (client *Client, err error) {
 	log.Debug("Create UM client")
 
 	if messageHandler == nil {
@@ -141,7 +149,7 @@ func New(config *config.Config, messageHandler MessageHandler, insecure bool) (c
 		closeChannel:   make(chan struct{}),
 	}
 
-	if err = client.createConnection(config, insecure); err != nil {
+	if err = client.createConnection(config, provider, cryptocontext, insecure); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -195,7 +203,9 @@ func (status ComponentStatus) String() string {
  * Private
  ******************************************************************************/
 
-func (client *Client) createConnection(config *config.Config, insecure bool) (err error) {
+func (client *Client) createConnection(
+	config *config.Config, provider CertificateProvider,
+	cryptocontext *cryptutils.CryptoContext, insecure bool) (err error) {
 	log.Debug("Connecting to CM...")
 
 	var secureOpt grpc.DialOption
@@ -203,7 +213,12 @@ func (client *Client) createConnection(config *config.Config, insecure bool) (er
 	if insecure {
 		secureOpt = grpc.WithInsecure()
 	} else {
-		tlsConfig, err := cryptutils.GetClientMutualTLSConfig(config.CACert, config.CertStorage)
+		certURL, keyURL, err := provider.GetCertificate(config.CertStorage, cryptocontext)
+		if err != nil {
+			return aoserrors.Wrap(err)
+		}
+
+		tlsConfig, err := cryptocontext.GetClientMutualTLSConfig(certURL, keyURL)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}
