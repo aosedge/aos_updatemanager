@@ -37,19 +37,21 @@ const (
 	retryDelay = 1 * time.Second
 )
 
-/*******************************************************************************
+const folderPerm = 0o755
+
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Public
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-// Mount creates mount point and mount device to it
+// Mount creates mount point and mount device to it.
 func Mount(device string, mountPoint string, fsType string, flags uintptr, opts string) (err error) {
 	log.WithFields(log.Fields{"device": device, "type": fsType, "mountPoint": mountPoint}).Debug("Mount partition")
 
-	if err = os.MkdirAll(mountPoint, 0755); err != nil {
+	if err = os.MkdirAll(mountPoint, folderPerm); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -61,7 +63,7 @@ func Mount(device string, mountPoint string, fsType string, flags uintptr, opts 
 			log.Warningf("Mount error: %s, try remount...", err)
 
 			// Try to sync and force umount
-			syscall.Unmount(mountPoint, syscall.MNT_FORCE)
+			_ = syscall.Unmount(mountPoint, syscall.MNT_FORCE)
 		}); err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -69,13 +71,14 @@ func Mount(device string, mountPoint string, fsType string, flags uintptr, opts 
 	return nil
 }
 
-// Umount umount mount point and remove it
+// Umount umount mount point and remove it.
 func Umount(mountPoint string) (err error) {
 	log.WithFields(log.Fields{"mountPoint": mountPoint}).Debug("Umount partition")
 
 	defer func() {
 		if removeErr := os.RemoveAll(mountPoint); removeErr != nil {
 			log.Errorf("Can't remove mount point: %s", removeErr)
+
 			if err == nil {
 				err = aoserrors.Wrap(removeErr)
 			}
@@ -96,7 +99,6 @@ func Umount(mountPoint string) (err error) {
 			// Try to sync and force umount
 			syscall.Sync()
 		}); err != nil {
-
 		log.Warningf("Can't umount for: %s", mountPoint)
 
 		if output, err := exec.Command("lsof", mountPoint).CombinedOutput(); err == nil {
@@ -113,9 +115,9 @@ func Umount(mountPoint string) (err error) {
 	return nil
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func retry(caller func() error, restorer func(error)) (err error) {
 	i := 0

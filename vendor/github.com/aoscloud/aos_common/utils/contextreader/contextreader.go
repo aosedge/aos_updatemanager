@@ -26,6 +26,7 @@ import (
  * Types
  **********************************************************************************************************************/
 
+// ContextReader context reader instance.
 type ContextReader struct {
 	ctx    context.Context
 	reader io.Reader
@@ -35,7 +36,7 @@ type ContextReader struct {
  * Public
  **********************************************************************************************************************/
 
-// New creates new context reader
+// New creates new context reader.
 func New(ctx context.Context, reader io.Reader) (contextReader io.Reader) {
 	return &ContextReader{
 		ctx:    ctx,
@@ -46,9 +47,9 @@ func New(ctx context.Context, reader io.Reader) (contextReader io.Reader) {
 func (contextReader *ContextReader) Read(p []byte) (n int, err error) {
 	select {
 	case <-contextReader.ctx.Done():
-		return 0, contextReader.ctx.Err()
+		return 0, contextReader.ctx.Err() // nolint:wrapcheck // error not properly handled by io.Copy
 
 	default:
-		return contextReader.reader.Read(p)
+		return contextReader.reader.Read(p) // nolint:wrapcheck // error not properly handled by io.Copy
 	}
 }

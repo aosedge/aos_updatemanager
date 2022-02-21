@@ -17,7 +17,8 @@
 package testtools
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -35,31 +36,31 @@ import (
 // This package contains different tools which are used in unit tests by
 // different modules
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Consts
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-const ioBufferSize = 1024 * 1024
+const strconvBase10 = 10
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-// PartDesc partition description structure
+// PartDesc partition description structure.
 type PartDesc struct {
 	Type  string
 	Label string
 	Size  uint64
 }
 
-// PartInfo partition info structure
+// PartInfo partition info structure.
 type PartInfo struct {
 	PartDesc
 	Device   string
 	PartUUID string
 }
 
-// TestDisk test disk structure
+// TestDisk test disk structure.
 type TestDisk struct {
 	Device     string
 	Partitions []PartInfo
@@ -67,15 +68,16 @@ type TestDisk struct {
 	path string
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Public
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-// NewTestDisk creates new disk in file
+// NewTestDisk creates new disk in file.
 func NewTestDisk(path string, desc []PartDesc) (disk *TestDisk, err error) {
 	disk = &TestDisk{
 		Partitions: make([]PartInfo, 0, len(desc)),
-		path:       path}
+		path:       path,
+	}
 
 	defer func(disk *TestDisk) {
 		if err != nil {
@@ -87,64 +89,29 @@ func NewTestDisk(path string, desc []PartDesc) (disk *TestDisk, err error) {
 	var diskSize uint64 = 2
 
 	for _, part := range desc {
-		diskSize = diskSize + part.Size
+		diskSize += part.Size
 	}
 
-	var output []byte
-
-	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M", "count="+strconv.FormatUint(diskSize, 10)).CombinedOutput(); err != nil {
-		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
+	if err = createDisk(path, diskSize); err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
-	if output, err = exec.Command("parted", "-s", path, "mktable", "gpt").CombinedOutput(); err != nil {
-		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
+	if err = createParts(path, desc); err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
-	diskSize = 1
-
-	for _, part := range desc {
-		if output, err = exec.Command("parted", "-s", path, "mkpart", "primary",
-			fmt.Sprintf("%dMiB", diskSize),
-			fmt.Sprintf("%dMiB", diskSize+part.Size)).CombinedOutput(); err != nil {
-			return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
-		}
-
-		diskSize = diskSize + part.Size
+	if disk.Device, err = setupDevice(path); err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
-	if output, err = exec.Command("losetup", "-f", "-P", path, "--show").CombinedOutput(); err != nil {
-		return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
-	}
-
-	disk.Device = strings.TrimSpace(string(output))
-
-	for i, part := range desc {
-		info := PartInfo{
-			PartDesc: part,
-			Device:   disk.Device + "p" + strconv.Itoa(i+1),
-		}
-
-		if info.PartUUID, err = getPartUUID(info.Device); err != nil {
-			return nil, aoserrors.Wrap(err)
-		}
-
-		disk.Partitions = append(disk.Partitions, info)
-
-		labelOption := "-L"
-
-		if strings.Contains(part.Type, "fat") || strings.Contains(part.Type, "dos") {
-			labelOption = "-n"
-		}
-
-		if output, err = exec.Command("mkfs."+part.Type, info.Device, labelOption, info.Label).CombinedOutput(); err != nil {
-			return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
-		}
+	if disk.Partitions, err = formatDisk(disk.Device, desc); err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return disk, nil
 }
 
-// Close closes test disk
+// Close closes test disk.
 func (disk *TestDisk) Close() (err error) {
 	var output []byte
 
@@ -161,13 +128,13 @@ func (disk *TestDisk) Close() (err error) {
 	return nil
 }
 
-// CreateFilePartition creates partition in file
+// CreateFilePartition creates partition in file.
 func CreateFilePartition(path string, fsType string, size uint64,
 	contentCreator func(mountPoint string) (err error), archivate bool) (err error) {
 	var output []byte
 
 	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M",
-		"count="+strconv.FormatUint(size, 10)).CombinedOutput(); err != nil {
+		"count="+strconv.FormatUint(size, strconvBase10)).CombinedOutput(); err != nil {
 		return aoserrors.Errorf("%s (%s)", err, (string(output)))
 	}
 
@@ -216,7 +183,7 @@ func CreateFilePartition(path string, fsType string, size uint64,
 	return nil
 }
 
-// ComparePartitions compares partitions
+// ComparePartitions compares partitions.
 func ComparePartitions(dst, src string) (err error) {
 	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
@@ -230,36 +197,36 @@ func ComparePartitions(dst, src string) (err error) {
 	}
 	defer dstFile.Close()
 
-	srcMd5 := md5.New()
-	dstMd5 := md5.New()
+	srcSha256 := sha256.New()
+	dstSha256 := sha256.New()
 
-	size, err := srcFile.Seek(0, 2)
+	size, err := srcFile.Seek(0, io.SeekEnd)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err = srcFile.Seek(0, 0); err != nil {
+	if _, err = srcFile.Seek(0, io.SeekStart); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err := io.CopyN(srcMd5, srcFile, size); err != nil && err != io.EOF {
+	if _, err := io.CopyN(srcSha256, srcFile, size); err != nil && errors.Is(err, io.EOF) {
 		return aoserrors.Wrap(err)
 	}
 
-	if _, err := io.CopyN(dstMd5, dstFile, size); err != nil && err != io.EOF {
+	if _, err := io.CopyN(dstSha256, dstFile, size); err != nil && errors.Is(err, io.EOF) {
 		return aoserrors.Wrap(err)
 	}
 
-	if !reflect.DeepEqual(srcMd5.Sum(nil), dstMd5.Sum(nil)) {
+	if !reflect.DeepEqual(srcSha256.Sum(nil), dstSha256.Sum(nil)) {
 		return aoserrors.New("data mismatch")
 	}
 
 	return nil
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func getPartUUID(device string) (partUUID string, err error) {
 	var output []byte
@@ -275,4 +242,78 @@ func getPartUUID(device string) (partUUID string, err error) {
 	}
 
 	return "", aoserrors.New("partition UUID not found")
+}
+
+func createDisk(path string, size uint64) (err error) {
+	var output []byte
+
+	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M",
+		"count="+strconv.FormatUint(size, strconvBase10)).CombinedOutput(); err != nil {
+		return aoserrors.Errorf("%s (%s)", err, (string(output)))
+	}
+
+	if output, err = exec.Command("parted", "-s", path, "mktable", "gpt").CombinedOutput(); err != nil {
+		return aoserrors.Errorf("%s (%s)", err, (string(output)))
+	}
+
+	return nil
+}
+
+func createParts(path string, desc []PartDesc) (err error) {
+	var (
+		diskSize uint64 = 1
+		output   []byte
+	)
+
+	for _, part := range desc {
+		if output, err = exec.Command("parted", "-s", path, "mkpart", "primary",
+			fmt.Sprintf("%dMiB", diskSize),
+			fmt.Sprintf("%dMiB", diskSize+part.Size)).CombinedOutput(); err != nil {
+			return aoserrors.Errorf("%s (%s)", err, (string(output)))
+		}
+
+		diskSize += part.Size
+	}
+
+	return nil
+}
+
+func setupDevice(path string) (device string, err error) {
+	var output []byte
+
+	if output, err = exec.Command("losetup", "-f", "-P", path, "--show").CombinedOutput(); err != nil {
+		return "", aoserrors.Errorf("%s (%s)", err, (string(output)))
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func formatDisk(device string, desc []PartDesc) (parts []PartInfo, err error) {
+	var output []byte
+
+	for i, part := range desc {
+		info := PartInfo{
+			PartDesc: part,
+			Device:   device + "p" + strconv.Itoa(i+1),
+		}
+
+		if info.PartUUID, err = getPartUUID(info.Device); err != nil {
+			return nil, aoserrors.Wrap(err)
+		}
+
+		parts = append(parts, info)
+
+		labelOption := "-L"
+
+		if strings.Contains(part.Type, "fat") || strings.Contains(part.Type, "dos") {
+			labelOption = "-n"
+		}
+
+		if output, err = exec.Command("mkfs."+part.Type, info.Device,
+			labelOption, info.Label).CombinedOutput(); err != nil {
+			return nil, aoserrors.Errorf("%s (%s)", err, (string(output)))
+		}
+	}
+
+	return parts, nil
 }
