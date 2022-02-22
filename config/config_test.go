@@ -66,7 +66,7 @@ func createConfigFile() (err error) {
 	"ServerUrl": "localhost:8090",
 	"ID": "um01",
 	"CACert": "/etc/ssl/certs/rootCA.crt",
-	"CertStorage": "/var/aos/crypt/um/",
+	"CertStorage": "um",
 	"WorkingDir": "/var/aos/updatemanager",
 	"DownloadDir": "/var/aos/updatemanager/download",
 	"UpdateModules":[{
@@ -168,7 +168,7 @@ func TestGetCredentials(t *testing.T) {
 		t.Errorf("Wrong caCert value: %s", cfg.CACert)
 	}
 
-	if cfg.CertStorage != "/var/aos/crypt/um/" {
+	if cfg.CertStorage != "um" {
 		t.Errorf("Wrong certStorage value: %s", cfg.CertStorage)
 	}
 }
