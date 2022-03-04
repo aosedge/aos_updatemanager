@@ -148,6 +148,15 @@ func TestAosVersion(t *testing.T) {
 }
 
 func TestModuleState(t *testing.T) {
+	state, err := db.GetModuleState("someID")
+	if err != nil {
+		t.Errorf("Can't get module state: %s", err)
+	}
+
+	if string(state) != "" {
+		t.Error("State should be empty")
+	}
+
 	type testItem struct {
 		id    string
 		state string
