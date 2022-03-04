@@ -126,7 +126,7 @@ func (db *Database) GetModuleState(id string) (state []byte, err error) {
 	}
 
 	if !rows.Next() {
-		return nil, aoserrors.New(ErrNotExistStr)
+		return state, nil
 	}
 
 	if err = rows.Scan(&state); err != nil {
