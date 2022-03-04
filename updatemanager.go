@@ -87,14 +87,14 @@ func init() {
  ******************************************************************************/
 
 func newUpdateManager(cfg *config.Config) (um *updateManager, err error) {
+	um = &updateManager{}
+
 	defer func() {
 		if err != nil {
 			um.close()
 			um = nil
 		}
 	}()
-
-	um = &updateManager{}
 
 	// Create DB
 	dbFile := path.Join(cfg.WorkingDir, dbFileName)
