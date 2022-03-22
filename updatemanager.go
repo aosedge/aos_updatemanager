@@ -110,28 +110,28 @@ func newUpdateManager(cfg *config.Config) (um *updateManager, err error) {
 		}
 
 		if err != nil {
-			return nil, aoserrors.Wrap(err)
+			return um, aoserrors.Wrap(err)
 		}
 	}
 
 	um.updater, err = updatehandler.New(cfg, um.db, um.db)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return um, aoserrors.Wrap(err)
 	}
 
 	um.cryptoContext, err = cryptutils.NewCryptoContext(cfg.CACert)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return um, aoserrors.Wrap(err)
 	}
 
 	um.iam, err = iamclient.New(cfg, false)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return um, aoserrors.Wrap(err)
 	}
 
 	um.client, err = umclient.New(cfg, um.updater, um.iam, um.cryptoContext, false)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return um, aoserrors.Wrap(err)
 	}
 
 	return um, nil
