@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/aoscloud/aos_updatemanager/workflows/CI/badge.svg)](https://github.com/aoscloud/aos_updatemanager/ctions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/aoscloud/aos_updatemanager/branch/main/graph/badge.svg?token=fvKMRCJlZv)](https://codecov.io/gh/aoscloud/aos_updatemanager)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=aoscloud_aos_updatemanager&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=aoscloud_aos_updatemanager)
 
 Aos Update Manager (UM) is responsible for update of different system part. The main functions of UM:
 
