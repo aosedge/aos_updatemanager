@@ -663,8 +663,10 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		}
 	}
 
-	if err = os.MkdirAll(handler.downloadDir, 0o755); err != nil {
-		return aoserrors.Wrap(err)
+	if handler.downloadDir != "" {
+		if err = os.MkdirAll(handler.downloadDir, 0o755); err != nil {
+			return aoserrors.Wrap(err)
+		}
 	}
 
 	urlVal, err := url.Parse(updateInfo.URL)
@@ -675,6 +677,10 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 	var filePath string
 
 	if urlVal.Scheme != "file" {
+		if handler.downloadDir == "" {
+			return aoserrors.New("download dir should be configured for remote image download")
+		}
+
 		if filePath, err = image.Download(context.Background(), handler.downloadDir, updateInfo.URL); err != nil {
 			return aoserrors.Wrap(err)
 		}
