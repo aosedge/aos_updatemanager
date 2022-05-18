@@ -27,9 +27,9 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aostypes"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/config"
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
@@ -89,7 +89,7 @@ func TestServicesActivated(t *testing.T) {
 	}
 
 	if err := systemdchecker.New(systemdchecker.Config{
-		SystemServices: serviceList, Timeout: config.Duration{Duration: 10 * time.Second},
+		SystemServices: serviceList, Timeout: aostypes.Duration{Duration: 10 * time.Second},
 	}).Check(); err != nil {
 		t.Errorf("Watch services error: %s", err)
 	}
@@ -106,7 +106,7 @@ func TestServicesFailed(t *testing.T) {
 	}
 
 	if err := systemdchecker.New(systemdchecker.Config{
-		SystemServices: serviceList, Timeout: config.Duration{Duration: 10 * time.Second},
+		SystemServices: serviceList, Timeout: aostypes.Duration{Duration: 10 * time.Second},
 	}).Check(); err == nil {
 		t.Error("Error expected")
 	}
