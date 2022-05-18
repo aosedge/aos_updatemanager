@@ -23,10 +23,9 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aostypes"
 	"github.com/coreos/go-systemd/v22/dbus"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/aoscloud/aos_updatemanager/config"
 )
 
 /***********************************************************************************************************************
@@ -41,9 +40,9 @@ const defaultTimeout = 30 * time.Second
 
 // Config watch services configuration.
 type Config struct {
-	SystemServices []string        `json:"systemServices"`
-	UserServices   []string        `json:"userServices"`
-	Timeout        config.Duration `json:"timeout"`
+	SystemServices []string          `json:"systemServices"`
+	UserServices   []string          `json:"userServices"`
+	Timeout        aostypes.Duration `json:"timeout"`
 }
 
 // Checker systemd checker instance.
@@ -111,7 +110,8 @@ func (checker *Checker) Check() (err error) {
  **********************************************************************************************************************/
 
 func watchServices(createConnection func(context.Context) (*dbus.Conn, error), services []string,
-	timeout time.Duration) (err error) {
+	timeout time.Duration,
+) (err error) {
 	systemd, err := createConnection(context.Background())
 	if err != nil {
 		return aoserrors.Wrap(err)
