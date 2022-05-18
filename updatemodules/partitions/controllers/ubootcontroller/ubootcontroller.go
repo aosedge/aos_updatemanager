@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/fs"
 	"github.com/aoscloud/aos_common/partition"
+	"github.com/aoscloud/aos_common/utils/fs"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
