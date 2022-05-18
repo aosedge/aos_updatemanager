@@ -26,8 +26,8 @@ import (
 	"syscall"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/fs"
 	"github.com/aoscloud/aos_common/partition"
+	"github.com/aoscloud/aos_common/utils/fs"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aoscloud/aos_updatemanager/updatehandler"
@@ -141,7 +141,8 @@ type updateState int
 // New creates fs update module instance.
 func New(id string, partitions []string, versionFile string, controller StateController,
 	storage updatehandler.ModuleStorage, rebootHandler RebootHandler,
-	checker UpdateChecker) (updateModule updatehandler.UpdateModule, err error) {
+	checker UpdateChecker,
+) (updateModule updatehandler.UpdateModule, err error) {
 	log.WithField("module", id).Debug("Create dualpart module")
 
 	module := &DualPartModule{
