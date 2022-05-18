@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/fs"
+	"github.com/aoscloud/aos_common/utils/fs"
 	"github.com/aoscloud/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
