@@ -38,7 +38,7 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/utils/tpmkey"
+	"github.com/aoscloud/aos_common/tpmkey"
 )
 
 /***********************************************************************************************************************
@@ -180,7 +180,8 @@ func (cryptoContext *CryptoContext) LoadCertificateByURL(certURLStr string) ([]*
 
 // LoadPrivateKeyByURL loads private key by URL.
 func (cryptoContext *CryptoContext) LoadPrivateKeyByURL(keyURLStr string) (privKey crypto.PrivateKey,
-	supportPKCS1v15SessionKey bool, err error) {
+	supportPKCS1v15SessionKey bool, err error,
+) {
 	keyURL, err := url.Parse(keyURLStr)
 	if err != nil {
 		return nil, false, aoserrors.Wrap(err)
