@@ -19,7 +19,6 @@ package updatemodules
 
 import (
 	// include all supported plugins.
-	_ "github.com/aoscloud/aos_updatemanager/updatemodules/boardconfigmodule"
 	_ "github.com/aoscloud/aos_updatemanager/updatemodules/efidualpart"
 	_ "github.com/aoscloud/aos_updatemanager/updatemodules/overlaysystemd"
 	_ "github.com/aoscloud/aos_updatemanager/updatemodules/overlayxenstore"
