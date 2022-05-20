@@ -25,9 +25,8 @@ type IAMProtectedServiceClient interface {
 	ApplyCert(ctx context.Context, in *ApplyCertRequest, opts ...grpc.CallOption) (*ApplyCertResponse, error)
 	EncryptDisk(ctx context.Context, in *EncryptDiskRequest, opts ...grpc.CallOption) (*empty.Empty, error)
 	FinishProvisioning(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
-	SetUsers(ctx context.Context, in *Users, opts ...grpc.CallOption) (*empty.Empty, error)
-	RegisterService(ctx context.Context, in *RegisterServiceRequest, opts ...grpc.CallOption) (*RegisterServiceResponse, error)
-	UnregisterService(ctx context.Context, in *UnregisterServiceRequest, opts ...grpc.CallOption) (*empty.Empty, error)
+	RegisterInstance(ctx context.Context, in *RegisterInstanceRequest, opts ...grpc.CallOption) (*RegisterInstanceResponse, error)
+	UnregisterInstance(ctx context.Context, in *UnregisterInstanceRequest, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type iAMProtectedServiceClient struct {
@@ -92,27 +91,18 @@ func (c *iAMProtectedServiceClient) FinishProvisioning(ctx context.Context, in *
 	return out, nil
 }
 
-func (c *iAMProtectedServiceClient) SetUsers(ctx context.Context, in *Users, opts ...grpc.CallOption) (*empty.Empty, error) {
-	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/iamanager.v2.IAMProtectedService/SetUsers", in, out, opts...)
+func (c *iAMProtectedServiceClient) RegisterInstance(ctx context.Context, in *RegisterInstanceRequest, opts ...grpc.CallOption) (*RegisterInstanceResponse, error) {
+	out := new(RegisterInstanceResponse)
+	err := c.cc.Invoke(ctx, "/iamanager.v2.IAMProtectedService/RegisterInstance", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *iAMProtectedServiceClient) RegisterService(ctx context.Context, in *RegisterServiceRequest, opts ...grpc.CallOption) (*RegisterServiceResponse, error) {
-	out := new(RegisterServiceResponse)
-	err := c.cc.Invoke(ctx, "/iamanager.v2.IAMProtectedService/RegisterService", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *iAMProtectedServiceClient) UnregisterService(ctx context.Context, in *UnregisterServiceRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
+func (c *iAMProtectedServiceClient) UnregisterInstance(ctx context.Context, in *UnregisterInstanceRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/iamanager.v2.IAMProtectedService/UnregisterService", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/iamanager.v2.IAMProtectedService/UnregisterInstance", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +119,8 @@ type IAMProtectedServiceServer interface {
 	ApplyCert(context.Context, *ApplyCertRequest) (*ApplyCertResponse, error)
 	EncryptDisk(context.Context, *EncryptDiskRequest) (*empty.Empty, error)
 	FinishProvisioning(context.Context, *empty.Empty) (*empty.Empty, error)
-	SetUsers(context.Context, *Users) (*empty.Empty, error)
-	RegisterService(context.Context, *RegisterServiceRequest) (*RegisterServiceResponse, error)
-	UnregisterService(context.Context, *UnregisterServiceRequest) (*empty.Empty, error)
+	RegisterInstance(context.Context, *RegisterInstanceRequest) (*RegisterInstanceResponse, error)
+	UnregisterInstance(context.Context, *UnregisterInstanceRequest) (*empty.Empty, error)
 	mustEmbedUnimplementedIAMProtectedServiceServer()
 }
 
@@ -157,14 +146,11 @@ func (UnimplementedIAMProtectedServiceServer) EncryptDisk(context.Context, *Encr
 func (UnimplementedIAMProtectedServiceServer) FinishProvisioning(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FinishProvisioning not implemented")
 }
-func (UnimplementedIAMProtectedServiceServer) SetUsers(context.Context, *Users) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetUsers not implemented")
+func (UnimplementedIAMProtectedServiceServer) RegisterInstance(context.Context, *RegisterInstanceRequest) (*RegisterInstanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterInstance not implemented")
 }
-func (UnimplementedIAMProtectedServiceServer) RegisterService(context.Context, *RegisterServiceRequest) (*RegisterServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterService not implemented")
-}
-func (UnimplementedIAMProtectedServiceServer) UnregisterService(context.Context, *UnregisterServiceRequest) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnregisterService not implemented")
+func (UnimplementedIAMProtectedServiceServer) UnregisterInstance(context.Context, *UnregisterInstanceRequest) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnregisterInstance not implemented")
 }
 func (UnimplementedIAMProtectedServiceServer) mustEmbedUnimplementedIAMProtectedServiceServer() {}
 
@@ -287,56 +273,38 @@ func _IAMProtectedService_FinishProvisioning_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IAMProtectedService_SetUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Users)
+func _IAMProtectedService_RegisterInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IAMProtectedServiceServer).SetUsers(ctx, in)
+		return srv.(IAMProtectedServiceServer).RegisterInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/iamanager.v2.IAMProtectedService/SetUsers",
+		FullMethod: "/iamanager.v2.IAMProtectedService/RegisterInstance",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IAMProtectedServiceServer).SetUsers(ctx, req.(*Users))
+		return srv.(IAMProtectedServiceServer).RegisterInstance(ctx, req.(*RegisterInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IAMProtectedService_RegisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterServiceRequest)
+func _IAMProtectedService_UnregisterInstance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnregisterInstanceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IAMProtectedServiceServer).RegisterService(ctx, in)
+		return srv.(IAMProtectedServiceServer).UnregisterInstance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/iamanager.v2.IAMProtectedService/RegisterService",
+		FullMethod: "/iamanager.v2.IAMProtectedService/UnregisterInstance",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IAMProtectedServiceServer).RegisterService(ctx, req.(*RegisterServiceRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _IAMProtectedService_UnregisterService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UnregisterServiceRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IAMProtectedServiceServer).UnregisterService(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/iamanager.v2.IAMProtectedService/UnregisterService",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IAMProtectedServiceServer).UnregisterService(ctx, req.(*UnregisterServiceRequest))
+		return srv.(IAMProtectedServiceServer).UnregisterInstance(ctx, req.(*UnregisterInstanceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -373,16 +341,12 @@ var IAMProtectedService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IAMProtectedService_FinishProvisioning_Handler,
 		},
 		{
-			MethodName: "SetUsers",
-			Handler:    _IAMProtectedService_SetUsers_Handler,
+			MethodName: "RegisterInstance",
+			Handler:    _IAMProtectedService_RegisterInstance_Handler,
 		},
 		{
-			MethodName: "RegisterService",
-			Handler:    _IAMProtectedService_RegisterService_Handler,
-		},
-		{
-			MethodName: "UnregisterService",
-			Handler:    _IAMProtectedService_UnregisterService_Handler,
+			MethodName: "UnregisterInstance",
+			Handler:    _IAMProtectedService_UnregisterInstance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
