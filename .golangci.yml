@@ -11,11 +11,23 @@ linters:
     - nestif
     - ireturn
     - gomoddirectives
+    - nonamedreturns
+    - exhaustruct
     # deprecated
     - interfacer
     - golint
     - scopelint
     - maligned
+    - bodyclose
+    - contextcheck
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - tparallel
+    - unparam
+    - wastedassign
 
 linters-settings:
   revive:

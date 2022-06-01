@@ -71,7 +71,8 @@ type moduleState struct {
 
 // New creates ssh module instance.
 func New(id string, configJSON json.RawMessage,
-	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+	storage updatehandler.ModuleStorage,
+) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Debug("Create SSH module")
 
 	sshModule := &SSHModule{id: id, storage: storage}

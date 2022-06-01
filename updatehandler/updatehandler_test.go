@@ -118,7 +118,8 @@ func TestMain(m *testing.M) {
 
 	updatehandler.RegisterPlugin("testmodule",
 		func(id string, configJSON json.RawMessage,
-			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+			storage updatehandler.ModuleStorage,
+		) (module updatehandler.UpdateModule, err error) {
 			if _, ok := components[id]; !ok {
 				components[id] = &testModule{id: id}
 			}
@@ -1155,7 +1156,8 @@ func createImage(imagePath string) (fileInfo image.FileInfo, err error) {
 }
 
 func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo,
-	vendorVersion string) (infos []umclient.ComponentUpdateInfo, err error) {
+	vendorVersion string,
+) (infos []umclient.ComponentUpdateInfo, err error) {
 	for _, status := range currentStatus {
 		imagePath := path.Join(tmpDir, fmt.Sprintf("testimage_%s.bin", status.ID))
 
@@ -1186,7 +1188,8 @@ func testOperation(
 	operation func(),
 	expectedStatus *umclient.Status,
 	expectedOps map[string][]string,
-	expectedOrder []orderInfo) {
+	expectedOrder []orderInfo,
+) {
 	t.Helper()
 
 	operation()

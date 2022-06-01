@@ -31,6 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/aoscloud/aos_updatemanager/config"
 )
@@ -136,7 +137,8 @@ type CertificateProvider interface {
 func New(
 	config *config.Config, messageHandler MessageHandler,
 	provider CertificateProvider,
-	cryptocontext *cryptutils.CryptoContext, insecure bool) (client *Client, err error) {
+	cryptocontext *cryptutils.CryptoContext, insecure bool,
+) (client *Client, err error) {
 	log.Debug("Create UM client")
 
 	if messageHandler == nil {
@@ -205,13 +207,14 @@ func (status ComponentStatus) String() string {
 
 func (client *Client) createConnection(
 	config *config.Config, provider CertificateProvider,
-	cryptocontext *cryptutils.CryptoContext, insecure bool) (err error) {
+	cryptocontext *cryptutils.CryptoContext, insecureConn bool,
+) (err error) {
 	log.Debug("Connecting to CM...")
 
 	var secureOpt grpc.DialOption
 
-	if insecure {
-		secureOpt = grpc.WithInsecure()
+	if insecureConn {
+		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
 	} else {
 		certURL, keyURL, err := provider.GetCertificate(config.CertStorage, cryptocontext)
 		if err != nil {
