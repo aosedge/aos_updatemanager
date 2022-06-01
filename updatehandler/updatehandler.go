@@ -270,7 +270,8 @@ func (handler *Handler) Close() {
  ******************************************************************************/
 
 func (handler *Handler) createComponent(
-	plugin, id string, params json.RawMessage, storage ModuleStorage) (module UpdateModule, err error) {
+	plugin, id string, params json.RawMessage, storage ModuleStorage,
+) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, aoserrors.Errorf("plugin %s not found", plugin)
@@ -506,7 +507,8 @@ func doPriorityOperations(operations []priorityOperation, stopOnError bool) (err
 }
 
 func (handler *Handler) doOperation(componentStatuses []*umclient.ComponentStatusInfo,
-	operation componentOperation, stopOnError bool) (rebootStatuses []*umclient.ComponentStatusInfo, err error) {
+	operation componentOperation, stopOnError bool,
+) (rebootStatuses []*umclient.ComponentStatusInfo, err error) {
 	operations := make([]priorityOperation, 0, len(componentStatuses))
 
 	for _, componentStatus := range componentStatuses {

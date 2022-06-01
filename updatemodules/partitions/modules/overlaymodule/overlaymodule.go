@@ -123,7 +123,8 @@ type moduleMetadata struct {
 // New creates module instance.
 func New(id string, versionFile, updateDir string,
 	storage updatehandler.ModuleStorage, rebooter Rebooter,
-	checker UpdateChecker) (module updatehandler.UpdateModule, err error) {
+	checker UpdateChecker,
+) (module updatehandler.UpdateModule, err error) {
 	log.WithFields(log.Fields{"id": id}).Debug("Create overlay module")
 
 	if storage == nil {
