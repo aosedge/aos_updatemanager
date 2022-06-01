@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cavaliercoder/grab"
+	"github.com/cavaliergopher/grab/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
