@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/aoscloud/aos_updatemanager/config"
 )
@@ -60,7 +61,8 @@ func New(config *config.Config, insecure bool) (client *Client, err error) {
 
 // GetCertificate gets certificate by issuer.
 func (client *Client) GetCertificate(
-	cerType string, cryptocontext *cryptutils.CryptoContext) (certURL, keyURL string, err error) {
+	cerType string, cryptocontext *cryptutils.CryptoContext,
+) (certURL, keyURL string, err error) {
 	log.WithFields(log.Fields{
 		"type": cerType,
 	}).Debug("Get certificate")
@@ -96,7 +98,8 @@ func (client *Client) GetCertificate(
  **********************************************************************************************************************/
 
 func (client *Client) createConnection(
-	cryptocontext *cryptutils.CryptoContext) (connection *grpc.ClientConn, pbPublic pb.IAMPublicServiceClient, err error) {
+	cryptocontext *cryptutils.CryptoContext,
+) (connection *grpc.ClientConn, pbPublic pb.IAMPublicServiceClient, err error) {
 	log.Debug("Connecting to IAM...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), iamRequestTimeout)
@@ -105,7 +108,7 @@ func (client *Client) createConnection(
 	var secureOpt grpc.DialOption
 
 	if client.insecure {
-		secureOpt = grpc.WithInsecure()
+		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
 	} else {
 		if cryptocontext == nil {
 			return nil, nil, aoserrors.New("cryptocontext must not be nil")

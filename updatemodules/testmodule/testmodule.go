@@ -48,7 +48,8 @@ type TestModule struct {
 
 // New creates test module instance.
 func New(id string, configJSON json.RawMessage,
-	storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+	storage updatehandler.ModuleStorage,
+) (module updatehandler.UpdateModule, err error) {
 	log.WithField("id", id).Debug("Create test module")
 
 	testModule := &TestModule{id: id}
