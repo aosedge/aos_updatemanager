@@ -129,8 +129,9 @@ func (disk *TestDisk) Close() (err error) {
 }
 
 // CreateFilePartition creates partition in file.
-func CreateFilePartition(path string, fsType string, size uint64,
-	contentCreator func(mountPoint string) (err error), archivate bool) (err error) {
+func CreateFilePartition(
+	path string, fsType string, size uint64, contentCreator func(mountPoint string) (err error), archivate bool,
+) (err error) {
 	var output []byte
 
 	if output, err = exec.Command("dd", "if=/dev/zero", "of="+path, "bs=1M",

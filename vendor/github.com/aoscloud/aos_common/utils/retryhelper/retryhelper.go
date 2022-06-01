@@ -39,8 +39,10 @@ const (
  **********************************************************************************************************************/
 
 // Retry performs operation defined number of times with configured delay.
-func Retry(ctx context.Context, retryFunc func() error, retryCbk func(retryCount int, delay time.Duration, err error),
-	maxTry int, delay, maxDelay time.Duration) (err error) {
+func Retry(
+	ctx context.Context, retryFunc func() error, retryCbk func(retryCount int, delay time.Duration, err error),
+	maxTry int, delay, maxDelay time.Duration,
+) (err error) {
 	try := 1
 
 	for {
@@ -84,6 +86,7 @@ func DefaultRetry(ctx context.Context, retryFunc func() error) (err error) {
 
 // DefaultInfinitRetry performs operation default number of times with default delay.
 func DefaultInfinitRetry(ctx context.Context, retryFunc func() error,
-	retryCbk func(retryCount int, delay time.Duration, err error)) (err error) {
+	retryCbk func(retryCount int, delay time.Duration, err error),
+) (err error) {
 	return Retry(ctx, retryFunc, retryCbk, 0, defaultRetryDelay, defaultMaxRetryDelay)
 }

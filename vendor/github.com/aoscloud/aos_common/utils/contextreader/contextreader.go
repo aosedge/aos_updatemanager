@@ -28,7 +28,7 @@ import (
 
 // ContextReader context reader instance.
 type ContextReader struct {
-	ctx    context.Context
+	ctx    context.Context // nolint:containedctx
 	reader io.Reader
 }
 
