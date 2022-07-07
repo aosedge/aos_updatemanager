@@ -20,104 +20,48 @@ package testtools
 import (
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/pem"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"path"
+	"math/big"
+	"net"
+	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 )
 
 /***********************************************************************************************************************
- * Consts
+ * Var
  **********************************************************************************************************************/
 
-const filePerm = 0o600
-
-const caCertificate = `-----BEGIN CERTIFICATE-----
-MIIDYTCCAkmgAwIBAgIUefLO+XArcR2jeqrgGqQlTM20N/swDQYJKoZIhvcNAQEL
-BQAwQDELMAkGA1UEBhMCVUExEzARBgNVBAgMClNvbWUtU3RhdGUxDTALBgNVBAcM
-BEt5aXYxDTALBgNVBAoMBEVQQU0wHhcNMjAwNzAzMTU0NzEzWhcNMjAwODAyMTU0
-NzEzWjBAMQswCQYDVQQGEwJVQTETMBEGA1UECAwKU29tZS1TdGF0ZTENMAsGA1UE
-BwwES3lpdjENMAsGA1UECgwERVBBTTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
-AQoCggEBAMQAdRAyH+S6QSCYAq09Kn5uhNgBSEcOwUTdTH1W9BSgXaHAbHQmY0py
-2EnXoQ4/B+xdFsFLRpW7dvDaXcgMjjX1B/Yn52lF2OLdTaRwcA5/5wU2hAKAs4lu
-lLRS1Ez48cRutjyVwzB70EB78Og/79SbZnrE73RhE4gUGq1/7l95VrQeVyMxXPSz
-T5DVQrwZ/TnNDHbB2WDP3oWi4EhHRSE3GxO9OvVIlWtps2/VLLGDjFKDDw57c+CJ
-GtYDDSQGSAzYgKHLbC4YZdatLCzLOK+HYMBMQ+A+h1FFDOQiafjc2hhNAJJgK4YE
-S2bTKPSDwUFvNXlojLUuRqmeJblTfU8CAwEAAaNTMFEwHQYDVR0OBBYEFGTTfDCg
-4dwM/qAGCsMIt3akp3kaMB8GA1UdIwQYMBaAFGTTfDCg4dwM/qAGCsMIt3akp3ka
-MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBACE7Dm84YTAhxnjf
-BC5tekchab1LtG00kGD3olYIrk60ST9CTkeZKbIRUiJguu7YyS8/9acCI5PrL+Bj
-JeThNo8BiHgEJ0MZkUI9JhIqWT1dHFZoiIWBJia6IyEEFrUEfKBpYW85Get25em3
-xokm39qQ2HFKJXbzixE/4F792lUWU49g4tvClrkRrVISBxy1xPAQZ38dep9NMhHe
-puBh64yKH073veYqAlkv4p+m0VDJsSRhrhHnC1n37P6UIy3FhyxfsnQ4JTbDsjyH
-d43D/UeLrvqwwJvRWqwa1XCbkxyhBQ+/2Soq/ym+EFTgJJcT/UjXZMU6C3NF7oLa
-2bbVjCU=
------END CERTIFICATE-----`
-
-const caKey = `-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEAxAB1EDIf5LpBIJgCrT0qfm6E2AFIRw7BRN1MfVb0FKBdocBs
-dCZjSnLYSdehDj8H7F0WwUtGlbt28NpdyAyONfUH9ifnaUXY4t1NpHBwDn/nBTaE
-AoCziW6UtFLUTPjxxG62PJXDMHvQQHvw6D/v1JtmesTvdGETiBQarX/uX3lWtB5X
-IzFc9LNPkNVCvBn9Oc0MdsHZYM/ehaLgSEdFITcbE7069UiVa2mzb9UssYOMUoMP
-Dntz4Ika1gMNJAZIDNiAoctsLhhl1q0sLMs4r4dgwExD4D6HUUUM5CJp+NzaGE0A
-kmArhgRLZtMo9IPBQW81eWiMtS5GqZ4luVN9TwIDAQABAoIBADsH0DnyfryKg/bn
-EVdPpq6xZn0P1c7g2MB+zfyp5ZUYv1pp87//l8PiVtXWhYEe5qn/V00b+MQ705Sy
-j7AiZ+pERAOU/RMtoCajdDDkVDtpthBR3OxMCsaHcW3lzF7qUxZQKb6RdFnz0EK7
-kVDBgN/Ndc3f5iZs3k8LjwVWFFrYTzkM+5vD7W5u0ORwOPuvXvoR39fIbKAd2DcD
-Q++lEt/+E1Uqggenpuyewgr/gg5OTIN9ky3bksjSnjqfb5ClmNypEp0oLV3aF/y+
-B4GiZjckkWEFZX9gtqP+6TGb4IQVnSJz7k7n3vwOf5VUQjgZYx/363WdGalIUG79
-NkGDwOECgYEA8hFX5Dy+Wiap43lc+P6MH1lxNKCwjMi5SvM/mYpi3vFIuHo8FxTW
-HLKOqB82l/9N8WnC76JWq4raPyOKt+pyQKknSg3iArxks7fy4h/k+5F2c6/cFb6P
-TaFDt7rG3B7x9gcJbNj2U0mMEn77vcYZ39DABv1yVQumOQA3wvcST9cCgYEAz0hf
-Tbf/QILO4oQ/Olv9bN0oOVkwmm61RZyQHSykX3seTgNkkJ1EZRuqHPUIJGe0pc5/
-jMQfK9WthYjx28YNnXlNCwWYf7M7n1rN2DsZciT0uQIio65GiDK4w3oRhTAWgX7L
-QiH5eY6MxXMj68lHhTuFI/wSPeiksdFgtvnX70kCgYBUX30uHYoPrChNFFE2rKq0
-hp1xxYykFZaYLD7/yn95y8oYGur09JtIt2gH65FA24kUW1PJ6OCivCwkE8RXJI2c
-Qhlis4ISiA3lonkzHgDXOrV5z1M79QbH/Sy4To7fzJ1zrrI3UUxSbXE4RTCDzhfY
-rk8wYIjIYd4XQh8tgqbMUwKBgQCcF5vtIsoNAnRZD82tXOiSulg4F3oKUaQgL642
-yg9d95Dynot0e3mtyg9ojvz6rT3UPpS+pFH06IwrKt026wYFt/rUefpE7+vOLMsm
-MhsPYdUIHRuItwxWNBv+2EWpTnUkPx9BReRgLYDEj9hVDtXU9uVkG8aA6Fhdr5Zt
-M+fwQQKBgAbcuUeR9RseENAYl2fTf6ZaZ6pbK2HHo3qOqaY5vWpMESUOsAuC46qj
-anwM76TcEbTBHgEWMDYiAYURXPVXisouoD6jsTcMDErwM/3kqMQ7rD6VM9uK7UF+
-M0dV7SSA2lMvENr54k6V7zdaxnRDu8GL+OHtiZxeBG1P4pKhvf9l
------END RSA PRIVATE KEY-----`
-
-const csrConf = `[req]
-prompt = no
-distinguished_name = dn
-req_extensions = req_ext
-
-[dn]
-CN = AoS message-handler
-O = EPAM
-OU = AoS
-
-[req_ext]
-basicConstraints = CA:false
-subjectKeyIdentifier=hash
-
-[ext]
-# PKIX recommendation.
-basicConstraints = CA:false
-subjectKeyIdentifier=hash
-authorityKeyIdentifier=keyid:always
-keyUsage = digitalSignature,keyEncipherment
-extendedKeyUsage=serverAuth,clientAuth
-#subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = *.westeurope.cloudapp.azure.com
-DNS.2 = *.kyiv.epam.com
-DNS.3 = *.minsk.epam.com
-DNS.4 = *.aos-dev.test
-DNS.5 = rabbitmq
-DNS.6 = localhost
-IP.1 = 127.0.0.1`
+// DefaultCertificateTemplate default certificate template.
+var DefaultCertificateTemplate = x509.Certificate{ //nolint:gochecknoglobals
+	SerialNumber: big.NewInt(1),
+	Version:      3, // nolint:gomnd
+	NotBefore:    time.Now().Add(-10 * time.Second),
+	NotAfter:     time.Now().AddDate(10, 0, 0),
+	KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature |
+		x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+	Subject: pkix.Name{
+		Country:            []string{"UA"},
+		Organization:       []string{"EPAM"},
+		OrganizationalUnit: []string{"Aos"},
+		Locality:           []string{"Kyiv"},
+	},
+	DNSNames: []string{
+		"localhost",
+		"wwwaosum",
+		"*.kyiv.epam.com",
+		"*.aos-dev.test",
+	},
+	BasicConstraintsValid: true,
+	IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1).To4(), net.IPv6loopback}, // nolint:gomnd
+}
 
 /***********************************************************************************************************************
  * Public
@@ -135,72 +79,138 @@ func CreateCSR(key crypto.PrivateKey) (csr []byte, err error) {
 	return csr, nil
 }
 
-// GetCACertificate returns CA certificate.
-func GetCACertificate() (cert []byte) {
-	return []byte(caCertificate)
+// GenerateCert generates certificate.
+func GenerateCert(
+	template, parent *x509.Certificate, privateKey *rsa.PrivateKey, publicKey crypto.PublicKey,
+) (*x509.Certificate, error) {
+	publicKeyBytes, err := asn1.Marshal(*publicKey.(*rsa.PublicKey))
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	subjectKeyID := sha256.Sum256(publicKeyBytes)
+	template.SubjectKeyId = subjectKeyID[:]
+
+	caBytes, err := x509.CreateCertificate(rand.Reader, template, parent, publicKey, privateKey)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	cert, err := x509.ParseCertificate(caBytes)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return cert, nil
 }
 
-// GetCAKey returns CA key.
-func GetCAKey() (cert []byte) {
-	return []byte(caKey)
+// GenerateCertAndKey generates key and certificate.
+func GenerateCertAndKey(
+	template, parent *x509.Certificate, parentPrivateKey *rsa.PrivateKey,
+) (cert *x509.Certificate, privateKey crypto.PrivateKey, err error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048) // nolint:gomnd
+	if err != nil {
+		return nil, nil, aoserrors.Wrap(err)
+	}
+
+	if parentPrivateKey == nil {
+		parentPrivateKey = key
+	}
+
+	if cert, err = GenerateCert(template, parent, parentPrivateKey, key.Public()); err != nil {
+		return nil, nil, err
+	}
+
+	return cert, key, nil
 }
 
-// CreateCertificate creates certificate.
-func CreateCertificate(workDir string, csr []byte) (cert []byte, err error) {
-	tmpDir, err := ioutil.TempDir(workDir, "cert*")
+// VerifyCertChain verifies chain of certificates.
+func VerifyCertChain(leafCert *x509.Certificate, roots, intermediates []*x509.Certificate) error {
+	rootPool := x509.NewCertPool()
+	intermediatePool := x509.NewCertPool()
+
+	for _, c := range roots {
+		rootPool.AddCert(c)
+	}
+
+	for _, c := range intermediates {
+		intermediatePool.AddCert(c)
+	}
+
+	opts := x509.VerifyOptions{
+		Roots:         rootPool,
+		Intermediates: intermediatePool,
+	}
+
+	if _, err := leafCert.Verify(opts); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	return nil
+}
+
+// GenerateDefaultCARootCertAndKey generates default CA root certificate and key.
+func GenerateDefaultCARootCertAndKey() (cert *x509.Certificate, key crypto.PrivateKey, err error) {
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return nil, nil, aoserrors.Wrap(err)
 	}
 
-	defer os.RemoveAll(tmpDir)
+	rootTemplate := DefaultCertificateTemplate
+	rootTemplate.SerialNumber = serialNumber
+	rootTemplate.IsCA = true
+	rootTemplate.Subject.OrganizationalUnit = []string{"Novus Ordo Seclorum"}
+	rootTemplate.Subject.CommonName = "Fusion Root CA"
 
-	caCertFile := path.Join(tmpDir, "ca.crt")
-	caKeyFile := path.Join(tmpDir, "ca.key")
-	csrFile := path.Join(tmpDir, "unit.csr")
-	csrConfFile := path.Join(tmpDir, "csr.conf")
-	unitCertFile := path.Join(tmpDir, "unit.der")
-
-	if err = ioutil.WriteFile(csrFile, csr, filePerm); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if err = ioutil.WriteFile(caCertFile, GetCACertificate(), filePerm); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if err = ioutil.WriteFile(caKeyFile, GetCAKey(), filePerm); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	if err = ioutil.WriteFile(csrConfFile, []byte(csrConf), filePerm); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
-
-	var out []byte
-
-	if out, err = exec.Command("openssl", "req", "-inform", "PEM", "-in",
-		csrFile, "-out", csrFile+".pem").CombinedOutput(); err != nil {
-		return nil, aoserrors.Errorf("message: %s, %s", string(out), err)
-	}
-
-	if out, err = exec.Command("openssl", "x509", "-req", "-in", csrFile+".pem",
-		"-CA", caCertFile, "-CAkey", caKeyFile, "-extfile", csrConfFile, "-extensions", "ext",
-		"-outform", "PEM", "-out", unitCertFile, "-CAcreateserial", "-days", "3650").CombinedOutput(); err != nil {
-		return nil, aoserrors.Errorf("message: %s, %s", string(out), err)
-	}
-
-	certData, err := ioutil.ReadFile(unitCertFile)
+	cert, key, err = GenerateCertAndKey(&rootTemplate, &rootTemplate, nil)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return nil, nil, aoserrors.Wrap(err)
 	}
 
-	caData, err := ioutil.ReadFile(caCertFile)
+	return cert, key, nil
+}
+
+// GenerateCACertAndKey generates CA certificate and key.
+func GenerateCACertAndKey(
+	parent *x509.Certificate, privateKey *rsa.PrivateKey, subject pkix.Name,
+) (*x509.Certificate, crypto.PrivateKey, error) {
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return nil, nil, aoserrors.Wrap(err)
 	}
 
-	certData = append(certData, caData...)
-	certData = append(certData, '\n')
+	template := DefaultCertificateTemplate
+	template.SerialNumber = serialNumber
+	template.Subject = subject
+	template.IsCA = true
 
-	return certData, nil
+	cert, key, err := GenerateCertAndKey(&template, parent, privateKey)
+	if err != nil {
+		return nil, nil, aoserrors.Wrap(err)
+	}
+
+	return cert, key, nil
+}
+
+// GenerateCertAndKeyWithSubject generates certificate and key.
+func GenerateCertAndKeyWithSubject(
+	subject pkix.Name, parent *x509.Certificate, privateKey *rsa.PrivateKey,
+) (*x509.Certificate, crypto.PrivateKey, error) {
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, nil, aoserrors.Wrap(err)
+	}
+
+	template := DefaultCertificateTemplate
+	template.SerialNumber = serialNumber
+	template.Subject = subject
+	template.NotAfter = time.Now().AddDate(1, 0, 0)
+	template.IsCA = false
+
+	cert, key, err := GenerateCertAndKey(&template, parent, privateKey)
+	if err != nil {
+		return nil, nil, aoserrors.Wrap(err)
+	}
+
+	return cert, key, nil
 }
