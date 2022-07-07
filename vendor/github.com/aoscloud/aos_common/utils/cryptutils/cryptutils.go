@@ -260,6 +260,13 @@ func (cryptoContext *CryptoContext) GetClientTLSConfig() (*tls.Config, error) {
 	return &tls.Config{RootCAs: cryptoContext.rootCertPool, MinVersion: tls.VersionTLS12}, nil
 }
 
+// CertToPEM is a utility function returns a PEM encoded x509 Certificate.
+func CertToPEM(cert *x509.Certificate) []byte {
+	pemCert := pem.EncodeToMemory(&pem.Block{Type: PEMBlockCertificate, Bytes: cert.Raw})
+
+	return pemCert
+}
+
 // PEMToX509Cert parses PEM data to x509 certificate structures.
 func PEMToX509Cert(data []byte) (certs []*x509.Certificate, err error) {
 	var block *pem.Block
@@ -400,36 +407,38 @@ func LoadPrivateKeyFromFile(fileName string) (crypto.PrivateKey, error) {
 
 // SavePrivateKeyToFile saves private key to file.
 func SavePrivateKeyToFile(fileName string, key crypto.PrivateKey) error {
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0o600)
+	keyPem, err := PrivateKeyToPEM(key)
 	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(fileName, keyPem, 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
-	defer file.Close()
 
+	return nil
+}
+
+// PrivateKeyToPEM converts private key to PEM format.
+func PrivateKeyToPEM(key crypto.PrivateKey) ([]byte, error) {
 	switch privateKey := key.(type) {
 	case *rsa.PrivateKey:
-		if err = pem.Encode(file, &pem.Block{
+		return pem.EncodeToMemory(&pem.Block{
 			Type:  PEMBlockRSAPrivateKey,
 			Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-		}); err != nil {
-			return aoserrors.Wrap(err)
-		}
+		}), nil
 
 	case *ecdsa.PrivateKey:
 		data, err := x509.MarshalECPrivateKey(privateKey)
 		if err != nil {
-			return aoserrors.Wrap(err)
+			return nil, aoserrors.Wrap(err)
 		}
 
-		if err = pem.Encode(file, &pem.Block{Type: PEMBlockECPrivateKey, Bytes: data}); err != nil {
-			return aoserrors.Wrap(err)
-		}
+		return pem.EncodeToMemory(&pem.Block{Type: PEMBlockECPrivateKey, Bytes: data}), nil
 
 	default:
-		return aoserrors.Errorf("unsupported key type: %v", reflect.TypeOf(privateKey))
+		return nil, aoserrors.Errorf("unsupported key type: %v", reflect.TypeOf(privateKey))
 	}
-
-	return nil
 }
 
 // CheckCertificate checks if certificate matches key.
@@ -449,6 +458,51 @@ func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) error {
 	}
 
 	return nil
+}
+
+// ParsePKCS11Url extracts library, token, label, id, user pin from pkcs url.
+func ParsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin string) {
+	opaqueValues := make(map[string]string)
+
+	for _, field := range strings.Split(pkcs11Url.Opaque, ";") {
+		items := strings.Split(field, "=")
+		if len(items) < 2 {
+			continue
+		}
+
+		opaqueValues[items[0]] = items[1]
+	}
+
+	for name, value := range opaqueValues {
+		switch name {
+		case "token":
+			token = value
+
+		case "object":
+			label = value
+
+		case "id":
+			id = value
+		}
+	}
+
+	library = DefaultPKCS11Library
+
+	for name, item := range pkcs11Url.Query() {
+		if len(item) == 0 {
+			continue
+		}
+
+		switch name {
+		case "module-path":
+			library = item[0]
+
+		case "pin-value":
+			userPin = item[0]
+		}
+	}
+
+	return library, token, label, id, userPin
 }
 
 /***********************************************************************************************************************
@@ -494,50 +548,6 @@ func (cryptoContext *CryptoContext) getTLSCertificate(certURLStr, keyURLStr stri
 	return tls.Certificate{Certificate: getRawCertificate(certs), PrivateKey: key}, nil
 }
 
-func parsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin string) {
-	opaqueValues := make(map[string]string)
-
-	for _, field := range strings.Split(pkcs11Url.Opaque, ";") {
-		items := strings.Split(field, "=")
-		if len(items) < 2 {
-			continue
-		}
-
-		opaqueValues[items[0]] = items[1]
-	}
-
-	for name, value := range opaqueValues {
-		switch name {
-		case "token":
-			token = value
-
-		case "object":
-			label = value
-
-		case "id":
-			id = value
-		}
-	}
-
-	library = DefaultPKCS11Library
-
-	for name, item := range pkcs11Url.Query() {
-		if len(item) == 0 {
-			continue
-		}
-
-		switch name {
-		case "module-path":
-			library = item[0]
-
-		case "pin-value":
-			userPin = item[0]
-		}
-	}
-
-	return library, token, label, id, userPin
-}
-
 func (cryptoContext *CryptoContext) getPKCS11Context(library, token, userPin string) (*crypto11.Context, error) {
 	cryptoContext.Lock()
 	defer cryptoContext.Unlock()
@@ -569,7 +579,7 @@ func (cryptoContext *CryptoContext) getPKCS11Context(library, token, userPin str
 }
 
 func (cryptoContext *CryptoContext) loadCertificateFromPKCS11(certURL *url.URL) ([]*x509.Certificate, error) {
-	library, token, label, id, userPin := parsePKCS11Url(certURL)
+	library, token, label, id, userPin := ParsePKCS11Url(certURL)
 
 	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
 	if err != nil {
@@ -633,7 +643,7 @@ func (cryptoContext *CryptoContext) loadPrivateKeyFromTPM(keyURL *url.URL) (cryp
 }
 
 func (cryptoContext *CryptoContext) loadPrivateKeyFromPKCS11(keyURL *url.URL) (crypto.PrivateKey, error) {
-	library, token, label, id, userPin := parsePKCS11Url(keyURL)
+	library, token, label, id, userPin := ParsePKCS11Url(keyURL)
 
 	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
 	if err != nil {

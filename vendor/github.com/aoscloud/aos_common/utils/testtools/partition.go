@@ -17,14 +17,10 @@
 package testtools
 
 import (
-	"crypto/sha256"
-	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -179,47 +175,6 @@ func CreateFilePartition(
 		if err = contentCreator(mountPoint); err != nil {
 			return aoserrors.Wrap(err)
 		}
-	}
-
-	return nil
-}
-
-// ComparePartitions compares partitions.
-func ComparePartitions(dst, src string) (err error) {
-	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.OpenFile(dst, os.O_RDONLY, 0)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-	defer dstFile.Close()
-
-	srcSha256 := sha256.New()
-	dstSha256 := sha256.New()
-
-	size, err := srcFile.Seek(0, io.SeekEnd)
-	if err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	if _, err = srcFile.Seek(0, io.SeekStart); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	if _, err := io.CopyN(srcSha256, srcFile, size); err != nil && errors.Is(err, io.EOF) {
-		return aoserrors.Wrap(err)
-	}
-
-	if _, err := io.CopyN(dstSha256, dstFile, size); err != nil && errors.Is(err, io.EOF) {
-		return aoserrors.Wrap(err)
-	}
-
-	if !reflect.DeepEqual(srcSha256.Sum(nil), dstSha256.Sum(nil)) {
-		return aoserrors.New("data mismatch")
 	}
 
 	return nil

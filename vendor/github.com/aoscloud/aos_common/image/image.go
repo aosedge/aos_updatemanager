@@ -19,11 +19,14 @@ package image
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"reflect"
 	"strings"
@@ -43,6 +46,17 @@ import (
 
 const (
 	updateDownloadsTime = 10 * time.Second
+)
+
+const (
+	dirSymlinkSize  = 4 * 1024
+	contentTypeSize = 64
+)
+
+const (
+	copyBufferSize     = 1024 * 1024
+	copyBreathInterval = 5 * time.Second
+	copyBreathTime     = 500 * time.Millisecond
 )
 
 /***********************************************************************************************************************
@@ -83,6 +97,10 @@ func Download(ctx context.Context, destination, url string) (fileName string, er
 
 		case <-resp.Done:
 			if err := resp.Err(); err != nil {
+				if removeErr := os.RemoveAll(resp.Filename); removeErr != nil {
+					log.Errorf("Can't remove download file: %v", removeErr)
+				}
+
 				return "", aoserrors.Wrap(err)
 			}
 
@@ -107,7 +125,7 @@ func CheckFileInfo(ctx context.Context, fileName string, fileInfo FileInfo) (err
 	}
 
 	if uint64(stat.Size()) != fileInfo.Size {
-		return aoserrors.New("file size mistmatch")
+		return aoserrors.New("file size mismatch")
 	}
 
 	hash256 := sha3.New256()
@@ -119,7 +137,7 @@ func CheckFileInfo(ctx context.Context, fileName string, fileInfo FileInfo) (err
 	}
 
 	if !reflect.DeepEqual(hash256.Sum(nil), fileInfo.Sha256) {
-		return aoserrors.New("checksum sha256 mistmatch")
+		return aoserrors.New("checksum sha256 mismatch")
 	}
 
 	hash512 := sha3.New512()
@@ -133,7 +151,7 @@ func CheckFileInfo(ctx context.Context, fileName string, fileInfo FileInfo) (err
 	}
 
 	if !reflect.DeepEqual(hash512.Sum(nil), fileInfo.Sha512) {
-		return aoserrors.New("checksum sha512 mistmatch")
+		return aoserrors.New("checksum sha512 mismatch")
 	}
 
 	return nil
@@ -222,6 +240,197 @@ func UntarGZArchive(ctx context.Context, source, destination string) (err error)
 	}
 }
 
+// UnpackTarImage extracts tar image.
+func UnpackTarImage(source, destination string) error {
+	log.WithFields(log.Fields{"name": source, "destination": destination}).Debug("Unpack tar image")
+
+	if _, err := os.Stat(source); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if output, err := exec.Command("tar", "xf", source, "-C", destination).CombinedOutput(); err != nil {
+		log.Errorf("Failed to unpack archive: %s", string(output))
+
+		return aoserrors.Wrap(err)
+	}
+
+	return nil
+}
+
+// GetUncompressedTarContentSize calculates tar content size.
+func GetUncompressedTarContentSize(path string) (size int64, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer file.Close()
+
+	bReader := bufio.NewReader(file)
+
+	testBytes, err := bReader.Peek(contentTypeSize)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+
+	reader := io.Reader(bReader)
+
+	if strings.Contains(http.DetectContentType(testBytes), "x-gzip") {
+		gzipReader, err := gzip.NewReader(reader)
+		if err != nil {
+			return 0, aoserrors.Wrap(err)
+		}
+		defer gzipReader.Close()
+
+		reader = gzipReader
+	}
+
+	tarReader := tar.NewReader(reader)
+
+	for {
+		header, err := tarReader.Next()
+		if errors.Is(err, io.EOF) {
+			return size, nil
+		}
+
+		if err != nil {
+			return 0, aoserrors.Wrap(err)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			size += dirSymlinkSize
+
+		case tar.TypeSymlink:
+			size += dirSymlinkSize
+
+		case tar.TypeReg:
+			size += header.Size
+		}
+	}
+}
+
+// Copy copies one file content to another.
+func Copy(dst, src string) (copied int64, err error) {
+	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Start copy")
+
+	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer dstFile.Close()
+
+	copied, duration, err := copyData(dstFile, srcFile)
+	if err != nil {
+		return copied, aoserrors.Wrap(err)
+	}
+
+	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy finished")
+
+	return copied, nil
+}
+
+// CopyFromGzipArchive copies gzip archive to file.
+func CopyFromGzipArchive(dst, src string) (copied int64, err error) {
+	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Start copy from gzip archive")
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer dstFile.Close()
+
+	gz, err := gzip.NewReader(srcFile)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer gz.Close()
+
+	copied, duration, err := copyData(dstFile, gz)
+	if err != nil {
+		return copied, aoserrors.Wrap(err)
+	}
+
+	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy from gzip archive finished")
+
+	return copied, nil
+}
+
+// CopyToDevice copies file content to device.
+func CopyToDevice(dst, src string) (copied int64, err error) {
+	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Start copy to device")
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC, 0)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer dstFile.Close()
+
+	copied, duration, err := copyData(dstFile, srcFile)
+	if err != nil {
+		return copied, aoserrors.Wrap(err)
+	}
+
+	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy to device finished")
+
+	return copied, nil
+}
+
+// CopyFromGzipArchiveToDevice copies gzip archive to device.
+func CopyFromGzipArchiveToDevice(dst, src string) (copied int64, err error) {
+	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Start copy from gzip archive to device")
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC, 0)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer dstFile.Close()
+
+	gz, err := gzip.NewReader(srcFile)
+	if err != nil {
+		return 0, aoserrors.Wrap(err)
+	}
+	defer gz.Close()
+
+	copied, duration, err := copyData(dstFile, gz)
+	if err != nil {
+		return copied, aoserrors.Wrap(err)
+	}
+
+	log.WithFields(log.Fields{
+		"copied": copied, "duration": duration,
+	}).Debug("Copy from gzip archive to device finished")
+
+	return copied, nil
+}
+
 /***********************************************************************************************************************
  * Private
  **********************************************************************************************************************/
@@ -268,4 +477,39 @@ func getItemPath(destination, name string) (itemPath string, err error) {
 	}
 
 	return itemPath, nil
+}
+
+func copyData(dst io.Writer, src io.Reader) (copied int64, duration time.Duration, err error) {
+	startTime := time.Now()
+	buf := make([]byte, copyBufferSize)
+
+	for !errors.Is(err, io.EOF) {
+		var readCount int
+
+		if readCount, err = src.Read(buf); err != nil && !errors.Is(err, io.EOF) {
+			return copied, duration, aoserrors.Wrap(err)
+		}
+
+		if readCount > 0 {
+			var writeCount int
+
+			if writeCount, err = dst.Write(buf[:readCount]); err != nil {
+				return copied, duration, aoserrors.Wrap(err)
+			}
+
+			copied += int64(writeCount)
+		}
+
+		if time.Now().After(startTime.Add(duration).Add(copyBreathInterval)) {
+			time.Sleep(copyBreathTime)
+
+			duration = time.Since(startTime)
+
+			log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy progress")
+		}
+	}
+
+	duration = time.Since(startTime)
+
+	return copied, duration, nil
 }

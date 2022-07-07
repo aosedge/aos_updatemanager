@@ -18,19 +18,13 @@
 package partition
 
 import (
-	"compress/gzip"
-	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 )
@@ -42,13 +36,6 @@ import "C"
 /*******************************************************************************
  * Consts
  ******************************************************************************/
-
-const ioBufferSize = 1024 * 1024
-
-const (
-	copyBreathInterval = 5 * time.Second
-	copyBreathTime     = 500 * time.Millisecond
-)
 
 const (
 	tagTypeLabel    = "LABEL"
@@ -71,66 +58,6 @@ type PartInfo struct {
 /*******************************************************************************
  * Public
  ******************************************************************************/
-
-// Copy copies one partition to another
-func Copy(dst, src string) (copied int64, err error) {
-	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Copy partition")
-
-	srcFile, err := os.OpenFile(src, os.O_RDONLY, 0)
-	if err != nil {
-		return 0, aoserrors.Wrap(err)
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.OpenFile(dst, os.O_RDWR, 0)
-	if err != nil {
-		return 0, aoserrors.Wrap(err)
-	}
-	defer dstFile.Close()
-
-	var duration time.Duration
-
-	if copied, duration, err = copyData(dstFile, srcFile); err != nil {
-		return copied, aoserrors.Wrap(err)
-	}
-
-	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy partition")
-
-	return copied, nil
-}
-
-// CopyFromGzipArchive copies partition from archived file
-func CopyFromGzipArchive(dst, src string) (copied int64, err error) {
-	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Copy partition from archive")
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return 0, aoserrors.Wrap(err)
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.OpenFile(dst, os.O_RDWR, 0)
-	if err != nil {
-		return 0, aoserrors.Wrap(err)
-	}
-	defer dstFile.Close()
-
-	gz, err := gzip.NewReader(srcFile)
-	if err != nil {
-		return 0, aoserrors.Wrap(err)
-	}
-	defer gz.Close()
-
-	var duration time.Duration
-
-	if copied, duration, err = copyData(dstFile, gz); err != nil {
-		return copied, aoserrors.Wrap(err)
-	}
-
-	log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy partition from archive")
-
-	return copied, nil
-}
 
 // GetPartInfo returns partition info
 func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
@@ -228,43 +155,4 @@ func GetPartitionNum(partitionPath string) (num int, err error) {
 	}
 
 	return num, aoserrors.Wrap(err)
-}
-
-/*******************************************************************************
- * Private
- ******************************************************************************/
-
-func copyData(dst io.Writer, src io.Reader) (copied int64, duration time.Duration, err error) {
-	startTime := time.Now()
-	buf := make([]byte, ioBufferSize)
-
-	for !errors.Is(err, io.EOF) {
-		var readCount int
-
-		if readCount, err = src.Read(buf); err != nil && !errors.Is(err, io.EOF) {
-			return copied, duration, aoserrors.Wrap(err)
-		}
-
-		if readCount > 0 {
-			var writeCount int
-
-			if writeCount, err = dst.Write(buf[:readCount]); err != nil {
-				return copied, duration, aoserrors.Wrap(err)
-			}
-
-			copied += int64(writeCount)
-		}
-
-		if time.Now().After(startTime.Add(duration).Add(copyBreathInterval)) {
-			time.Sleep(copyBreathTime)
-
-			duration = time.Since(startTime)
-
-			log.WithFields(log.Fields{"copied": copied, "duration": duration}).Debug("Copy progress")
-		}
-	}
-
-	duration = time.Since(startTime)
-
-	return copied, duration, nil
 }
