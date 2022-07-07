@@ -26,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/image"
 	"github.com/aoscloud/aos_common/partition"
 	"github.com/aoscloud/aos_common/utils/fs"
 	log "github.com/sirupsen/logrus"
@@ -280,7 +281,7 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 
 	module.state.UpdatePartition = secPartition
 
-	if _, err = partition.CopyFromGzipArchive(module.partitions[secPartition], module.state.ImagePath); err != nil {
+	if _, err = image.CopyFromGzipArchiveToDevice(module.partitions[secPartition], module.state.ImagePath); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -306,7 +307,7 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	updatePartition := module.state.UpdatePartition
 	secPartition := (updatePartition + 1) % len(module.partitions)
 
-	if _, err = partition.Copy(module.partitions[updatePartition], module.partitions[secPartition]); err != nil {
+	if _, err = image.CopyToDevice(module.partitions[updatePartition], module.partitions[secPartition]); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -342,7 +343,7 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	currentPartition := module.state.UpdatePartition
 	secPartition := (currentPartition + 1) % len(module.partitions)
 
-	if _, err = partition.Copy(module.partitions[secPartition], module.partitions[currentPartition]); err != nil {
+	if _, err = image.CopyToDevice(module.partitions[secPartition], module.partitions[currentPartition]); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
