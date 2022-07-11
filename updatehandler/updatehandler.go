@@ -636,15 +636,6 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
-	currentStatus, ok := handler.componentStatuses[updateInfo.ID]
-	if !ok {
-		return aoserrors.Errorf("component %s is not installed", updateInfo.ID)
-	}
-
-	if currentStatus.Status == umclient.StatusError {
-		return aoserrors.New(currentStatus.Error)
-	}
-
 	vendorVersion, err := module.GetVendorVersion()
 	if err == nil && updateInfo.VendorVersion != "" {
 		if vendorVersion == updateInfo.VendorVersion {
@@ -702,14 +693,21 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 		return aoserrors.Wrap(err)
 	}
 
-	handler.state.CurrentVendorVersions[updateInfo.ID] = handler.componentStatuses[updateInfo.ID].VendorVersion
-
 	return nil
 }
 
 func (handler *Handler) onPrepareState(event *fsm.Event) {
 	handler.Lock()
 	defer handler.Unlock()
+
+	var err error
+
+	defer func() {
+		if err != nil {
+			handler.state.Error = err.Error()
+			handler.fsm.SetState(stateFailed)
+		}
+	}()
 
 	componentsInfo := make(map[string]*umclient.ComponentUpdateInfo)
 
@@ -723,15 +721,24 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 	}
 
 	if len(infos) == 0 {
-		handler.state.Error = "Prepare component list is empty"
-		handler.fsm.SetState(stateFailed)
-
+		err = aoserrors.New("prepare component list is empty")
 		return
 	}
 
 	for i, info := range infos {
-		componentsInfo[info.ID] = &infos[i]
+		componentStatus, ok := handler.componentStatuses[info.ID]
+		if !ok {
+			err = aoserrors.Errorf("component %s is not installed", info.ID)
+			return
+		}
 
+		if componentStatus.Status == umclient.StatusError {
+			err = aoserrors.New(componentStatus.Error)
+			return
+		}
+
+		handler.state.CurrentVendorVersions[info.ID] = handler.componentStatuses[info.ID].VendorVersion
+		componentsInfo[info.ID] = &infos[i]
 		handler.state.ComponentStatuses[info.ID] = &umclient.ComponentStatusInfo{
 			ID:            info.ID,
 			VendorVersion: info.VendorVersion,
@@ -740,7 +747,7 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 		}
 	}
 
-	if err := handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
+	err = handler.componentOperation(func(module UpdateModule) (rebootRequired bool, err error) {
 		updateInfo, ok := componentsInfo[module.GetID()]
 		if !ok {
 			return false, aoserrors.Errorf("update info for %s component not found", module.GetID())
@@ -754,10 +761,7 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 		}).Debug("Prepare component")
 
 		return false, handler.prepareComponent(module, updateInfo)
-	}, true); err != nil {
-		handler.state.Error = err.Error()
-		handler.fsm.SetState(stateFailed)
-	}
+	}, true)
 }
 
 func (handler *Handler) onUpdateState(event *fsm.Event) {
