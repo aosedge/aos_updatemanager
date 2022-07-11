@@ -695,7 +695,7 @@ func TestUpdateBadImage(t *testing.T) {
 		t.Fatalf("Can't create update infos: %s", err)
 	}
 
-	failedErrStr := "checksum sha512 mistmatch"
+	failedErrStr := "checksum sha512 mismatch"
 	failedComponent := components["id2"]
 
 	newStatus := currentStatus
