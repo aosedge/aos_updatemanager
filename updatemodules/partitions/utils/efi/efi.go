@@ -327,8 +327,9 @@ func (instance *Instance) Close() (err error) {
 }
 
 // CreateBootEntry creates new boot entry variable
-func (instance *Instance) CreateBootEntry(isActive int, partitionPath string, loader string,
-	entryName string) (id uint16, err error) {
+func (instance *Instance) CreateBootEntry(
+	isActive int, partitionPath string, loader string, entryName string,
+) (id uint16, err error) {
 	devicePath, err := partition.GetParentDevice(partitionPath)
 	if err != nil {
 		return 0, aoserrors.Wrap(err)
@@ -421,7 +422,8 @@ func readU16(guid, name string) (data []uint16, err error) {
 }
 
 func makeLinuxLoadOption(optionActive int, optionDisk string, optionPart int, optionLoader string,
-	dataSize int, optionLabel string, optionalData []byte, optionalSize int) (data []byte, elemSize int, err error) {
+	dataSize int, optionLabel string, optionalData []byte, optionalSize int,
+) (data []byte, elemSize int, err error) {
 	var attributes int32
 
 	if optionActive != 0 {
