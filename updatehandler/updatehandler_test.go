@@ -137,7 +137,7 @@ func TestMain(m *testing.M) {
 		},
 	}
 
-	server := &http.Server{Addr: ":9000", Handler: http.FileServer(http.Dir(tmpDir))}
+	server := &http.Server{Addr: ":9000", Handler: http.FileServer(http.Dir(tmpDir)), ReadHeaderTimeout: time.Second}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
