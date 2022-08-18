@@ -247,7 +247,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Wrong vendor version: %s", version)
 	}
 
-	if err = testtools.ComparePartitions(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
+	if err = testtools.CompareFiles(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
 		t.Errorf("Compare partition error: %s", err)
 	}
 
@@ -381,7 +381,7 @@ func TestRevert(t *testing.T) {
 		t.Errorf("Wrong vendor version: %s", version)
 	}
 
-	if err = testtools.ComparePartitions(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
+	if err = testtools.CompareFiles(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
 		t.Errorf("Compare partition error: %s", err)
 	}
 
@@ -492,7 +492,7 @@ func TestRevertOnFail(t *testing.T) {
 		t.Errorf("Wrong vendor version: %s", version)
 	}
 
-	if err = testtools.ComparePartitions(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
+	if err = testtools.CompareFiles(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
 		t.Errorf("Compare partition error: %s", err)
 	}
 

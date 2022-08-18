@@ -52,7 +52,8 @@ type moduleConfig struct {
 func init() {
 	updatehandler.RegisterPlugin("ubootdualpart",
 		func(id string, configJSON json.RawMessage,
-			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+			storage updatehandler.ModuleStorage,
+		) (module updatehandler.UpdateModule, err error) {
 			var config moduleConfig
 
 			if err = json.Unmarshal(configJSON, &config); err != nil {

@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"os"
 	"path"
-	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 )
@@ -60,11 +59,6 @@ type ModuleConfig struct {
 	Params         json.RawMessage
 }
 
-// Duration represents duration in format "00:00:00".
-type Duration struct {
-	time.Duration
-}
-
 /*******************************************************************************
  * Public
  ******************************************************************************/
@@ -92,41 +86,4 @@ func New(fileName string) (config *Config, err error) {
 	}
 
 	return config, nil
-}
-
-// MarshalJSON marshals JSON Duration type.
-func (d Duration) MarshalJSON() (b []byte, err error) {
-	if b, err = json.Marshal(d.Duration.String()); err != nil {
-		return b, aoserrors.Wrap(err)
-	}
-
-	return b, nil
-}
-
-// UnmarshalJSON unmarshals JSON Duration type.
-func (d *Duration) UnmarshalJSON(b []byte) (err error) {
-	var v interface{}
-
-	if err := json.Unmarshal(b, &v); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	switch value := v.(type) {
-	case float64:
-		d.Duration = time.Duration(value)
-		return nil
-
-	case string:
-		duration, err := time.ParseDuration(value)
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
-
-		d.Duration = duration
-
-		return nil
-
-	default:
-		return aoserrors.Errorf("invalid duration value: %v", value)
-	}
 }

@@ -45,7 +45,8 @@ type moduleConfig struct {
 func init() {
 	updatehandler.RegisterPlugin("overlaysystemd",
 		func(id string, configJSON json.RawMessage,
-			storage updatehandler.ModuleStorage) (module updatehandler.UpdateModule, err error) {
+			storage updatehandler.ModuleStorage,
+		) (module updatehandler.UpdateModule, err error) {
 			if len(configJSON) == 0 {
 				return nil, aoserrors.Errorf("config for %s module is required", id)
 			}

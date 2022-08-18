@@ -210,28 +210,27 @@ func (db *Database) Close() {
  * Private
  ******************************************************************************/
 
-func newDatabase(
-	name string, migrationPath string, mergedMigrationPath string, version uint) (db *Database, err error) {
+func newDatabase(name string, migrationPath string, mergedMigrationPath string, version uint) (*Database, error) {
 	log.WithField("name", name).Debug("Open database")
 
 	// Check and create db path
-	if _, err = os.Stat(filepath.Dir(name)); err != nil {
+	if _, err := os.Stat(filepath.Dir(name)); err != nil {
 		if !os.IsNotExist(err) {
-			return db, aoserrors.Wrap(err)
+			return nil, aoserrors.Wrap(err)
 		}
 
 		if err = os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-			return db, aoserrors.Wrap(err)
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	sqlite, err := sql.Open("sqlite3", fmt.Sprintf("%s?_busy_timeout=%d&_journal_mode=%s&_sync=%s",
 		name, busyTimeout, journalMode, syncMode))
 	if err != nil {
-		return db, aoserrors.Wrap(err)
+		return nil, aoserrors.Wrap(err)
 	}
 
-	db = &Database{sqlite}
+	db := &Database{sqlite}
 
 	defer func() {
 		if err != nil {
@@ -241,13 +240,13 @@ func newDatabase(
 
 	if migrationPath != mergedMigrationPath {
 		if err = migration.MergeMigrationFiles(migrationPath, mergedMigrationPath); err != nil {
-			return db, aoserrors.Wrap(err)
+			return nil, aoserrors.Wrap(err)
 		}
 	}
 
 	exists, err := db.isTableExist("config")
 	if err != nil {
-		return db, aoserrors.Wrap(err)
+		return nil, aoserrors.Wrap(err)
 	}
 
 	if !exists {
@@ -257,16 +256,16 @@ func newDatabase(
 		}
 	} else {
 		if err = migration.DoMigrate(db.sql, mergedMigrationPath, version); err != nil {
-			return db, aoserrors.Errorf("%s (%s)", ErrMigrationFailedStr, err.Error())
+			return nil, aoserrors.Errorf("%s (%s)", ErrMigrationFailedStr, err.Error())
 		}
 	}
 
 	if err = db.createConfigTable(); err != nil {
-		return db, err
+		return nil, err
 	}
 
 	if err := db.createModuleTable(); err != nil {
-		return db, aoserrors.Wrap(err)
+		return nil, aoserrors.Wrap(err)
 	}
 
 	return db, nil

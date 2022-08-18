@@ -1,25 +1,35 @@
-name: WS_CHECK
+name: MEND_CHECK
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   ws_check:
-    runs-on: [self-hosted, linux, x64]
-    env:
-      WSS_API_KEY: ${{ secrets.WSS_API_KEY }}
-      WSS_UM_TOKEN: ${{ secrets.WSS_UM_TOKEN }}
-      WSS_USER_KEY: ${{ secrets.WSS_USER_KEY }}
+    runs-on: ubuntu-latest
     steps:
       - name: Code checkout
         uses: actions/checkout@v2
 
-      - name: ws_check
+      - name: mend_check
+        env:
+          WSS_API_KEY: ${{ secrets.WSS_API_KEY }}
+          WSS_UM_TOKEN: ${{ secrets.WSS_UM_TOKEN }}
+          WSS_USER_KEY: ${{ secrets.WSS_USER_KEY }}
         run: |
-          java -jar /usr/bin/wss-unified-agent.jar \
-           -apiKey $WSS_API_KEY \
-           -projectToken $WSS_UM_TOKEN \
-           -userKey $WSS_USER_KEY \
-           -c ./ci/wss-um.conf -d ./ -scanComment $GITHUB_SHA
+          echo Downloading WhiteSource Unified Agent
+          curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent.jar
+          if [[ "$(curl -sL https://unified-agent.s3.amazonaws.com/wss-unified-agent.jar.sha256)" != "$(sha256sum wss-unified-agent.jar)" ]] ; then
+            echo "Integrity Check Failed"
+          else
+            java -jar wss-unified-agent.jar  \
+             -apiKey $WSS_API_KEY \
+             -projectToken $WSS_UM_TOKEN \
+             -userKey $WSS_USER_KEY \
+             -c ./ci/wss-um.conf -d ./ \
+             -scanComment $GITHUB_SHA
+          fi

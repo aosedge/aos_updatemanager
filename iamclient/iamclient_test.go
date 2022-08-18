@@ -146,9 +146,8 @@ func (server *testServer) close() {
 	}
 }
 
-func (server *testServer) GetCert(
-	context context.Context, req *pb.GetCertRequest) (rsp *pb.GetCertResponse, err error) {
-	rsp = &pb.GetCertResponse{Type: req.Type}
+func (server *testServer) GetCert(context context.Context, req *pb.GetCertRequest) (*pb.GetCertResponse, error) {
+	rsp := &pb.GetCertResponse{Type: req.Type}
 
 	if req.Type != server.certURL.certType {
 		return rsp, aoserrors.New("not found")

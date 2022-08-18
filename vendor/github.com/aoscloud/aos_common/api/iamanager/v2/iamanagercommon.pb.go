@@ -67,16 +67,16 @@ func (x *Permissions) GetPermissions() map[string]string {
 	return nil
 }
 
-type Users struct {
+type Subjects struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Users []string `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
+	Subjects []string `protobuf:"bytes,1,rep,name=subjects,proto3" json:"subjects,omitempty"`
 }
 
-func (x *Users) Reset() {
-	*x = Users{}
+func (x *Subjects) Reset() {
+	*x = Subjects{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_iamanager_v2_iamanagercommon_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -84,13 +84,13 @@ func (x *Users) Reset() {
 	}
 }
 
-func (x *Users) String() string {
+func (x *Subjects) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Users) ProtoMessage() {}
+func (*Subjects) ProtoMessage() {}
 
-func (x *Users) ProtoReflect() protoreflect.Message {
+func (x *Subjects) ProtoReflect() protoreflect.Message {
 	mi := &file_iamanager_v2_iamanagercommon_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -102,16 +102,79 @@ func (x *Users) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Users.ProtoReflect.Descriptor instead.
-func (*Users) Descriptor() ([]byte, []int) {
+// Deprecated: Use Subjects.ProtoReflect.Descriptor instead.
+func (*Subjects) Descriptor() ([]byte, []int) {
 	return file_iamanager_v2_iamanagercommon_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Users) GetUsers() []string {
+func (x *Subjects) GetSubjects() []string {
 	if x != nil {
-		return x.Users
+		return x.Subjects
 	}
 	return nil
+}
+
+type InstanceIdent struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ServiceId string `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
+	SubjectId string `protobuf:"bytes,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	Instance  int64  `protobuf:"varint,3,opt,name=instance,proto3" json:"instance,omitempty"`
+}
+
+func (x *InstanceIdent) Reset() {
+	*x = InstanceIdent{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_iamanager_v2_iamanagercommon_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *InstanceIdent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstanceIdent) ProtoMessage() {}
+
+func (x *InstanceIdent) ProtoReflect() protoreflect.Message {
+	mi := &file_iamanager_v2_iamanagercommon_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstanceIdent.ProtoReflect.Descriptor instead.
+func (*InstanceIdent) Descriptor() ([]byte, []int) {
+	return file_iamanager_v2_iamanagercommon_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *InstanceIdent) GetServiceId() string {
+	if x != nil {
+		return x.ServiceId
+	}
+	return ""
+}
+
+func (x *InstanceIdent) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *InstanceIdent) GetInstance() int64 {
+	if x != nil {
+		return x.Instance
+	}
+	return 0
 }
 
 var File_iamanager_v2_iamanagercommon_proto protoreflect.FileDescriptor
@@ -130,9 +193,16 @@ var file_iamanager_v2_iamanagercommon_proto_rawDesc = []byte{
 	0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
 	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01,
-	0x22, 0x1d, 0x0a, 0x05, 0x55, 0x73, 0x65, 0x72, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x75, 0x73, 0x65,
-	0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x75, 0x73, 0x65, 0x72, 0x73, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x22, 0x26, 0x0a, 0x08, 0x53, 0x75, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x73, 0x12, 0x1a, 0x0a, 0x08,
+	0x73, 0x75, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x08,
+	0x73, 0x75, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x73, 0x22, 0x69, 0x0a, 0x0d, 0x49, 0x6e, 0x73, 0x74,
+	0x61, 0x6e, 0x63, 0x65, 0x49, 0x64, 0x65, 0x6e, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x65, 0x72,
+	0x76, 0x69, 0x63, 0x65, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x73,
+	0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x49, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x75, 0x62, 0x6a,
+	0x65, 0x63, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x73, 0x75,
+	0x62, 0x6a, 0x65, 0x63, 0x74, 0x49, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x69, 0x6e, 0x73, 0x74, 0x61,
+	0x6e, 0x63, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x69, 0x6e, 0x73, 0x74, 0x61,
+	0x6e, 0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -147,14 +217,15 @@ func file_iamanager_v2_iamanagercommon_proto_rawDescGZIP() []byte {
 	return file_iamanager_v2_iamanagercommon_proto_rawDescData
 }
 
-var file_iamanager_v2_iamanagercommon_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_iamanager_v2_iamanagercommon_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_iamanager_v2_iamanagercommon_proto_goTypes = []interface{}{
-	(*Permissions)(nil), // 0: iamanager.v2.Permissions
-	(*Users)(nil),       // 1: iamanager.v2.Users
-	nil,                 // 2: iamanager.v2.Permissions.PermissionsEntry
+	(*Permissions)(nil),   // 0: iamanager.v2.Permissions
+	(*Subjects)(nil),      // 1: iamanager.v2.Subjects
+	(*InstanceIdent)(nil), // 2: iamanager.v2.InstanceIdent
+	nil,                   // 3: iamanager.v2.Permissions.PermissionsEntry
 }
 var file_iamanager_v2_iamanagercommon_proto_depIdxs = []int32{
-	2, // 0: iamanager.v2.Permissions.permissions:type_name -> iamanager.v2.Permissions.PermissionsEntry
+	3, // 0: iamanager.v2.Permissions.permissions:type_name -> iamanager.v2.Permissions.PermissionsEntry
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -181,7 +252,19 @@ func file_iamanager_v2_iamanagercommon_proto_init() {
 			}
 		}
 		file_iamanager_v2_iamanagercommon_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Users); i {
+			switch v := v.(*Subjects); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_iamanager_v2_iamanagercommon_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*InstanceIdent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -199,7 +282,7 @@ func file_iamanager_v2_iamanagercommon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_iamanager_v2_iamanagercommon_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
