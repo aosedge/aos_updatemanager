@@ -30,8 +30,10 @@ import (
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	"github.com/aoscloud/aos_updatemanager/config"
 )
@@ -292,6 +294,13 @@ func (client *Client) processMessages() (err error) {
 	for {
 		message, err := client.stream.Recv()
 		if err != nil {
+			if code, ok := status.FromError(err); ok {
+				if code.Code() == codes.Canceled {
+					log.Debug("UM client connection closed")
+					return nil
+				}
+			}
+
 			return aoserrors.Wrap(err)
 		}
 
