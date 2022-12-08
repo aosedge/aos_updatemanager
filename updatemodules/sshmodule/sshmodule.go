@@ -88,7 +88,7 @@ func New(id string, configJSON json.RawMessage,
 		stateJSON = []byte{}
 	}
 
-	state := moduleState{Version: ""}
+	state := moduleState{Version: "0.0.0"}
 
 	if len(stateJSON) != 0 {
 		if err = json.Unmarshal(stateJSON, &state); err != nil {
