@@ -153,12 +153,6 @@ func TestMain(m *testing.M) {
  * Tests
  ******************************************************************************/
 
-func TestGetID(t *testing.T) {
-	if cfg.ID != "um01" {
-		t.Errorf("Wrong ID value: %s", cfg.ID)
-	}
-}
-
 func TestGetCredentials(t *testing.T) {
 	if cfg.CMServerURL != "localhost:8093" {
 		t.Errorf("Wrong CMServerURL value: %s", cfg.CMServerURL)

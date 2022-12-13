@@ -36,9 +36,9 @@ import (
 	"github.com/aoscloud/aos_updatemanager/umclient"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Consts
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 const serverURL = "localhost:8091"
 
@@ -54,9 +54,9 @@ const (
 	waitRegisteredTimeout = 30 * time.Second
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type testServer struct {
 	grpcServer      *grpc.Server
@@ -72,13 +72,17 @@ type testMessageHandler struct {
 	statusChannel  chan umclient.Status
 }
 
-/*******************************************************************************
- * Vars
- ******************************************************************************/
+type testCertProvider struct {
+	nodeID string
+}
 
-/*******************************************************************************
+/***********************************************************************************************************************
+ * Vars
+ **********************************************************************************************************************/
+
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{
@@ -90,13 +94,13 @@ func init() {
 	log.SetOutput(os.Stdout)
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Main
- ******************************************************************************/
+ **********************************************************************************************************************/
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Tests
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func TestMessages(t *testing.T) {
 	server, err := newTestServer(serverURL)
@@ -108,7 +112,7 @@ func TestMessages(t *testing.T) {
 
 	handler := newMessageHandler()
 
-	client, err := umclient.New(&config.Config{CMServerURL: serverURL, ID: "um"}, handler, nil, nil, true)
+	client, err := umclient.New(&config.Config{CMServerURL: serverURL}, handler, newCertProvider("um1"), nil, true)
 	if err != nil {
 		t.Fatalf("Can't create UM client: %s", err)
 	}
@@ -208,7 +212,7 @@ func TestServerDisconnect(t *testing.T) {
 
 	handler := newMessageHandler()
 
-	client, err := umclient.New(&config.Config{CMServerURL: serverURL, ID: "um"}, handler, nil, nil, true)
+	client, err := umclient.New(&config.Config{CMServerURL: serverURL}, handler, newCertProvider("um1"), nil, true)
 	if err != nil {
 		t.Fatalf("Can't create UM client: %s", err)
 	}
@@ -440,4 +444,16 @@ func (handler *testMessageHandler) waitMessage(message string) (err error) {
 
 func (handler *testMessageHandler) sendStatus(status umclient.Status) {
 	handler.statusChannel <- status
+}
+
+func newCertProvider(nodeID string) *testCertProvider {
+	return &testCertProvider{nodeID: nodeID}
+}
+
+func (provider *testCertProvider) GetNodeID() (string, error) {
+	return provider.nodeID, nil
+}
+
+func (provider *testCertProvider) GetCertificate(certType string) (certURL, ketURL string, err error) {
+	return "", "", nil
 }
