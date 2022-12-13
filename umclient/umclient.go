@@ -234,7 +234,7 @@ func (client *Client) createConnection(
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 
-	if client.connection, err = grpc.DialContext(ctx, config.ServerURL, secureOpt, grpc.WithBlock()); err != nil {
+	if client.connection, err = grpc.DialContext(ctx, config.CMServerURL, secureOpt, grpc.WithBlock()); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

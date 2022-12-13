@@ -96,7 +96,7 @@ func TestGetCertificates(t *testing.T) {
 	server.certURL = certInfo{certType: "um", url: "umCertURL"}
 	server.keyURL = certInfo{certType: "um", url: "umKeyURL"}
 
-	client, err := iamclient.New(&config.Config{IAMServerURL: serverURL}, true)
+	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL})
 	if err != nil {
 		t.Fatalf("Can't create IAM client: %s", err)
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/aoscloud/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/aoscloud/aos_updatemanager/config"
@@ -44,7 +43,6 @@ const iamRequestTimeout = 30 * time.Second
 
 // Client IAM client instance.
 type Client struct {
-	insecure     bool
 	iamServerURL string
 }
 
@@ -53,8 +51,8 @@ type Client struct {
  **********************************************************************************************************************/
 
 // New creates new IAM client.
-func New(config *config.Config, insecure bool) (client *Client, err error) {
-	client = &Client{insecure: insecure, iamServerURL: config.IAMServerURL}
+func New(config *config.Config) (client *Client, err error) {
+	client = &Client{iamServerURL: config.IAMPublicServerURL}
 
 	return client, nil
 }
@@ -107,20 +105,7 @@ func (client *Client) createConnection(
 
 	var secureOpt grpc.DialOption
 
-	if client.insecure {
-		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
-	} else {
-		if cryptocontext == nil {
-			return nil, nil, aoserrors.New("cryptocontext must not be nil")
-		}
-
-		tlsConfig, err := cryptocontext.GetClientTLSConfig()
-		if err != nil {
-			return nil, nil, aoserrors.Wrap(err)
-		}
-
-		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
-	}
+	secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
 
 	if connection, err = grpc.DialContext(ctx, client.iamServerURL, secureOpt, grpc.WithBlock()); err != nil {
 		return nil, nil, aoserrors.Wrap(err)
