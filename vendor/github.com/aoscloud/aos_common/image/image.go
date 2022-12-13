@@ -22,8 +22,10 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -33,10 +35,12 @@ import (
 	"time"
 
 	"github.com/cavaliergopher/grab/v3"
+	"github.com/opencontainers/go-digest"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aoscloud/aos_common/aostypes"
 	"github.com/aoscloud/aos_common/utils/contextreader"
 )
 
@@ -46,6 +50,12 @@ import (
 
 const (
 	updateDownloadsTime = 10 * time.Second
+)
+
+const (
+	manifestFileName = "manifest.json"
+	blobsFolder      = "blobs"
+	buffSize         = 1024 * 1024
 )
 
 const (
@@ -256,6 +266,68 @@ func UnpackTarImage(source, destination string) error {
 		log.Errorf("Failed to unpack archive: %s", string(output))
 
 		return aoserrors.Wrap(err)
+	}
+
+	return nil
+}
+
+// GetImageManifest  gets image manifest data from file.
+func GetImageManifest(imagePath string) (*aostypes.ServiceManifest, error) {
+	manifestJSON, err := ioutil.ReadFile(path.Join(imagePath, manifestFileName))
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	var manifest aostypes.ServiceManifest
+
+	if err = json.Unmarshal(manifestJSON, &manifest); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	return &manifest, nil
+}
+
+// GetLayersFromManifest gets image layers.
+func GetLayersFromManifest(manifest *aostypes.ServiceManifest) (layers []string) {
+	for _, layer := range manifest.Layers[1:] {
+		layers = append(layers, string(layer.Digest))
+	}
+
+	return layers
+}
+
+// ValidateDigest validates digest.
+func ValidateDigest(installDir string, digest digest.Digest) (err error) {
+	if err = digest.Validate(); err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	file, err := os.Open(path.Join(installDir, blobsFolder, string(digest.Algorithm()), digest.Hex()))
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+	defer file.Close()
+
+	buffer := make([]byte, buffSize)
+	verifier := digest.Verifier()
+
+	for {
+		count, readErr := file.Read(buffer)
+		if readErr != nil && readErr != io.EOF {
+			return aoserrors.Wrap(readErr)
+		}
+
+		if _, err := verifier.Write(buffer[:count]); err != nil {
+			return aoserrors.Wrap(err)
+		}
+
+		if readErr != nil {
+			break
+		}
+	}
+
+	if !verifier.Verified() {
+		return aoserrors.New("hash missmach")
 	}
 
 	return nil
