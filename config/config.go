@@ -40,7 +40,6 @@ type Migration struct {
 type Config struct {
 	CMServerURL        string         `json:"cmServerUrl"`
 	IAMPublicServerURL string         `json:"iamPublicServerUrl"`
-	ID                 string         `json:"id"`
 	CACert             string         `json:"caCert"`
 	CertStorage        string         `json:"certStorage"`
 	WorkingDir         string         `json:"workingDir"`

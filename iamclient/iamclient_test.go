@@ -25,6 +25,7 @@ import (
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
+	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -51,11 +52,17 @@ type certInfo struct {
 type testServer struct {
 	pb.UnimplementedIAMPublicServiceServer
 
-	grpcServer          *grpc.Server
-	usersChangedChannel chan []string
-	certURL             certInfo
-	keyURL              certInfo
+	grpcServer *grpc.Server
+	nodeID     string
+	certURL    certInfo
+	keyURL     certInfo
 }
+
+/***********************************************************************************************************************
+ * Vars
+ **********************************************************************************************************************/
+
+var server *testServer
 
 /***********************************************************************************************************************
  * Init
@@ -76,7 +83,15 @@ func init() {
  **********************************************************************************************************************/
 
 func TestMain(m *testing.M) {
+	var err error
+
+	if server, err = newTestServer(serverURL); err != nil {
+		log.Fatalf("Can't create test server: %s", err)
+	}
+
 	ret := m.Run()
+
+	server.close()
 
 	os.Exit(ret)
 }
@@ -85,23 +100,36 @@ func TestMain(m *testing.M) {
  * Tests
  **********************************************************************************************************************/
 
-func TestGetCertificates(t *testing.T) {
-	server, err := newTestServer(serverURL)
-	if err != nil {
-		t.Fatalf("Can't create test server: %s", err)
-	}
+func TestGetNodeID(t *testing.T) {
+	server.nodeID = "testNode"
 
-	defer server.close()
-
-	server.certURL = certInfo{certType: "um", url: "umCertURL"}
-	server.keyURL = certInfo{certType: "um", url: "umKeyURL"}
-
-	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL})
+	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL}, nil)
 	if err != nil {
 		t.Fatalf("Can't create IAM client: %s", err)
 	}
+	defer client.Close()
 
-	certURL, keyURL, err := client.GetCertificate("um", nil)
+	nodeID, err := client.GetNodeID()
+	if err != nil {
+		t.Fatalf("Can't get node ID: %v", err)
+	}
+
+	if nodeID != server.nodeID {
+		t.Errorf("Wrong node ID: %s", nodeID)
+	}
+}
+
+func TestGetCertificates(t *testing.T) {
+	server.certURL = certInfo{certType: "um", url: "umCertURL"}
+	server.keyURL = certInfo{certType: "um", url: "umKeyURL"}
+
+	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL}, nil)
+	if err != nil {
+		t.Fatalf("Can't create IAM client: %s", err)
+	}
+	defer client.Close()
+
+	certURL, keyURL, err := client.GetCertificate("um")
 	if err != nil {
 		t.Fatalf("Can't get um certificate: %s", err)
 	}
@@ -115,12 +143,12 @@ func TestGetCertificates(t *testing.T) {
 	}
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func newTestServer(url string) (server *testServer, err error) {
-	server = &testServer{usersChangedChannel: make(chan []string, 1)}
+	server = &testServer{}
 
 	listener, err := net.Listen("tcp", url)
 	if err != nil {
@@ -144,6 +172,10 @@ func (server *testServer) close() {
 	if server.grpcServer != nil {
 		server.grpcServer.Stop()
 	}
+}
+
+func (server *testServer) GetNodeInfo(context context.Context, req *empty.Empty) (*pb.NodeInfo, error) {
+	return &pb.NodeInfo{NodeId: server.nodeID}, nil
 }
 
 func (server *testServer) GetCert(context context.Context, req *pb.GetCertRequest) (*pb.GetCertResponse, error) {

@@ -128,7 +128,6 @@ func TestMain(m *testing.M) {
 		})
 
 	cfg = &config.Config{
-		ID:          "um",
 		DownloadDir: path.Join(tmpDir, "downloadDir"),
 		UpdateModules: []config.ModuleConfig{
 			{ID: "id1", Plugin: "testmodule"},
@@ -748,7 +747,6 @@ func TestUpdateBadImage(t *testing.T) {
 
 func TestUpdatePriority(t *testing.T) {
 	cfg := &config.Config{
-		ID:          "um",
 		DownloadDir: path.Join(tmpDir, "downloadDir"),
 		UpdateModules: []config.ModuleConfig{
 			{ID: "id1", Plugin: "testmodule", UpdatePriority: 3, RebootPriority: 1},
