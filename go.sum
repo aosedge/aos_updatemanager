@@ -61,10 +61,8 @@ github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRF
 github.com/anexia-it/fsquota v0.1.3 h1:Be+b4ohDQmtEWLwWvCzQqUbbg3Kj72Nb4OHKkTT7/J0=
 github.com/anexia-it/fsquota v0.1.3/go.mod h1:XkcUA9mQoL+AZ8j9XHB9Hi/g3xzt2nBW1C46+pkUlRA=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
-github.com/aoscloud/aos_common v0.0.0-20220601114328-b2664b6af2bb h1:0em5QtFcwcJKgzjE9mf28iyki7qQg1ykRs5Rc2DZGrA=
-github.com/aoscloud/aos_common v0.0.0-20220601114328-b2664b6af2bb/go.mod h1:oBjSXlkXlK/IRpA6jons7Ji7m8RW1ykEluohgRQdqTA=
-github.com/aoscloud/aos_common v0.0.0-20220818090503-b3b09ab17df8 h1:nPnOUCFpZkmY5Mb2UtK/4CWHyRgjX8UCM+rrME4epus=
-github.com/aoscloud/aos_common v0.0.0-20220818090503-b3b09ab17df8/go.mod h1:oBjSXlkXlK/IRpA6jons7Ji7m8RW1ykEluohgRQdqTA=
+github.com/aoscloud/aos_common v0.0.0-20221208142009-526fe4f13945 h1:Yklc180qaP2IgKT3tCsvWVfrti5uLnCNb2noIPvZOZk=
+github.com/aoscloud/aos_common v0.0.0-20221208142009-526fe4f13945/go.mod h1:uYn3NJ6V5VPFu9l95j93wOGdQorLPUV3Y8AzByHh4vs=
 github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:1CPr+UrVduUABuDLGzsKaz7Dp8Nu6zSfp8WqR5TiH0I=
 github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
 github.com/apache/arrow/go/arrow v0.0.0-20200601151325-b2287a20f230/go.mod h1:QNYViu/X0HXDHw7m3KXzWSVXIbfUvJqBFe6Gj8/pYA0=
@@ -457,7 +455,9 @@ github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+W
 github.com/onsi/ginkgo v1.12.0/go.mod h1:oUhWkIvk5aDxtKvDDuw8gItl8pKl42LzjC9KZE0HfGg=
 github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7JYyY=
 github.com/onsi/gomega v1.9.0/go.mod h1:Ho0h+IUsWyvy1OpqCwxlQ/21gkhVunqlU8fDGcoTdcA=
+github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
+github.com/opencontainers/image-spec v1.0.1 h1:JMemWkRwHx4Zj+fVxWoMCFm/8sYGGrUVojFA6h/TRcI=
 github.com/opencontainers/image-spec v1.0.1/go.mod h1:BtxoFyWECRxE4U/7sNtV5W15zMzWCbyJoFRP3s7yZA0=
 github.com/opencontainers/selinux v1.10.1 h1:09LIPVRP3uuZGQvgR+SgMSNBd1Eb3vlRbGqQpoHsF8w=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
