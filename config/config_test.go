@@ -63,9 +63,9 @@ func createWrongConfigFile() (err error) {
 
 func createConfigFile() (err error) {
 	configContent := `{
-	"ServerUrl": "localhost:8090",
 	"ID": "um01",
 	"CACert": "/etc/ssl/certs/rootCA.crt",
+	"CMServerUrl": "localhost:8093",
 	"CertStorage": "um",
 	"WorkingDir": "/var/aos/updatemanager",
 	"DownloadDir": "/var/aos/updatemanager/download",
@@ -160,8 +160,8 @@ func TestGetID(t *testing.T) {
 }
 
 func TestGetCredentials(t *testing.T) {
-	if cfg.ServerURL != "localhost:8090" {
-		t.Errorf("Wrong ServerURL value: %s", cfg.ServerURL)
+	if cfg.CMServerURL != "localhost:8093" {
+		t.Errorf("Wrong CMServerURL value: %s", cfg.CMServerURL)
 	}
 
 	if cfg.CACert != "/etc/ssl/certs/rootCA.crt" {
