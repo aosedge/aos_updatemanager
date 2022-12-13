@@ -124,7 +124,7 @@ func newUpdateManager(cfg *config.Config) (um *updateManager, err error) {
 		return um, aoserrors.Wrap(err)
 	}
 
-	um.iam, err = iamclient.New(cfg, false)
+	um.iam, err = iamclient.New(cfg, um.cryptoContext)
 	if err != nil {
 		return um, aoserrors.Wrap(err)
 	}
