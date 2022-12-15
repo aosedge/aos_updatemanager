@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 func TestGetNodeID(t *testing.T) {
 	server.nodeID = "testNode"
 
-	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL}, nil)
+	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create IAM client: %s", err)
 	}
@@ -123,7 +123,7 @@ func TestGetCertificates(t *testing.T) {
 	server.certURL = certInfo{certType: "um", url: "umCertURL"}
 	server.keyURL = certInfo{certType: "um", url: "umKeyURL"}
 
-	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL}, nil)
+	client, err := iamclient.New(&config.Config{IAMPublicServerURL: serverURL}, nil, true)
 	if err != nil {
 		t.Fatalf("Can't create IAM client: %s", err)
 	}

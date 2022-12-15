@@ -27,6 +27,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/aoscloud/aos_updatemanager/config"
@@ -53,11 +54,11 @@ type Client struct {
  **********************************************************************************************************************/
 
 // New creates new IAM client.
-func New(config *config.Config, cryptocontext *cryptutils.CryptoContext) (client *Client, err error) {
+func New(config *config.Config, cryptocontext *cryptutils.CryptoContext, insecure bool) (client *Client, err error) {
 	client = &Client{}
 
 	if client.connection, client.service, err = client.createConnection(
-		cryptocontext, config.IAMPublicServerURL); err != nil {
+		cryptocontext, config.IAMPublicServerURL, insecure); err != nil {
 		return client, err
 	}
 
@@ -120,15 +121,32 @@ func (client *Client) GetCertificate(cerType string) (certURL, keyURL string, er
  **********************************************************************************************************************/
 
 func (client *Client) createConnection(
-	cryptocontext *cryptutils.CryptoContext, serverURL string,
+	cryptocontext *cryptutils.CryptoContext, serverURL string, insecureCon bool,
 ) (connection *grpc.ClientConn, pbPublic pb.IAMPublicServiceClient, err error) {
 	log.Debug("Connecting to IAM...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), iamRequestTimeout)
 	defer cancel()
 
+	var secureOpt grpc.DialOption
+
+	if insecureCon {
+		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
+	} else {
+		if cryptocontext == nil {
+			return nil, nil, aoserrors.New("cryptocontext must not be nil")
+		}
+
+		tlsConfig, err := cryptocontext.GetClientTLSConfig()
+		if err != nil {
+			return nil, nil, aoserrors.Wrap(err)
+		}
+
+		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
+	}
+
 	if connection, err = grpc.DialContext(ctx, serverURL,
-		grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()); err != nil {
+		secureOpt, grpc.WithBlock()); err != nil {
 		return nil, nil, aoserrors.Wrap(err)
 	}
 
