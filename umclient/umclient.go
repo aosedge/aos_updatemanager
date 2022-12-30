@@ -38,9 +38,9 @@ import (
 	"github.com/aoscloud/aos_updatemanager/config"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Consts
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 const (
 	connectTimeout   = 30 * time.Second
@@ -62,9 +62,9 @@ const (
 	StatusError
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 // Client UM client instance.
 type Client struct {
@@ -128,17 +128,16 @@ type MessageHandler interface {
 
 // CertificateProvider interface to get certificate.
 type CertificateProvider interface {
-	GetCertificate(certType string, cryptocontext *cryptutils.CryptoContext) (certURL, ketURL string, err error)
+	GetNodeID() (string, error)
+	GetCertificate(certType string) (certURL, ketURL string, err error)
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Public
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 // New creates new UM client.
-func New(
-	config *config.Config, messageHandler MessageHandler,
-	provider CertificateProvider,
+func New(cfg *config.Config, messageHandler MessageHandler, certProvider CertificateProvider,
 	cryptocontext *cryptutils.CryptoContext, insecure bool,
 ) (client *Client, err error) {
 	log.Debug("Create UM client")
@@ -149,11 +148,14 @@ func New(
 
 	client = &Client{
 		messageHandler: messageHandler,
-		umID:           config.ID,
 		closeChannel:   make(chan struct{}),
 	}
 
-	if err = client.createConnection(config, provider, cryptocontext, insecure); err != nil {
+	if client.umID, err = certProvider.GetNodeID(); err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	if err = client.createConnection(cfg, certProvider, cryptocontext, insecure); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -203,9 +205,9 @@ func (status ComponentStatus) String() string {
 	}[status]
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Private
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func (client *Client) createConnection(
 	config *config.Config, provider CertificateProvider,
@@ -218,7 +220,7 @@ func (client *Client) createConnection(
 	if insecureConn {
 		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
 	} else {
-		certURL, keyURL, err := provider.GetCertificate(config.CertStorage, cryptocontext)
+		certURL, keyURL, err := provider.GetCertificate(config.CertStorage)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}
@@ -234,7 +236,7 @@ func (client *Client) createConnection(
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 
-	if client.connection, err = grpc.DialContext(ctx, config.ServerURL, secureOpt, grpc.WithBlock()); err != nil {
+	if client.connection, err = grpc.DialContext(ctx, config.CMServerURL, secureOpt, grpc.WithBlock()); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -352,7 +354,7 @@ func (client *Client) sendStatus(status Status) (err error) {
 		return aoserrors.New("client is not connected")
 	}
 
-	log.WithFields(log.Fields{"umID": client.umID, "state": status.State, "error": status.Error}).Debug("Send status")
+	log.WithFields(log.Fields{"umID": client, "state": status.State, "error": status.Error}).Debug("Send status")
 
 	pbComponents := make([]*pb.SystemComponent, 0, len(status.Components))
 

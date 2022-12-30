@@ -22,8 +22,9 @@ import (
 	"time"
 
 	"github.com/aoscloud/aos_common/aoserrors"
-	pb "github.com/aoscloud/aos_common/api/iamanager/v2"
+	pb "github.com/aoscloud/aos_common/api/iamanager/v4"
 	"github.com/aoscloud/aos_common/utils/cryptutils"
+	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -44,8 +45,8 @@ const iamRequestTimeout = 30 * time.Second
 
 // Client IAM client instance.
 type Client struct {
-	insecure     bool
-	iamServerURL string
+	connection *grpc.ClientConn
+	service    pb.IAMPublicServiceClient
 }
 
 /***********************************************************************************************************************
@@ -53,37 +54,59 @@ type Client struct {
  **********************************************************************************************************************/
 
 // New creates new IAM client.
-func New(config *config.Config, insecure bool) (client *Client, err error) {
-	client = &Client{insecure: insecure, iamServerURL: config.IAMServerURL}
+func New(config *config.Config, cryptocontext *cryptutils.CryptoContext, insecure bool) (client *Client, err error) {
+	client = &Client{}
+
+	if client.connection, client.service, err = client.createConnection(
+		cryptocontext, config.IAMPublicServerURL, insecure); err != nil {
+		return client, err
+	}
+
+	defer func() {
+		if err != nil {
+			client.Close()
+		}
+	}()
 
 	return client, nil
 }
 
-// GetCertificate gets certificate by issuer.
-func (client *Client) GetCertificate(
-	cerType string, cryptocontext *cryptutils.CryptoContext,
-) (certURL, keyURL string, err error) {
-	log.WithFields(log.Fields{
-		"type": cerType,
-	}).Debug("Get certificate")
-
-	connection, pbPublic, err := client.createConnection(cryptocontext)
-	if err != nil {
-		return "", "", err
-	}
-
-	defer func() {
-		if connection != nil {
-			connection.Close()
+// Close closes IAM client.
+func (client *Client) Close() error {
+	if client.connection != nil {
+		if err := client.connection.Close(); err != nil {
+			return aoserrors.Wrap(err)
 		}
 
 		log.Debug("Disconnected from IAM")
-	}()
+	}
+
+	return nil
+}
+
+// GetNodeID returns node ID.
+func (client *Client) GetNodeID() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), iamRequestTimeout)
+	defer cancel()
+
+	response, err := client.service.GetNodeInfo(ctx, &empty.Empty{})
+	if err != nil {
+		return "", aoserrors.Wrap(err)
+	}
+
+	log.WithFields(log.Fields{"nodeID": response.NodeId, "nodeType": response.NodeType}).Debug("Get node info")
+
+	return response.NodeId, nil
+}
+
+// GetCertificate gets certificate by issuer.
+func (client *Client) GetCertificate(cerType string) (certURL, keyURL string, err error) {
+	log.WithFields(log.Fields{"type": cerType}).Debug("Get certificate")
 
 	ctx, cancel := context.WithTimeout(context.Background(), iamRequestTimeout)
 	defer cancel()
 
-	response, err := pbPublic.GetCert(ctx, &pb.GetCertRequest{Type: cerType})
+	response, err := client.service.GetCert(ctx, &pb.GetCertRequest{Type: cerType})
 	if err != nil {
 		return "", "", aoserrors.Wrap(err)
 	}
@@ -98,7 +121,7 @@ func (client *Client) GetCertificate(
  **********************************************************************************************************************/
 
 func (client *Client) createConnection(
-	cryptocontext *cryptutils.CryptoContext,
+	cryptocontext *cryptutils.CryptoContext, serverURL string, insecureCon bool,
 ) (connection *grpc.ClientConn, pbPublic pb.IAMPublicServiceClient, err error) {
 	log.Debug("Connecting to IAM...")
 
@@ -107,7 +130,7 @@ func (client *Client) createConnection(
 
 	var secureOpt grpc.DialOption
 
-	if client.insecure {
+	if insecureCon {
 		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
 	} else {
 		if cryptocontext == nil {
@@ -122,7 +145,8 @@ func (client *Client) createConnection(
 		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 	}
 
-	if connection, err = grpc.DialContext(ctx, client.iamServerURL, secureOpt, grpc.WithBlock()); err != nil {
+	if connection, err = grpc.DialContext(ctx, serverURL,
+		secureOpt, grpc.WithBlock()); err != nil {
 		return nil, nil, aoserrors.Wrap(err)
 	}
 

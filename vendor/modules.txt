@@ -4,11 +4,11 @@ github.com/ThalesIgnite/crypto11
 # github.com/anexia-it/fsquota v0.1.3
 ## explicit
 github.com/anexia-it/fsquota
-# github.com/aoscloud/aos_common v0.0.0-20220818090503-b3b09ab17df8
+# github.com/aoscloud/aos_common v0.0.0-20221208142009-526fe4f13945
 ## explicit; go 1.18
 github.com/aoscloud/aos_common/aoserrors
 github.com/aoscloud/aos_common/aostypes
-github.com/aoscloud/aos_common/api/iamanager/v2
+github.com/aoscloud/aos_common/api/iamanager/v4
 github.com/aoscloud/aos_common/api/updatemanager/v1
 github.com/aoscloud/aos_common/image
 github.com/aoscloud/aos_common/migration
@@ -98,6 +98,13 @@ github.com/mattn/go-sqlite3
 # github.com/miekg/pkcs11 v1.0.3
 ## explicit; go 1.12
 github.com/miekg/pkcs11
+# github.com/opencontainers/go-digest v1.0.0
+## explicit; go 1.13
+github.com/opencontainers/go-digest
+# github.com/opencontainers/image-spec v1.0.1
+## explicit
+github.com/opencontainers/image-spec/specs-go
+github.com/opencontainers/image-spec/specs-go/v1
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors

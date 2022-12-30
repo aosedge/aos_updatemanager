@@ -5,9 +5,10 @@ go 1.18
 replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 
 require (
-	github.com/aoscloud/aos_common v0.0.0-20220818090503-b3b09ab17df8
+	github.com/aoscloud/aos_common v0.0.0-20221208142009-526fe4f13945
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/golang/protobuf v1.5.2
 	github.com/joelnb/xenstore-go v0.3.0
 	github.com/looplab/fsm v0.3.0
 	github.com/mattn/go-sqlite3 v1.14.13
@@ -26,7 +27,6 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
 	github.com/golang-migrate/migrate/v4 v4.15.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-tpm v0.3.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -36,6 +36,8 @@ require (
 	github.com/lib/pq v1.10.6 // indirect
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40 // indirect
 	github.com/miekg/pkcs11 v1.0.3 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/speijnik/go-errortree v1.0.1 // indirect
 	github.com/thales-e-security/pool v0.0.2 // indirect

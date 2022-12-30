@@ -38,15 +38,14 @@ type Migration struct {
 
 // Config instance.
 type Config struct {
-	ServerURL     string         `json:"serverUrl"`
-	IAMServerURL  string         `json:"iamServerUrl"`
-	ID            string         `json:"id"`
-	CACert        string         `json:"caCert"`
-	CertStorage   string         `json:"certStorage"`
-	WorkingDir    string         `json:"workingDir"`
-	DownloadDir   string         `json:"downloadDir"`
-	UpdateModules []ModuleConfig `json:"updateModules"`
-	Migration     Migration      `json:"migration"`
+	CMServerURL        string         `json:"cmServerUrl"`
+	IAMPublicServerURL string         `json:"iamPublicServerUrl"`
+	CACert             string         `json:"caCert"`
+	CertStorage        string         `json:"certStorage"`
+	WorkingDir         string         `json:"workingDir"`
+	DownloadDir        string         `json:"downloadDir"`
+	UpdateModules      []ModuleConfig `json:"updateModules"`
+	Migration          Migration      `json:"migration"`
 }
 
 // ModuleConfig module configuration.
