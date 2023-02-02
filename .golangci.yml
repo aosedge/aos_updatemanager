@@ -47,7 +47,7 @@ linters-settings:
   gomnd:
     settings:
       mnd:
-        ignored-numbers: 0o600,0o755,10,16,32,64
+        ignored-numbers: 0o600,0o755,2,10,16,32,64
 
   gofumpt:
     lang-version: "1.14"
