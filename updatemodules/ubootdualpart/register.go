@@ -29,9 +29,9 @@ import (
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Vars
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type controllerConfig struct {
 	Device      string `json:"device"`
@@ -45,9 +45,9 @@ type moduleConfig struct {
 	SystemdChecker systemdchecker.Config `json:"systemdChecker"`
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	updatehandler.RegisterPlugin("ubootdualpart",
@@ -66,7 +66,8 @@ func init() {
 			}
 
 			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &xenstorerebooter.XenstoreRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
+				controller, storage, &xenstorerebooter.XenstoreRebooter{},
+				systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 
