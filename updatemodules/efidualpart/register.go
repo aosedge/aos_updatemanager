@@ -29,9 +29,9 @@ import (
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type moduleConfig struct {
 	Loader         string                `json:"loader"`
@@ -40,9 +40,9 @@ type moduleConfig struct {
 	SystemdChecker systemdchecker.Config `json:"systemdChecker"`
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	updatehandler.RegisterPlugin("efidualpart",
@@ -65,7 +65,8 @@ func init() {
 			}
 
 			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &systemdrebooter.SystemdRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
+				controller, storage, &systemdrebooter.SystemdRebooter{},
+				systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 
