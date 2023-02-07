@@ -27,11 +27,12 @@ import (
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/utils/bootparams"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Vars
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type controllerConfig struct {
 	Device      string `json:"device"`
@@ -40,14 +41,15 @@ type controllerConfig struct {
 
 type moduleConfig struct {
 	Controller     controllerConfig      `json:"controller"`
+	DetectMode     string                `json:"detectMode"`
 	Partitions     []string              `json:"partitions"`
 	VersionFile    string                `json:"versionFile"`
 	SystemdChecker systemdchecker.Config `json:"systemdChecker"`
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	updatehandler.RegisterPlugin("ubootdualpart",
@@ -60,13 +62,32 @@ func init() {
 				return nil, aoserrors.Wrap(err)
 			}
 
-			controller, err := ubootcontroller.New(config.Controller.Device, config.Controller.EnvFileName)
+			partitions := config.Partitions
+			envDevice := config.Controller.Device
+
+			if config.DetectMode != "" {
+				parser, err := bootparams.New()
+				if err != nil {
+					return nil, aoserrors.Wrap(err)
+				}
+
+				if envDevice, err = parser.GetEnvPart(config.DetectMode, config.Controller.Device); err != nil {
+					return nil, aoserrors.Wrap(err)
+				}
+
+				if partitions, err = parser.GetBootParts(config.DetectMode, config.Partitions); err != nil {
+					return nil, aoserrors.Wrap(err)
+				}
+			}
+
+			controller, err := ubootcontroller.New(envDevice, config.Controller.EnvFileName)
 			if err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 
-			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &xenstorerebooter.XenstoreRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
+			if module, err = dualpartmodule.New(id, partitions, config.VersionFile,
+				controller, storage, &xenstorerebooter.XenstoreRebooter{},
+				systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 

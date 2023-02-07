@@ -27,22 +27,24 @@ import (
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/systemdrebooter"
 	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
+	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/utils/bootparams"
 )
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Types
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 type moduleConfig struct {
 	Loader         string                `json:"loader"`
 	VersionFile    string                `json:"versionFile"`
+	DetectMode     string                `json:"detectMode"`
 	Partitions     []string              `json:"partitions"`
 	SystemdChecker systemdchecker.Config `json:"systemdChecker"`
 }
 
-/*******************************************************************************
+/***********************************************************************************************************************
  * Init
- ******************************************************************************/
+ **********************************************************************************************************************/
 
 func init() {
 	updatehandler.RegisterPlugin("efidualpart",
@@ -64,8 +66,24 @@ func init() {
 				return nil, aoserrors.Wrap(err)
 			}
 
-			if module, err = dualpartmodule.New(id, config.Partitions, config.VersionFile,
-				controller, storage, &systemdrebooter.SystemdRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
+			var partitions []string
+
+			if config.DetectMode != "" {
+				parser, err := bootparams.New()
+				if err != nil {
+					return nil, aoserrors.Wrap(err)
+				}
+
+				if partitions, err = parser.GetBootParts(config.DetectMode, config.Partitions); err != nil {
+					return nil, aoserrors.Wrap(err)
+				}
+			} else {
+				partitions = config.Partitions
+			}
+
+			if module, err = dualpartmodule.New(id, partitions, config.VersionFile,
+				controller, storage, &systemdrebooter.SystemdRebooter{},
+				systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}
 
