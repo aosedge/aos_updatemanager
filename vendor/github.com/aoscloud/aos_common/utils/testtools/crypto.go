@@ -24,7 +24,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/asn1"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -81,9 +80,9 @@ func CreateCSR(key crypto.PrivateKey) (csr []byte, err error) {
 
 // GenerateCert generates certificate.
 func GenerateCert(
-	template, parent *x509.Certificate, privateKey *rsa.PrivateKey, publicKey crypto.PublicKey,
+	template, parent *x509.Certificate, privateKey crypto.PrivateKey, publicKey crypto.PublicKey,
 ) (*x509.Certificate, error) {
-	publicKeyBytes, err := asn1.Marshal(*publicKey.(*rsa.PublicKey))
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -106,7 +105,7 @@ func GenerateCert(
 
 // GenerateCertAndKey generates key and certificate.
 func GenerateCertAndKey(
-	template, parent *x509.Certificate, parentPrivateKey *rsa.PrivateKey,
+	template, parent *x509.Certificate, parentPrivateKey crypto.PrivateKey,
 ) (cert *x509.Certificate, privateKey crypto.PrivateKey, err error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048) // nolint:gomnd
 	if err != nil {
@@ -172,7 +171,7 @@ func GenerateDefaultCARootCertAndKey() (cert *x509.Certificate, key crypto.Priva
 
 // GenerateCACertAndKey generates CA certificate and key.
 func GenerateCACertAndKey(
-	parent *x509.Certificate, privateKey *rsa.PrivateKey, subject pkix.Name,
+	parent *x509.Certificate, privateKey crypto.PrivateKey, subject pkix.Name,
 ) (*x509.Certificate, crypto.PrivateKey, error) {
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
@@ -194,7 +193,7 @@ func GenerateCACertAndKey(
 
 // GenerateCertAndKeyWithSubject generates certificate and key.
 func GenerateCertAndKeyWithSubject(
-	subject pkix.Name, parent *x509.Certificate, privateKey *rsa.PrivateKey,
+	subject pkix.Name, parent *x509.Certificate, privateKey crypto.PrivateKey,
 ) (*x509.Certificate, crypto.PrivateKey, error) {
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
