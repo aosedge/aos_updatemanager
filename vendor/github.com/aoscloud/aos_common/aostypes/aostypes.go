@@ -216,7 +216,7 @@ type ServiceConfig struct {
 	Hostname           *string                      `json:"hostname,omitempty"`
 	Runner             string                       `json:"runner"`
 	Sysctl             map[string]string            `json:"sysctl,omitempty"`
-	ServiceTTL         *uint64                      `json:"serviceTtl,omitempty"`
+	OfflineTTL         Duration                     `json:"offlineTtl,omitempty"`
 	Quotas             ServiceQuotas                `json:"quotas"`
 	AllowedConnections map[string]struct{}          `json:"allowedConnections,omitempty"`
 	Devices            []ServiceDevice              `json:"devices,omitempty"`
