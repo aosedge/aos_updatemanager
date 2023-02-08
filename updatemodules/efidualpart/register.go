@@ -61,12 +61,7 @@ func init() {
 				return nil, aoserrors.Wrap(err)
 			}
 
-			controller, err := eficontroller.New(config.Partitions, config.Loader)
-			if err != nil {
-				return nil, aoserrors.Wrap(err)
-			}
-
-			var partitions []string
+			partitions := config.Partitions
 
 			if config.DetectMode != "" {
 				parser, err := bootparams.New()
@@ -77,8 +72,11 @@ func init() {
 				if partitions, err = parser.GetBootParts(config.DetectMode, config.Partitions); err != nil {
 					return nil, aoserrors.Wrap(err)
 				}
-			} else {
-				partitions = config.Partitions
+			}
+
+			controller, err := eficontroller.New(partitions, config.Loader)
+			if err != nil {
+				return nil, aoserrors.Wrap(err)
 			}
 
 			if module, err = dualpartmodule.New(id, partitions, config.VersionFile,
