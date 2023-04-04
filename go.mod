@@ -23,7 +23,7 @@ require (
 	github.com/ThalesIgnite/crypto11 v0.0.0-00010101000000-000000000000 // indirect
 	github.com/anexia-it/fsquota v0.1.3 // indirect
 	github.com/cavaliergopher/grab/v3 v3.0.1 // indirect
-	github.com/docker/docker v17.12.1-ce+incompatible // indirect
+	github.com/docker/docker v20.10.24+incompatible // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
 	github.com/golang-migrate/migrate/v4 v4.15.0 // indirect
@@ -36,6 +36,8 @@ require (
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40 // indirect
 	github.com/miekg/pkcs11 v1.0.3 // indirect
+	github.com/moby/sys/mount v0.3.3 // indirect
+	github.com/moby/sys/mountinfo v0.6.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

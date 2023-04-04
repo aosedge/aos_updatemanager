@@ -1,3 +1,6 @@
+//go:build freebsd && cgo
+// +build freebsd,cgo
+
 package mount
 
 /*
@@ -11,11 +14,9 @@ package mount
 import "C"
 
 import (
-	"fmt"
 	"strings"
+	"syscall"
 	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 func allocateIOVecs(options []string) []C.struct_iovec {
@@ -49,12 +50,13 @@ func mount(device, target, mType string, flag uintptr, data string) error {
 	}
 
 	if errno := C.nmount(&rawOptions[0], C.uint(len(options)), C.int(flag)); errno != 0 {
-		reason := C.GoString(C.strerror(*C.__error()))
-		return fmt.Errorf("Failed to call nmount: %s", reason)
+		return &mountError{
+			op:     "mount",
+			source: device,
+			target: target,
+			flags:  flag,
+			err:    syscall.Errno(errno),
+		}
 	}
 	return nil
-}
-
-func unmount(target string, flag int) error {
-	return unix.Unmount(target, flag)
 }
