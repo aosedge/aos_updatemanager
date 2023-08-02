@@ -1,6 +1,6 @@
 module github.com/aoscloud/aos_updatemanager
 
-go 1.18
+go 1.20
 
 replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 
