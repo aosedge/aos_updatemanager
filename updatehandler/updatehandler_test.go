@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -111,7 +110,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "um_")
+	tmpDir, err = os.MkdirTemp("", "um_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}

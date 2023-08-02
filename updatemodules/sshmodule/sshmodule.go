@@ -54,11 +54,11 @@ type SSHModule struct {
 }
 
 type moduleConfig struct {
-	Host     string
-	User     string
-	Password string
-	DestPath string
-	Commands []string
+	Host     string   `json:"host"`
+	User     string   `json:"user"`
+	Password string   `json:"password"`
+	DestPath string   `json:"destPath"`
+	Commands []string `json:"commands"`
 }
 
 type moduleState struct {
@@ -155,7 +155,7 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 	config := &ssh.ClientConfig{
 		User:            module.config.User,
 		Auth:            []ssh.AuthMethod{ssh.Password(module.config.Password)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // nolint:gosec // use as example update module
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // use as example update module
 	}
 
 	client, err := ssh.Dial("tcp", module.config.Host, config)

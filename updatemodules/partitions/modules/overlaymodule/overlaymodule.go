@@ -19,7 +19,6 @@ package overlaymodule
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -275,7 +274,7 @@ func (module *OverlayModule) Update() (rebootRequired bool, err error) {
 		return false, aoserrors.Errorf("wrong state: %s", module.state.UpdateState)
 	}
 
-	if err = ioutil.WriteFile(path.Join(module.updateDir, doUpdateFileName),
+	if err = os.WriteFile(path.Join(module.updateDir, doUpdateFileName),
 		[]byte(module.state.UpdateType), 0o600); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
@@ -312,7 +311,7 @@ func (module *OverlayModule) Apply() (rebootRequired bool, err error) {
 		return false, aoserrors.Errorf("wrong state: %s", module.state.UpdateState)
 	}
 
-	if err = ioutil.WriteFile(path.Join(module.updateDir, doApplyFileName),
+	if err = os.WriteFile(path.Join(module.updateDir, doApplyFileName),
 		[]byte(module.state.UpdateType), 0o600); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
@@ -410,7 +409,7 @@ func (module *OverlayModule) getState() (err error) {
 }
 
 func (module *OverlayModule) getModuleVersion() (version string, err error) {
-	data, err := ioutil.ReadFile(module.versionFile)
+	data, err := os.ReadFile(module.versionFile)
 	if err != nil {
 		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", module.versionFile, err)
 	}
