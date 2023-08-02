@@ -59,7 +59,7 @@ const (
  * Vars
  ******************************************************************************/
 
-var plugins = make(map[string]NewPlugin) // nolint:gochecknoglobals
+var plugins = make(map[string]NewPlugin) //nolint:gochecknoglobals
 
 /*******************************************************************************
  * Types

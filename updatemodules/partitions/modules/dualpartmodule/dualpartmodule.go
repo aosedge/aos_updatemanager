@@ -19,7 +19,6 @@ package dualpartmodule
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -411,7 +410,7 @@ func (module *DualPartModule) setState(state updateState) (err error) {
 }
 
 func (module *DualPartModule) getModuleVersion(part string) (version string, err error) {
-	mountDir, err := ioutil.TempDir("", "aos_")
+	mountDir, err := os.MkdirTemp("", "aos_")
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
@@ -435,7 +434,7 @@ func (module *DualPartModule) getModuleVersion(part string) (version string, err
 
 	versionFilePath := path.Join(mountDir, module.versionFile)
 
-	data, err := ioutil.ReadFile(versionFilePath)
+	data, err := os.ReadFile(versionFilePath)
 	if err != nil {
 		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", versionFilePath, err)
 	}
