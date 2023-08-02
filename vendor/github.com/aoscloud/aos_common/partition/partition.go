@@ -19,7 +19,6 @@ package partition
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -66,7 +65,7 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 		blkcache C.blkid_cache
 	)
 
-	if ret := C.blkid_get_cache(&blkcache, C.CString("/dev/null")); ret != 0 { // nolint:gocritic // wrong warning?
+	if ret := C.blkid_get_cache(&blkcache, C.CString("/dev/null")); ret != 0 { //nolint:gocritic // wrong warning?
 		return PartInfo{}, aoserrors.New("can't get blkid cache")
 	}
 
@@ -83,7 +82,7 @@ func GetPartInfo(partDevice string) (partInfo PartInfo, err error) {
 		tagValue *C.char
 	)
 
-	for C.blkid_tag_next(iter, &tagType, &tagValue) == 0 { // nolint:gocritic // wrong warning?
+	for C.blkid_tag_next(iter, &tagType, &tagValue) == 0 { //nolint:gocritic // wrong warning?
 		switch C.GoString(tagType) {
 		case tagTypeLabel:
 			partInfo.Label = C.GoString(tagValue)
@@ -109,13 +108,13 @@ func GetParentDevice(partitionPath string) (devPath string, err error) {
 		return "", aoserrors.Wrap(err)
 	}
 
-	items, err := ioutil.ReadDir("/sys/block")
+	items, err := os.ReadDir("/sys/block")
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
 
 	for _, item := range items {
-		subItems, err := ioutil.ReadDir(path.Join("/sys/block", item.Name()))
+		subItems, err := os.ReadDir(path.Join("/sys/block", item.Name()))
 		if err != nil {
 			return "", aoserrors.Wrap(err)
 		}
@@ -144,7 +143,7 @@ func GetPartitionNum(partitionPath string) (num int, err error) {
 		return 0, aoserrors.Wrap(err)
 	}
 
-	b, err := ioutil.ReadFile(sysPath)
+	b, err := os.ReadFile(sysPath)
 	if err != nil || len(b) == 0 {
 		return 0, aoserrors.Wrap(err)
 	}

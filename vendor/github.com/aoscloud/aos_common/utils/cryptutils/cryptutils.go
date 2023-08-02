@@ -26,7 +26,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"reflect"
@@ -92,7 +91,7 @@ type pkcs11Descriptor struct {
  * Vars
  **********************************************************************************************************************/
 
-// nolint:gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	// DefaultTPMDevice used if not specified in the URL.
 	DefaultTPMDevice io.ReadWriteCloser
@@ -360,7 +359,7 @@ func PEMToX509PrivateKey(data []byte) (key crypto.PrivateKey, err error) {
 
 // LoadCertificateFromFile loads certificate from file.
 func LoadCertificateFromFile(fileName string) ([]*x509.Certificate, error) {
-	data, err := ioutil.ReadFile(fileName)
+	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -392,7 +391,7 @@ func SaveCertificateToFile(fileName string, certs []*x509.Certificate) error {
 
 // LoadPrivateKeyFromFile loads private key from file.
 func LoadPrivateKeyFromFile(fileName string) (crypto.PrivateKey, error) {
-	data, err := ioutil.ReadFile(fileName)
+	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -510,7 +509,7 @@ func ParsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin stri
  **********************************************************************************************************************/
 
 func getCaCertPool(rootCaFilePath string) (*x509.CertPool, error) {
-	pemCA, err := ioutil.ReadFile(rootCaFilePath)
+	pemCA, err := os.ReadFile(rootCaFilePath)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}

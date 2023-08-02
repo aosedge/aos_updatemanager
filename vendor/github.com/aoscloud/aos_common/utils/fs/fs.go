@@ -245,7 +245,7 @@ func SetUserFSQuota(path string, limit uint64, uid, gid uint32) (err error) {
 
 	limits.Bytes.SetHard(limit)
 
-	if _, err := fsquota.SetUserQuota(path, &user, limits); err != nil { // nolint
+	if _, err := fsquota.SetUserQuota(path, &user, limits); err != nil { //nolint:govet
 		return aoserrors.Wrap(err)
 	}
 
