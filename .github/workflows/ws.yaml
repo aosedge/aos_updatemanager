@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
@@ -13,13 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Code checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: mend_check
         env:
           WSS_API_KEY: ${{ secrets.WSS_API_KEY }}
           WSS_UM_TOKEN: ${{ secrets.WSS_UM_TOKEN }}
           WSS_USER_KEY: ${{ secrets.WSS_USER_KEY }}
+
         run: |
           echo Downloading WhiteSource Unified Agent
           curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent.jar
