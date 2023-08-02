@@ -28,7 +28,7 @@ import (
 
 // ContextReader context reader instance.
 type ContextReader struct {
-	ctx    context.Context // nolint:containedctx
+	ctx    context.Context //nolint:containedctx
 	reader io.Reader
 }
 
@@ -47,9 +47,9 @@ func New(ctx context.Context, reader io.Reader) (contextReader io.Reader) {
 func (contextReader *ContextReader) Read(p []byte) (n int, err error) {
 	select {
 	case <-contextReader.ctx.Done():
-		return 0, contextReader.ctx.Err() // nolint:wrapcheck // error not properly handled by io.Copy
+		return 0, contextReader.ctx.Err() //nolint:wrapcheck // error not properly handled by io.Copy
 
 	default:
-		return contextReader.reader.Read(p) // nolint:wrapcheck // error not properly handled by io.Copy
+		return contextReader.reader.Read(p) //nolint:wrapcheck // error not properly handled by io.Copy
 	}
 }

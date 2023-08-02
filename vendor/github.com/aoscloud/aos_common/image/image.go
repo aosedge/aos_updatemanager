@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -103,7 +102,9 @@ func Download(ctx context.Context, destination, url string) (fileName string, er
 	for {
 		select {
 		case <-timer.C:
-			log.WithFields(log.Fields{"complete": resp.BytesComplete(), "total": resp.Size}).Debug("Download progress")
+			log.WithFields(log.Fields{
+				"complete": resp.BytesComplete(), "total": resp.Size(),
+			}).Debug("Download progress")
 
 		case <-resp.Done:
 			if err := resp.Err(); err != nil {
@@ -273,7 +274,7 @@ func UnpackTarImage(source, destination string) error {
 
 // GetImageManifest  gets image manifest data from file.
 func GetImageManifest(imagePath string) (*aostypes.ServiceManifest, error) {
-	manifestJSON, err := ioutil.ReadFile(path.Join(imagePath, manifestFileName))
+	manifestJSON, err := os.ReadFile(path.Join(imagePath, manifestFileName))
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}

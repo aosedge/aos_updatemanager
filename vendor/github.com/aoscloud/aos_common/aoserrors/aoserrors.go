@@ -46,12 +46,12 @@ type Error struct {
 
 // New creates new Aos error from string message.
 func New(message string) error {
-	return createAosError(errors.New(message)) // nolint:goerr113 // convert to Aos error
+	return createAosError(errors.New(message)) //nolint:goerr113 // convert to Aos error
 }
 
 // Errorf creates new formatted Aos error.
 func Errorf(format string, args ...interface{}) error {
-	return createAosError(fmt.Errorf(format, args...)) // nolint:goerr113 // convert to Aos error
+	return createAosError(fmt.Errorf(format, args...)) //nolint:goerr113 // convert to Aos error
 }
 
 // Wrap wraps existing error.
