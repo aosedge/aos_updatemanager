@@ -19,6 +19,7 @@ package xenstorerebooter
 
 import (
 	"os"
+	"syscall"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/joelnb/xenstore-go"
@@ -47,6 +48,8 @@ type XenstoreRebooter struct{}
 
 // Reboot requests to reboot system by writing xenstore entry.
 func (reboot *XenstoreRebooter) Reboot() (err error) {
+	syscall.Sync()
+
 	xenClient, err := xenstore.NewXenBusClient(xenBus)
 	if err != nil {
 		return aoserrors.Wrap(err)
