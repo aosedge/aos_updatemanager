@@ -280,7 +280,8 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 
 	module.state.UpdatePartition = secPartition
 
-	if _, err = image.CopyFromGzipArchiveToDevice(module.partitions[secPartition], module.state.ImagePath); err != nil {
+	if _, err = image.CopyFromGzipArchiveToDevice(
+		module.partitions[secPartition], module.state.ImagePath, true); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -306,7 +307,8 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	updatePartition := module.state.UpdatePartition
 	secPartition := (updatePartition + 1) % len(module.partitions)
 
-	if _, err = image.CopyToDevice(module.partitions[updatePartition], module.partitions[secPartition]); err != nil {
+	if _, err = image.CopyToDevice(
+		module.partitions[updatePartition], module.partitions[secPartition], true); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -342,7 +344,8 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	currentPartition := module.state.UpdatePartition
 	secPartition := (currentPartition + 1) % len(module.partitions)
 
-	if _, err = image.CopyToDevice(module.partitions[secPartition], module.partitions[currentPartition]); err != nil {
+	if _, err = image.CopyToDevice(
+		module.partitions[secPartition], module.partitions[currentPartition], true); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 

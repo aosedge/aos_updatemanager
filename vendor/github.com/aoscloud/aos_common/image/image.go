@@ -31,6 +31,7 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cavaliergopher/grab/v3"
@@ -445,7 +446,7 @@ func CopyFromGzipArchive(dst, src string) (copied int64, err error) {
 }
 
 // CopyToDevice copies file content to device.
-func CopyToDevice(dst, src string) (copied int64, err error) {
+func CopyToDevice(dst, src string, direct bool) (copied int64, err error) {
 	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Start copy to device")
 
 	srcFile, err := os.Open(src)
@@ -454,7 +455,12 @@ func CopyToDevice(dst, src string) (copied int64, err error) {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC, 0)
+	flags := os.O_RDWR | os.O_TRUNC
+	if direct {
+		flags |= syscall.O_DIRECT
+	}
+
+	dstFile, err := os.OpenFile(dst, flags, 0)
 	if err != nil {
 		return 0, aoserrors.Wrap(err)
 	}
@@ -471,7 +477,7 @@ func CopyToDevice(dst, src string) (copied int64, err error) {
 }
 
 // CopyFromGzipArchiveToDevice copies gzip archive to device.
-func CopyFromGzipArchiveToDevice(dst, src string) (copied int64, err error) {
+func CopyFromGzipArchiveToDevice(dst, src string, direct bool) (copied int64, err error) {
 	log.WithFields(log.Fields{"src": src, "dst": dst}).Debug("Start copy from gzip archive to device")
 
 	srcFile, err := os.Open(src)
@@ -480,7 +486,12 @@ func CopyFromGzipArchiveToDevice(dst, src string) (copied int64, err error) {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.OpenFile(dst, os.O_RDWR|os.O_TRUNC, 0)
+	flags := os.O_RDWR | os.O_TRUNC
+	if direct {
+		flags |= syscall.O_DIRECT
+	}
+
+	dstFile, err := os.OpenFile(dst, flags, 0)
 	if err != nil {
 		return 0, aoserrors.Wrap(err)
 	}
