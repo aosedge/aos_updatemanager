@@ -19,7 +19,6 @@ package dualpartmodule_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -103,7 +102,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "um_")
+	tmpDir, err = os.MkdirTemp("", "um_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
@@ -276,7 +275,7 @@ func TestRevert(t *testing.T) {
 		t.Errorf("Can't get partition content: %s", err)
 	}
 
-	updateVersion := "v3.0" // nolint:goconst
+	updateVersion := "v3.0" //nolint:goconst
 
 	imagePath := path.Join(tmpDir, "image.gz")
 
@@ -659,7 +658,7 @@ func generateContent(contentPath string, content []fsContent) (err error) {
 			return aoserrors.Wrap(err)
 		}
 
-		if err = ioutil.WriteFile(filePath, file.content, 0o600); err != nil {
+		if err = os.WriteFile(filePath, file.content, 0o600); err != nil {
 			return aoserrors.Wrap(err)
 		}
 	}
@@ -668,7 +667,7 @@ func generateContent(contentPath string, content []fsContent) (err error) {
 }
 
 func getPartitionContent(device string) (content []fsContent, err error) {
-	mountPoint, err := ioutil.TempDir(tmpDir, "mount_")
+	mountPoint, err := os.MkdirTemp(tmpDir, "mount_")
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -703,7 +702,7 @@ func getPartitionContent(device string) (content []fsContent, err error) {
 
 		file := fsContent{name: "/" + relPath}
 
-		if file.content, err = ioutil.ReadFile(filePath); err != nil {
+		if file.content, err = os.ReadFile(filePath); err != nil {
 			return aoserrors.Wrap(err)
 		}
 
@@ -729,7 +728,7 @@ func compareContent(srcContent, dstContent []fsContent) (err error) {
 }
 
 func createVersionFile(device string, version string) (err error) {
-	mountPoint, err := ioutil.TempDir(tmpDir, "mount_")
+	mountPoint, err := os.MkdirTemp(tmpDir, "mount_")
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -752,7 +751,7 @@ func createVersionFile(device string, version string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = ioutil.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o600); err != nil {
+	if err = os.WriteFile(filePath, []byte(fmt.Sprintf(`VERSION="%s"`, version)), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

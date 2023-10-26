@@ -69,8 +69,8 @@ const (
 )
 
 const (
-	hdSignatureNone = iota // nolint
-	hdSignatureMBR         // nolint
+	hdSignatureNone = iota
+	hdSignatureMBR
 	hdSignatureGUID
 )
 
@@ -175,7 +175,7 @@ func (instance *Instance) GetBootByPartUUID(partUUID string) (id uint16, err err
 
 			var uuidStr *C.char
 
-			// nolint: gocritic
+			//nolint: gocritic
 			if rc := C.efi_guid_to_str((*C.efi_guid_t)(unsafe.Pointer(&hd.signature[0])), &uuidStr); rc < 0 {
 				log.Errorf("Wrong PARTUUID in efi var: %s", getEfiError())
 			}
@@ -386,7 +386,7 @@ func readVar(guid, name string) (data []byte, attributes uint32, err error) {
 		return nil, 0, aoserrors.Wrap(getEfiError())
 	}
 
-	// nolint: gocritic
+	//nolint: gocritic
 	if rc := C.efi_get_variable(efiGUID, C.CString(name), &efiData, &efiSize, &efiAttributes); rc < 0 {
 		return nil, 0, aoserrors.Wrap(getEfiError())
 	}
@@ -572,7 +572,7 @@ func getEfiError() (err error) {
 		errCode  C.int
 	)
 
-	rc := C.efi_error_get(C.uint(0), &filename, &function, &line, &message, &errCode) // nolint: gocritic
+	rc := C.efi_error_get(C.uint(0), &filename, &function, &line, &message, &errCode) //nolint: gocritic
 	if rc < 0 {
 		return aoserrors.New("can't get EFI error")
 	}
@@ -606,13 +606,13 @@ func (instance *Instance) readBootItems() (err error) {
 		name *C.char       = nil
 	)
 
-	bootItemRegexp, err := regexp.Compile(bootItemNamePattern) // nolint:gocritic // cathch errror here
+	bootItemRegexp, err := regexp.Compile(bootItemNamePattern) //nolint:gocritic // cathch errror here
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
 
 	for {
-		if rc := C.efi_get_next_variable_name(&guid, &name); rc == 0 { // nolint: gocritic
+		if rc := C.efi_get_next_variable_name(&guid, &name); rc == 0 { //nolint: gocritic
 			break
 		}
 
@@ -719,7 +719,7 @@ func parseMediaType(subType uint8, data []byte) (dp interface{}, err error) {
 		return hd, nil
 
 	default:
-		// nolint:nilnil // we parse only known fields
+		//nolint:nilnil // we parse only known fields
 		return nil, nil
 	}
 }

@@ -18,7 +18,6 @@
 package sshmodule_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -63,7 +62,7 @@ func init() {
 func TestMain(m *testing.M) {
 	var err error
 
-	tmpDir, err = ioutil.TempDir("", "um_")
+	tmpDir, err = os.MkdirTemp("", "um_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
@@ -114,7 +113,7 @@ func TestUpdate(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
+	if err := os.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
 		t.Fatalf("Can't write test file: %s", err)
 	}
 
@@ -177,7 +176,7 @@ func TestUpdateErrors(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
+	if err := os.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
 		t.Fatalf("Can't write test file: %s", err)
 	}
 
@@ -216,7 +215,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 
 	imagePath := path.Join(tmpDir, "testfile")
 
-	if err := ioutil.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
+	if err := os.WriteFile(imagePath, []byte("This is test file"), 0o600); err != nil {
 		t.Fatalf("Can't write test file: %s", err)
 	}
 

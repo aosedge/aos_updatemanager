@@ -18,7 +18,6 @@ package testtools
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -150,7 +149,7 @@ func CreateFilePartition(
 	if contentCreator != nil {
 		var mountPoint string
 
-		if mountPoint, err = ioutil.TempDir("", "um_mount"); err != nil {
+		if mountPoint, err = os.MkdirTemp("", "um_mount"); err != nil {
 			return aoserrors.Wrap(err)
 		}
 

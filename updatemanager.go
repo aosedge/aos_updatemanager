@@ -20,7 +20,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/signal"
 	"path"
@@ -52,7 +52,7 @@ const dbFileName = "updatemanager.db"
  ******************************************************************************/
 
 // GitSummary provided by govvv at compile-time.
-var GitSummary string // nolint:gochecknoglobals
+var GitSummary string //nolint:gochecknoglobals
 
 /*******************************************************************************
  * Types
@@ -225,13 +225,13 @@ func main() {
 
 	// Show version
 	if *showVersion {
-		fmt.Printf("Version: %s\n", GitSummary) // nolint:forbidigo // logs are't initialized
+		fmt.Printf("Version: %s\n", GitSummary) //nolint:forbidigo // logs are't initialized
 		return
 	}
 
 	if *useJournal {
 		log.AddHook(newJournalHook())
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	} else {
 		log.SetOutput(os.Stdout)
 	}

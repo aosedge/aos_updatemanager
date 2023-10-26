@@ -40,7 +40,7 @@ import (
 // DefaultCertificateTemplate default certificate template.
 var DefaultCertificateTemplate = x509.Certificate{ //nolint:gochecknoglobals
 	SerialNumber: big.NewInt(1),
-	Version:      3, // nolint:gomnd
+	Version:      3, //nolint:gomnd
 	NotBefore:    time.Now().Add(-10 * time.Second),
 	NotAfter:     time.Now().AddDate(10, 0, 0),
 	KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature |
@@ -59,7 +59,7 @@ var DefaultCertificateTemplate = x509.Certificate{ //nolint:gochecknoglobals
 		"*.aos-dev.test",
 	},
 	BasicConstraintsValid: true,
-	IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1).To4(), net.IPv6loopback}, // nolint:gomnd
+	IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1).To4(), net.IPv6loopback}, //nolint:gomnd
 }
 
 /***********************************************************************************************************************
@@ -107,7 +107,7 @@ func GenerateCert(
 func GenerateCertAndKey(
 	template, parent *x509.Certificate, parentPrivateKey crypto.PrivateKey,
 ) (cert *x509.Certificate, privateKey crypto.PrivateKey, err error) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048) // nolint:gomnd
+	key, err := rsa.GenerateKey(rand.Reader, 2048) //nolint:gomnd
 	if err != nil {
 		return nil, nil, aoserrors.Wrap(err)
 	}

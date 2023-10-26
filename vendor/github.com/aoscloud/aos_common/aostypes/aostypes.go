@@ -33,7 +33,7 @@ import (
  * Consts
  **********************************************************************************************************************/
 
-// nolint
+//nolint:revive
 const (
 	alternativePattern = `^P(((?P<year>\d+)-)((?P<month>\d+)-)((?P<day>\d+)))?(T((?P<hour>\d+):)((?P<minute>\d+):)(?P<second>\d+))?$`
 	canonicPattern     = `^P((?P<year>\d+)Y)?((?P<month>\d+)M)?((?P<week>\d+)W)?((?P<day>\d+)D)?(T((?P<hour>\d+)H)?((?P<minute>\d+)M)?((?P<second>\d+)S)?)?$`
@@ -166,9 +166,28 @@ type InstanceIdent struct {
 	Instance  uint64 `json:"instance"`
 }
 
+// FirewallRule firewall rule.
+type FirewallRule struct {
+	DstIP   string `json:"dstIp"`
+	DstPort string `json:"dstPort"`
+	Proto   string `json:"proto"`
+	SrcIP   string `json:"srcIp"`
+}
+
+// NetworkParameters networks parameters.
+type NetworkParameters struct {
+	NetworkID     string
+	Subnet        string
+	IP            string
+	VlanID        uint64
+	DNSServers    []string
+	FirewallRules []FirewallRule
+}
+
 // InstanceInfo instance information to start it.
 type InstanceInfo struct {
 	InstanceIdent
+	NetworkParameters
 	UID         uint32 `json:"uid"`
 	Priority    uint64 `json:"priority"`
 	StoragePath string `json:"storagePath"`
@@ -270,7 +289,7 @@ func (t *Time) UnmarshalJSON(b []byte) (err error) {
 			return aoserrors.Errorf(errFormat, value)
 		}
 
-		intFields := make([]int, 3) // nolint:gomnd //time format has 3 fields HH:MM:SS
+		intFields := make([]int, 3) //nolint:gomnd //time format has 3 fields HH:MM:SS
 
 		for i, field := range strFields {
 			if intFields[i], err = strconv.Atoi(field); err != nil {
@@ -278,7 +297,7 @@ func (t *Time) UnmarshalJSON(b []byte) (err error) {
 			}
 		}
 
-		t.Time = time.Date(0, 1, 1, intFields[0], intFields[1], intFields[2], 0, time.Local)
+		t.Time = time.Date(0, 1, 1, intFields[0], intFields[1], intFields[2], 0, time.Local) //nolint:gosmopolitan
 
 		return nil
 

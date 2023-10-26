@@ -18,7 +18,6 @@
 package ubootcontroller_test
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -70,7 +69,7 @@ func init() {
  ******************************************************************************/
 
 func TestMain(m *testing.M) {
-	tmpDir, err := ioutil.TempDir("", "um_")
+	tmpDir, err := os.MkdirTemp("", "um_")
 	if err != nil {
 		log.Fatalf("Error create temporary dir: %s", err)
 	}
@@ -219,7 +218,7 @@ func TestDefaultEnv(t *testing.T) {
  ******************************************************************************/
 
 func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) {
-	mountPoint, err := ioutil.TempDir("", "uboot_*")
+	mountPoint, err := os.MkdirTemp("", "uboot_*")
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -247,7 +246,7 @@ func processEnvFile(part testtools.PartInfo, cb func(string) error) (err error) 
 
 func createEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
-		err = ioutil.WriteFile(fileName, []byte(envFileFormat), 0o600)
+		err = os.WriteFile(fileName, []byte(envFileFormat), 0o600)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}
@@ -260,7 +259,7 @@ func createEnvFile(part testtools.PartInfo) (err error) {
 
 func createIncorrectEnvFile(part testtools.PartInfo) (err error) {
 	err = processEnvFile(part, func(fileName string) (err error) {
-		err = ioutil.WriteFile(fileName, []byte("@@@@@@"), 0o600)
+		err = os.WriteFile(fileName, []byte("@@@@@@"), 0o600)
 		if err != nil {
 			return aoserrors.Wrap(err)
 		}

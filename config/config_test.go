@@ -18,7 +18,6 @@
 package config_test
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -46,7 +45,7 @@ var cfg *config.Config
  ******************************************************************************/
 
 func saveConfigFile(configName string, configContent string) (err error) {
-	if err = ioutil.WriteFile(path.Join("tmp", configName), []byte(configContent), 0o600); err != nil {
+	if err = os.WriteFile(path.Join("tmp", configName), []byte(configContent), 0o600); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

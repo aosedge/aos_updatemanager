@@ -66,7 +66,7 @@ type eccKey struct {
  * Vars
  **********************************************************************************************************************/
 
-var supportedHash = map[crypto.Hash]tpm2.Algorithm{ // nolint:gochecknoglobals
+var supportedHash = map[crypto.Hash]tpm2.Algorithm{ //nolint:gochecknoglobals
 	crypto.SHA1:   tpm2.AlgSHA1,
 	crypto.SHA256: tpm2.AlgSHA256,
 	crypto.SHA384: tpm2.AlgSHA384,
@@ -78,7 +78,8 @@ var supportedHash = map[crypto.Hash]tpm2.Algorithm{ // nolint:gochecknoglobals
  **********************************************************************************************************************/
 
 // CreateFromPersistent creates key from persistent storage.
-// nolint:ireturn // we return different key types
+//
+//nolint:ireturn // we return different key types
 func CreateFromPersistent(device io.ReadWriter, persistentHandle tpmutil.Handle) (key TPMKey, err error) {
 	tpmPublic, _, _, err := tpm2.ReadPublic(device, persistentHandle)
 	if err != nil {
@@ -98,7 +99,8 @@ func CreateFromPersistent(device io.ReadWriter, persistentHandle tpmutil.Handle)
 }
 
 // CreateFromBlobs creates key from blobs.
-// nolint:ireturn // we return different key types
+//
+//nolint:ireturn // we return different key types
 func CreateFromBlobs(device io.ReadWriter, primaryHandle tpmutil.Handle,
 	password string, privateBlob, publicBlob []byte,
 ) (key TPMKey, err error) {
@@ -125,8 +127,7 @@ func CreateFromBlobs(device io.ReadWriter, primaryHandle tpmutil.Handle,
 /***********************************************************************************************************************
  * Private
  **********************************************************************************************************************/
-//
-// nolint:ireturn // we return different key types
+//nolint:ireturn // we return different key types
 func createNewKey(algorithm tpm2.Algorithm, tpmKey tpmKey) (key TPMKey, err error) {
 	switch algorithm {
 	case tpm2.AlgRSA:

@@ -19,7 +19,6 @@ package dualpartmodule
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -281,7 +280,8 @@ func (module *DualPartModule) Update() (rebootRequired bool, err error) {
 
 	module.state.UpdatePartition = secPartition
 
-	if _, err = image.CopyFromGzipArchiveToDevice(module.partitions[secPartition], module.state.ImagePath); err != nil {
+	if _, err = image.CopyFromGzipArchiveToDevice(
+		module.partitions[secPartition], module.state.ImagePath, true); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -307,7 +307,8 @@ func (module *DualPartModule) Revert() (rebootRequired bool, err error) {
 	updatePartition := module.state.UpdatePartition
 	secPartition := (updatePartition + 1) % len(module.partitions)
 
-	if _, err = image.CopyToDevice(module.partitions[updatePartition], module.partitions[secPartition]); err != nil {
+	if _, err = image.CopyToDevice(
+		module.partitions[updatePartition], module.partitions[secPartition], true); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -343,7 +344,8 @@ func (module *DualPartModule) Apply() (rebootRequired bool, err error) {
 	currentPartition := module.state.UpdatePartition
 	secPartition := (currentPartition + 1) % len(module.partitions)
 
-	if _, err = image.CopyToDevice(module.partitions[secPartition], module.partitions[currentPartition]); err != nil {
+	if _, err = image.CopyToDevice(
+		module.partitions[secPartition], module.partitions[currentPartition], true); err != nil {
 		return false, aoserrors.Wrap(err)
 	}
 
@@ -411,7 +413,7 @@ func (module *DualPartModule) setState(state updateState) (err error) {
 }
 
 func (module *DualPartModule) getModuleVersion(part string) (version string, err error) {
-	mountDir, err := ioutil.TempDir("", "aos_")
+	mountDir, err := os.MkdirTemp("", "aos_")
 	if err != nil {
 		return "", aoserrors.Wrap(err)
 	}
@@ -435,7 +437,7 @@ func (module *DualPartModule) getModuleVersion(part string) (version string, err
 
 	versionFilePath := path.Join(mountDir, module.versionFile)
 
-	data, err := ioutil.ReadFile(versionFilePath)
+	data, err := os.ReadFile(versionFilePath)
 	if err != nil {
 		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", versionFilePath, err)
 	}
