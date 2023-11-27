@@ -53,6 +53,8 @@ const (
 	opReboot  = "reboot"
 )
 
+const versionExistMsg = "component already has required vendor version: "
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -477,7 +479,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 				AosVersion:    info.AosVersion,
 				VendorVersion: sameVersionComponent.vendorVersion,
 				Status:        umclient.StatusError,
-				Error:         "component already has required vendor version: " + sameVersionComponent.vendorVersion,
+				Error:         versionExistMsg + sameVersionComponent.vendorVersion,
 			})
 		} else {
 			newStatus.Components = append(newStatus.Components, umclient.ComponentStatusInfo{
@@ -490,7 +492,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 	}
 
 	newStatus.State = umclient.StateFailed
-	newStatus.Error = "component already has required vendor version: " + sameVersionComponent.vendorVersion
+	newStatus.Error = versionExistMsg + sameVersionComponent.vendorVersion
 	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil, nil)
@@ -510,7 +512,7 @@ func TestUpdateSameVendorVersion(t *testing.T) {
 		AosVersion:    1,
 		VendorVersion: sameVersionComponent.vendorVersion,
 		Status:        umclient.StatusError,
-		Error:         "component already has required vendor version: " + sameVersionComponent.vendorVersion,
+		Error:         versionExistMsg + sameVersionComponent.vendorVersion,
 	})
 
 	testOperation(t, handler, handler.RevertUpdate, &newStatus, nil, nil)
