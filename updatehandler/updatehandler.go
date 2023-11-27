@@ -55,6 +55,11 @@ const (
 	stateFailed   = "failed"
 )
 
+const (
+	afterPrefix = "after_"
+	leavePrefix = "leave_"
+)
+
 /*******************************************************************************
  * Vars
  ******************************************************************************/
@@ -175,12 +180,12 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 		{Name: eventRevert, Src: []string{statePrepared, stateUpdated, stateFailed}, Dst: stateIdle},
 	},
 		fsm.Callbacks{
-			"after_event":           handler.onStateChanged,
-			"leave_state":           func(ctx context.Context, event *fsm.Event) { event.Async() },
-			"after_" + eventPrepare: handler.onPrepareState,
-			"after_" + eventUpdate:  handler.onUpdateState,
-			"after_" + eventApply:   handler.onApplyState,
-			"after_" + eventRevert:  handler.onRevertState,
+			afterPrefix + "event":      handler.onStateChanged,
+			leavePrefix + "state":      func(ctx context.Context, event *fsm.Event) { event.Async() },
+			afterPrefix + eventPrepare: handler.onPrepareState,
+			afterPrefix + eventUpdate:  handler.onUpdateState,
+			afterPrefix + eventApply:   handler.onApplyState,
+			afterPrefix + eventRevert:  handler.onRevertState,
 		},
 	)
 

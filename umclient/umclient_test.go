@@ -310,18 +310,18 @@ func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err 
 		}
 
 		status := umclient.Status{
-			State: umclient.UMState(pbStatus.UmState),
-			Error: pbStatus.Error,
+			State: umclient.UMState(pbStatus.GetUmState()),
+			Error: pbStatus.GetError(),
 		}
 
-		for _, component := range pbStatus.Components {
+		for _, component := range pbStatus.GetComponents() {
 			status.Components = append(status.Components,
 				umclient.ComponentStatusInfo{
-					ID:            component.Id,
-					VendorVersion: component.VendorVersion,
-					AosVersion:    component.AosVersion,
-					Status:        umclient.ComponentStatus(component.Status),
-					Error:         component.Error,
+					ID:            component.GetId(),
+					VendorVersion: component.GetVendorVersion(),
+					AosVersion:    component.GetAosVersion(),
+					Status:        umclient.ComponentStatus(component.GetStatus()),
+					Error:         component.GetError(),
 				})
 		}
 
