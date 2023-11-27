@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/docker/docker/pkg/mount"
+	"github.com/moby/sys/mountinfo"
 	"github.com/speijnik/go-errortree"
 	"golang.org/x/sys/unix"
 )
@@ -111,8 +111,8 @@ func pathToDevice(path string) (device string, err error) {
 	devMinor := unix.Minor(statT.Dev)
 
 	// Retrieve mount info
-	var mountInfos []*mount.Info
-	if mountInfos, err = mount.GetMounts(); err != nil {
+	var mountInfos []*mountinfo.Info
+	if mountInfos, err = mountinfo.GetMounts(nil); err != nil {
 		return
 	}
 
