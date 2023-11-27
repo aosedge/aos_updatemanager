@@ -20,10 +20,10 @@ package fs
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -219,7 +219,7 @@ func GetUserFSQuotaUsage(path string, uid, gid uint32) (byteUsed uint64, err err
 		return byteUsed, nil
 	}
 
-	user := user.User{Uid: fmt.Sprint(uid), Gid: fmt.Sprint(gid)}
+	user := user.User{Uid: strconv.FormatUint(uint64(uid), 10), Gid: strconv.FormatUint(uint64(gid), 10)}
 
 	info, err := fsquota.GetUserInfo(path, &user)
 	if err != nil {
@@ -237,7 +237,7 @@ func SetUserFSQuota(path string, limit uint64, uid, gid uint32) (err error) {
 		return nil
 	}
 
-	user := user.User{Uid: fmt.Sprint(uid), Gid: fmt.Sprint(gid)}
+	user := user.User{Uid: strconv.FormatUint(uint64(uid), 10), Gid: strconv.FormatUint(uint64(gid), 10)}
 
 	log.WithFields(log.Fields{"uid": uid, "gid": uid, "limit": limit}).Debug("Set user FS quota")
 
