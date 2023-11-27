@@ -176,7 +176,7 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 	},
 		fsm.Callbacks{
 			"after_event":           handler.onStateChanged,
-			"leave_state":           func(e *fsm.Event) { e.Async() },
+			"leave_state":           func(ctx context.Context, event *fsm.Event) { event.Async() },
 			"after_" + eventPrepare: handler.onPrepareState,
 			"after_" + eventUpdate:  handler.onUpdateState,
 			"after_" + eventApply:   handler.onApplyState,
@@ -407,7 +407,7 @@ func (handler *Handler) sendStatus() {
 	handler.statusChannel <- status
 }
 
-func (handler *Handler) onStateChanged(event *fsm.Event) {
+func (handler *Handler) onStateChanged(ctx context.Context, event *fsm.Event) {
 	handler.state.UpdateState = handler.fsm.Current()
 
 	if handler.state.UpdateState == stateIdle {
@@ -696,7 +696,7 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 	return nil
 }
 
-func (handler *Handler) onPrepareState(event *fsm.Event) {
+func (handler *Handler) onPrepareState(ctx context.Context, event *fsm.Event) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -764,7 +764,7 @@ func (handler *Handler) onPrepareState(event *fsm.Event) {
 	}, true)
 }
 
-func (handler *Handler) onUpdateState(event *fsm.Event) {
+func (handler *Handler) onUpdateState(ctx context.Context, event *fsm.Event) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -797,7 +797,7 @@ func (handler *Handler) onUpdateState(event *fsm.Event) {
 	}
 }
 
-func (handler *Handler) onApplyState(event *fsm.Event) {
+func (handler *Handler) onApplyState(ctx context.Context, event *fsm.Event) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -826,7 +826,7 @@ func (handler *Handler) onApplyState(event *fsm.Event) {
 	}
 }
 
-func (handler *Handler) onRevertState(event *fsm.Event) {
+func (handler *Handler) onRevertState(ctx context.Context, event *fsm.Event) {
 	handler.Lock()
 	defer handler.Unlock()
 
@@ -850,7 +850,7 @@ func (handler *Handler) sendEvent(event string, args ...interface{}) (err error)
 		return aoserrors.Errorf("error sending event %s in state: %s", event, handler.fsm.Current())
 	}
 
-	if err = handler.fsm.Event(event, args...); err != nil {
+	if err = handler.fsm.Event(context.Background(), event, args...); err != nil {
 		var fsmError fsm.AsyncError
 
 		if !errors.As(err, &fsmError) {
