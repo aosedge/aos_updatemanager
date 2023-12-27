@@ -21,7 +21,7 @@ import (
 	"crypto"
 	"io"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 
 	"github.com/aoscloud/aos_common/aoserrors"

@@ -179,13 +179,13 @@ func (server *testServer) GetNodeInfo(context context.Context, req *empty.Empty)
 }
 
 func (server *testServer) GetCert(context context.Context, req *pb.GetCertRequest) (*pb.GetCertResponse, error) {
-	rsp := &pb.GetCertResponse{Type: req.Type}
+	rsp := &pb.GetCertResponse{Type: req.GetType()}
 
-	if req.Type != server.certURL.certType {
+	if req.GetType() != server.certURL.certType {
 		return rsp, aoserrors.New("not found")
 	}
 
-	if req.Type != server.keyURL.certType {
+	if req.GetType() != server.keyURL.certType {
 		return rsp, aoserrors.New("not found")
 	}
 

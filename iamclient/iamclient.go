@@ -94,9 +94,9 @@ func (client *Client) GetNodeID() (string, error) {
 		return "", aoserrors.Wrap(err)
 	}
 
-	log.WithFields(log.Fields{"nodeID": response.NodeId, "nodeType": response.NodeType}).Debug("Get node info")
+	log.WithFields(log.Fields{"nodeID": response.GetNodeId(), "nodeType": response.GetNodeType()}).Debug("Get node info")
 
-	return response.NodeId, nil
+	return response.GetNodeId(), nil
 }
 
 // GetCertificate gets certificate by issuer.
@@ -111,9 +111,11 @@ func (client *Client) GetCertificate(cerType string) (certURL, keyURL string, er
 		return "", "", aoserrors.Wrap(err)
 	}
 
-	log.WithFields(log.Fields{"certURL": response.CertUrl, "keyURL": response.KeyUrl}).Debug("Certificate info")
+	log.WithFields(log.Fields{
+		"certURL": response.GetCertUrl(), "keyURL": response.GetKeyUrl(),
+	}).Debug("Certificate info")
 
-	return response.CertUrl, response.KeyUrl, nil
+	return response.GetCertUrl(), response.GetKeyUrl(), nil
 }
 
 /***********************************************************************************************************************

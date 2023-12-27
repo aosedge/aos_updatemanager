@@ -306,23 +306,23 @@ func (client *Client) processMessages() (err error) {
 			return aoserrors.Wrap(err)
 		}
 
-		switch data := message.CMMessage.(type) {
+		switch data := message.GetCMMessage().(type) {
 		case *pb.CMMessages_PrepareUpdate:
 			log.Debug("Prepare update received")
 
-			components := make([]ComponentUpdateInfo, 0, len(data.PrepareUpdate.Components))
+			components := make([]ComponentUpdateInfo, 0, len(data.PrepareUpdate.GetComponents()))
 
-			for _, component := range data.PrepareUpdate.Components {
+			for _, component := range data.PrepareUpdate.GetComponents() {
 				components = append(components,
 					ComponentUpdateInfo{
-						ID:            component.Id,
-						VendorVersion: component.VendorVersion,
-						AosVersion:    component.AosVersion,
-						Annotations:   json.RawMessage(component.Annotations),
-						URL:           component.Url,
-						Sha256:        component.Sha256,
-						Sha512:        component.Sha512,
-						Size:          component.Size,
+						ID:            component.GetId(),
+						VendorVersion: component.GetVendorVersion(),
+						AosVersion:    component.GetAosVersion(),
+						Annotations:   json.RawMessage(component.GetAnnotations()),
+						URL:           component.GetUrl(),
+						Sha256:        component.GetSha256(),
+						Sha512:        component.GetSha512(),
+						Size:          component.GetSize(),
 					})
 			}
 
