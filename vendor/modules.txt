@@ -4,8 +4,8 @@ github.com/ThalesIgnite/crypto11
 # github.com/anexia-it/fsquota v0.0.0-00010101000000-000000000000 => github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7
 ## explicit; go 1.21
 github.com/anexia-it/fsquota
-# github.com/aoscloud/aos_common v0.0.0-20231127154544-f0075875ceac
-## explicit; go 1.21
+# github.com/aoscloud/aos_common v0.0.0-20231227133432-0c97aef1696d
+## explicit; go 1.20
 github.com/aoscloud/aos_common/aoserrors
 github.com/aoscloud/aos_common/aostypes
 github.com/aoscloud/aos_common/api/iamanager/v4
@@ -123,7 +123,7 @@ github.com/tmc/scp
 # go.uber.org/atomic v1.7.0
 ## explicit; go 1.13
 go.uber.org/atomic
-# golang.org/x/crypto v0.15.0
+# golang.org/x/crypto v0.16.0
 ## explicit; go 1.18
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
@@ -142,7 +142,7 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sys v0.14.0
+# golang.org/x/sys v0.15.0
 ## explicit; go 1.18
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
