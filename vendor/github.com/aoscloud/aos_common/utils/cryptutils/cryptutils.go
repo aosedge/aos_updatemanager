@@ -30,11 +30,11 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/ThalesIgnite/crypto11"
 	"github.com/google/go-tpm/tpmutil"
+	pkcs11uri "github.com/stefanberger/go-pkcs11uri"
 
 	"github.com/aoscloud/aos_common/aoserrors"
 	"github.com/aoscloud/aos_common/tpmkey"
@@ -165,7 +165,7 @@ func (cryptoContext *CryptoContext) LoadCertificateByURL(certURLStr string) ([]*
 		return certs, nil
 
 	case SchemePKCS11:
-		certs, err := cryptoContext.loadCertificateFromPKCS11(certURL)
+		certs, err := cryptoContext.loadCertificateFromPKCS11(certURL.String())
 		if err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
@@ -200,7 +200,7 @@ func (cryptoContext *CryptoContext) LoadPrivateKeyByURL(keyURLStr string) (privK
 		}
 
 	case SchemePKCS11:
-		if privKey, err = cryptoContext.loadPrivateKeyFromPKCS11(keyURL); err != nil {
+		if privKey, err = cryptoContext.loadPrivateKeyFromPKCS11(keyURL.String()); err != nil {
 			return nil, false, aoserrors.Wrap(err)
 		}
 
@@ -459,49 +459,37 @@ func CheckCertificate(cert *x509.Certificate, key crypto.PrivateKey) error {
 	return nil
 }
 
-// ParsePKCS11Url extracts library, token, label, id, user pin from pkcs url.
-func ParsePKCS11Url(pkcs11Url *url.URL) (library, token, label, id, userPin string) {
-	opaqueValues := make(map[string]string)
+// ParsePKCS11URL extracts library, token, label, id, user pin from pkcs URL.
+func ParsePKCS11URL(pkcs11URL string) (library, token, userPIN string, label, id []byte, err error) {
+	uri := pkcs11uri.New()
 
-	for _, field := range strings.Split(pkcs11Url.Opaque, ";") {
-		items := strings.Split(field, "=")
-		if len(items) < 2 {
-			continue
-		}
+	uri.SetAllowAnyModule(true)
 
-		opaqueValues[items[0]] = items[1]
+	if err := uri.Parse(pkcs11URL); err != nil {
+		return "", "", "", nil, nil, aoserrors.Wrap(err)
 	}
 
-	for name, value := range opaqueValues {
-		switch name {
-		case "token":
-			token = value
-
-		case "object":
-			label = value
-
-		case "id":
-			id = value
+	if library, err = uri.GetModule(); err != nil {
+		if err.Error() != "module-name attribute is not set" {
+			return "", "", "", nil, nil, aoserrors.Wrap(err)
 		}
+
+		library = DefaultPKCS11Library
 	}
 
-	library = DefaultPKCS11Library
-
-	for name, item := range pkcs11Url.Query() {
-		if len(item) == 0 {
-			continue
-		}
-
-		switch name {
-		case "module-path":
-			library = item[0]
-
-		case "pin-value":
-			userPin = item[0]
+	if uri.HasPIN() {
+		if userPIN, err = uri.GetPIN(); err != nil {
+			return "", "", "", nil, nil, aoserrors.Wrap(err)
 		}
 	}
 
-	return library, token, label, id, userPin
+	token, _ = uri.GetPathAttribute("token", false)
+	labelStr, _ := uri.GetPathAttribute("object", false)
+	label = []byte(labelStr)
+	idStr, _ := uri.GetPathAttribute("id", false)
+	id = []byte(idStr)
+
+	return library, token, userPIN, label, id, nil
 }
 
 /***********************************************************************************************************************
@@ -577,15 +565,18 @@ func (cryptoContext *CryptoContext) getPKCS11Context(library, token, userPin str
 	return pkcs11Ctx, nil
 }
 
-func (cryptoContext *CryptoContext) loadCertificateFromPKCS11(certURL *url.URL) ([]*x509.Certificate, error) {
-	library, token, label, id, userPin := ParsePKCS11Url(certURL)
-
-	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
+func (cryptoContext *CryptoContext) loadCertificateFromPKCS11(certURL string) ([]*x509.Certificate, error) {
+	library, token, userPIN, label, id, err := ParsePKCS11URL(certURL)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return nil, err
 	}
 
-	certs, err := pkcs11Ctx.FindCertificateChain([]byte(id), []byte(label), nil)
+	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPIN)
+	if err != nil {
+		return nil, err
+	}
+
+	certs, err := pkcs11Ctx.FindCertificateChain(id, label, nil)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -641,15 +632,18 @@ func (cryptoContext *CryptoContext) loadPrivateKeyFromTPM(keyURL *url.URL) (cryp
 	return privKey, nil
 }
 
-func (cryptoContext *CryptoContext) loadPrivateKeyFromPKCS11(keyURL *url.URL) (crypto.PrivateKey, error) {
-	library, token, label, id, userPin := ParsePKCS11Url(keyURL)
-
-	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPin)
+func (cryptoContext *CryptoContext) loadPrivateKeyFromPKCS11(keyURL string) (crypto.PrivateKey, error) {
+	library, token, userPIN, label, id, err := ParsePKCS11URL(keyURL)
 	if err != nil {
-		return nil, aoserrors.Wrap(err)
+		return nil, err
 	}
 
-	key, err := pkcs11Ctx.FindKeyPair([]byte(id), []byte(label))
+	pkcs11Ctx, err := cryptoContext.getPKCS11Context(library, token, userPIN)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := pkcs11Ctx.FindKeyPair(id, label)
 	if err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
