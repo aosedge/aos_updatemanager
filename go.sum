@@ -1,5 +1,5 @@
-github.com/aoscloud/aos_common v0.0.0-20240402105404-b14f7b83241b h1:QTv9st8K3L7m9mYTw8I6fJmw1FGrMzlYcEKnzkcq7w8=
-github.com/aoscloud/aos_common v0.0.0-20240402105404-b14f7b83241b/go.mod h1:sRvMslEjU2uDksny4AB2ogdY3R08nxCKiRyZ+YYnUrc=
+github.com/aoscloud/aos_common v0.0.0-20240409092038-4c73ccbde411 h1:5XM5XgR5zDl264Osv1gadpZWPEuLC4pMTPI/fpFzGos=
+github.com/aoscloud/aos_common v0.0.0-20240409092038-4c73ccbde411/go.mod h1:sRvMslEjU2uDksny4AB2ogdY3R08nxCKiRyZ+YYnUrc=
 github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:1CPr+UrVduUABuDLGzsKaz7Dp8Nu6zSfp8WqR5TiH0I=
 github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
 github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7 h1:IZrcOMTQKPENNXu3JIKu72Mr8KsRiiZaKN1nJqI2PgU=
