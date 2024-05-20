@@ -31,7 +31,7 @@ import (
 
 const (
 	xenBus        = "/dev/xen/xenbus"
-	featureReboot = "control/user-reboot"
+	featureReboot = "data/user-reboot"
 	requestReboot = "2"
 )
 
