@@ -1,24 +1,24 @@
-# github.com/ThalesIgnite/crypto11 v0.0.0-00010101000000-000000000000 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
+# github.com/ThalesIgnite/crypto11 v0.0.0-00010101000000-000000000000 => github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 ## explicit; go 1.13
 github.com/ThalesIgnite/crypto11
-# github.com/anexia-it/fsquota v0.0.0-00010101000000-000000000000 => github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7
+# github.com/anexia-it/fsquota v0.0.0-00010101000000-000000000000 => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7
 ## explicit; go 1.21
 github.com/anexia-it/fsquota
-# github.com/aoscloud/aos_common v0.0.0-20240521092209-a7ee24167d4b
+# github.com/aosedge/aos_common v0.0.0-20240701123742-84e62a5773fc
 ## explicit; go 1.21
-github.com/aoscloud/aos_common/aoserrors
-github.com/aoscloud/aos_common/aostypes
-github.com/aoscloud/aos_common/api/iamanager/v4
-github.com/aoscloud/aos_common/api/updatemanager/v1
-github.com/aoscloud/aos_common/image
-github.com/aoscloud/aos_common/migration
-github.com/aoscloud/aos_common/partition
-github.com/aoscloud/aos_common/tpmkey
-github.com/aoscloud/aos_common/utils/contextreader
-github.com/aoscloud/aos_common/utils/cryptutils
-github.com/aoscloud/aos_common/utils/fs
-github.com/aoscloud/aos_common/utils/retryhelper
-github.com/aoscloud/aos_common/utils/testtools
+github.com/aosedge/aos_common/aoserrors
+github.com/aosedge/aos_common/aostypes
+github.com/aosedge/aos_common/api/iamanager/v4
+github.com/aosedge/aos_common/api/updatemanager/v1
+github.com/aosedge/aos_common/image
+github.com/aosedge/aos_common/migration
+github.com/aosedge/aos_common/partition
+github.com/aosedge/aos_common/tpmkey
+github.com/aosedge/aos_common/utils/contextreader
+github.com/aosedge/aos_common/utils/cryptutils
+github.com/aosedge/aos_common/utils/fs
+github.com/aosedge/aos_common/utils/retryhelper
+github.com/aosedge/aos_common/utils/testtools
 # github.com/cavaliergopher/grab/v3 v3.0.1
 ## explicit; go 1.14
 github.com/cavaliergopher/grab/v3
@@ -250,5 +250,5 @@ google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/ini.v1 v1.67.0
 ## explicit
 gopkg.in/ini.v1
-# github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
-# github.com/anexia-it/fsquota => github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7
+# github.com/ThalesIgnite/crypto11 => github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
+# github.com/anexia-it/fsquota => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7

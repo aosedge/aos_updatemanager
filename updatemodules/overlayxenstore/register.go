@@ -20,12 +20,12 @@ package overlayxenstore
 import (
 	"encoding/json"
 
-	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aoserrors"
 
-	"github.com/aoscloud/aos_updatemanager/updatehandler"
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
+	"github.com/aosedge/aos_updatemanager/updatehandler"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/rebooters/xenstorerebooter"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /*******************************************************************************

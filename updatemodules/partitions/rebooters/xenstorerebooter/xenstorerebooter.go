@@ -21,7 +21,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aoserrors"
 	"github.com/joelnb/xenstore-go"
 )
 

@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	pb "github.com/aoscloud/aos_common/api/updatemanager/v1"
+	"github.com/aosedge/aos_common/aoserrors"
+	pb "github.com/aosedge/aos_common/api/updatemanager/v1"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/aoscloud/aos_updatemanager/config"
-	"github.com/aoscloud/aos_updatemanager/umclient"
+	"github.com/aosedge/aos_updatemanager/config"
+	"github.com/aosedge/aos_updatemanager/umclient"
 )
 
 /***********************************************************************************************************************

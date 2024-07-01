@@ -21,7 +21,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aoserrors"
 	"github.com/coreos/go-systemd/v22/dbus"
 )
 
