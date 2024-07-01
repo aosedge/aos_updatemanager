@@ -126,14 +126,14 @@ func TestMessages(t *testing.T) {
 
 	components := []umclient.ComponentUpdateInfo{
 		{
-			ID: "test1", VendorVersion: "1.0", AosVersion: 1, URL: "url1",
+			ID: "test1", Version: "1.0", URL: "url1",
 			Annotations: json.RawMessage(`{"id1"}`), Sha256: []byte("sha256Val1"),
-			Sha512: []byte("sha512Val1"), Size: 12341,
+			Size: 12341,
 		},
 		{
-			ID: "test2", VendorVersion: "2.0", AosVersion: 2, URL: "url2",
+			ID: "test2", Version: "2.0", URL: "url2",
 			Annotations: json.RawMessage(`{"id1"}`), Sha256: []byte("sha256Val2"),
-			Sha512: []byte("sha512Val2"), Size: 12342,
+			Size: 12342,
 		},
 	}
 
@@ -182,8 +182,8 @@ func TestMessages(t *testing.T) {
 	// Send status
 
 	componentStatuses := []umclient.ComponentStatusInfo{
-		{ID: "test1", Status: umclient.StatusInstalled, VendorVersion: "1.0", AosVersion: 1},
-		{ID: "test2", Status: umclient.StatusInstalling, VendorVersion: "2.0", AosVersion: 2, Error: "error"},
+		{ID: "test1", Status: umclient.StatusInstalled, Version: "1.0"},
+		{ID: "test2", Status: umclient.StatusInstalling, Version: "2.0", Error: "error"},
 	}
 
 	sendStatus := umclient.Status{
@@ -239,8 +239,8 @@ func TestServerDisconnect(t *testing.T) {
 	// Prepare update
 
 	if err = server.prepareUpdate([]umclient.ComponentUpdateInfo{
-		{ID: "test1", URL: "url1", VendorVersion: "1.0"},
-		{ID: "test2", URL: "url2", VendorVersion: "2.0"},
+		{ID: "test1", URL: "url1", Version: "1.0"},
+		{ID: "test2", URL: "url2", Version: "2.0"},
 	}); err != nil {
 		t.Fatalf("Can't send prepare update: %s", err)
 	}
@@ -310,18 +310,18 @@ func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err 
 		}
 
 		status := umclient.Status{
-			State: umclient.UMState(pbStatus.GetUmState()),
-			Error: pbStatus.GetError(),
+			State: umclient.UMState(pbStatus.GetUpdateState()),
+			Error: pbStatus.GetError().GetMessage(),
 		}
 
 		for _, component := range pbStatus.GetComponents() {
 			status.Components = append(status.Components,
 				umclient.ComponentStatusInfo{
-					ID:            component.GetId(),
-					VendorVersion: component.GetVendorVersion(),
-					AosVersion:    component.GetAosVersion(),
-					Status:        umclient.ComponentStatus(component.GetStatus()),
-					Error:         component.GetError(),
+					ID:      component.GetComponentId(),
+					Type:    component.GetComponentType(),
+					Version: component.GetVersion(),
+					Status:  umclient.ComponentStatus(component.GetState()),
+					Error:   component.GetError().GetMessage(),
 				})
 		}
 
@@ -354,13 +354,12 @@ func (server *testServer) prepareUpdate(components []umclient.ComponentUpdateInf
 
 	for _, component := range components {
 		pbComponents = append(pbComponents, &pb.PrepareComponentInfo{
-			Id:            component.ID,
-			VendorVersion: component.VendorVersion,
-			AosVersion:    component.AosVersion,
+			ComponentId:   component.ID,
+			ComponentType: component.Type,
+			Version:       component.Version,
 			Annotations:   string(component.Annotations),
 			Url:           component.URL,
 			Sha256:        component.Sha256,
-			Sha512:        component.Sha512,
 			Size:          component.Size,
 		})
 	}
