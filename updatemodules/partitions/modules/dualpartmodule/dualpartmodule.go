@@ -24,13 +24,13 @@ import (
 	"regexp"
 	"syscall"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/image"
-	"github.com/aoscloud/aos_common/partition"
-	"github.com/aoscloud/aos_common/utils/fs"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/image"
+	"github.com/aosedge/aos_common/partition"
+	"github.com/aosedge/aos_common/utils/fs"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aosedge/aos_updatemanager/updatehandler"
 )
 
 // The sequence diagram of update:

@@ -27,11 +27,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/utils/testtools"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
 )
 
 /***********************************************************************************************************************

@@ -25,9 +25,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	pb "github.com/aoscloud/aos_common/api/updatemanager/v1"
-	"github.com/aoscloud/aos_common/utils/cryptutils"
+	"github.com/aosedge/aos_common/aoserrors"
+	pb "github.com/aosedge/aos_common/api/updatemanager/v1"
+	"github.com/aosedge/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/aoscloud/aos_updatemanager/config"
+	"github.com/aosedge/aos_updatemanager/config"
 )
 
 /***********************************************************************************************************************

@@ -31,13 +31,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/image"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/image"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/config"
-	"github.com/aoscloud/aos_updatemanager/umclient"
-	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aosedge/aos_updatemanager/config"
+	"github.com/aosedge/aos_updatemanager/umclient"
+	"github.com/aosedge/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

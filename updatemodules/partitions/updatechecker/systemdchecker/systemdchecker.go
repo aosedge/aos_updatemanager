@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/aostypes"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aostypes"
 	"github.com/coreos/go-systemd/v22/dbus"
 	log "github.com/sirupsen/logrus"
 )

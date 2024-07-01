@@ -25,11 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/aostypes"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aostypes"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/updatechecker/systemdchecker"
 )
 
 /***********************************************************************************************************************
