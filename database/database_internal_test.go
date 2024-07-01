@@ -129,20 +129,20 @@ func TestUpdateState(t *testing.T) {
 	}
 }
 
-func TestAosVersion(t *testing.T) {
-	var setAosVersion uint64 = 53
+func TestVersion(t *testing.T) {
+	setVersion := "1.0.0"
 
-	if err := db.SetAosVersion("id0", setAosVersion); err != nil {
-		t.Fatalf("Can't set Aos version: %s", err)
+	if err := db.SetVersion("id0", setVersion); err != nil {
+		t.Fatalf("Can't set version: %s", err)
 	}
 
-	getAosVersion, err := db.GetAosVersion("id0")
+	getVersion, err := db.GetVersion("id0")
 	if err != nil {
-		t.Fatalf("Can't get Aos version: %s", err)
+		t.Fatalf("Can't get version: %s", err)
 	}
 
-	if setAosVersion != getAosVersion {
-		t.Fatalf("Wrong Aos version: %v", getAosVersion)
+	if setVersion != getVersion {
+		t.Fatalf("Wrong version: %v", getVersion)
 	}
 }
 
