@@ -40,7 +40,7 @@ const (
 	syncMode    = "NORMAL"
 )
 
-const dbVersion = 2
+const dbVersion = 3
 
 /***********************************************************************************************************************
  * Vars
@@ -157,32 +157,32 @@ func (db *Database) SetModuleState(id string, state []byte) (err error) {
 	return nil
 }
 
-// GetAosVersion returns module Aos version.
-func (db *Database) GetAosVersion(id string) (version uint64, err error) {
-	rows, err := db.sql.Query("SELECT aosVersion FROM modules WHERE id = ?", id)
+// GetVersion returns module version.
+func (db *Database) GetVersion(id string) (version string, err error) {
+	rows, err := db.sql.Query("SELECT version FROM modules WHERE id = ?", id)
 	if err != nil {
-		return 0, aoserrors.Wrap(err)
+		return "", aoserrors.Wrap(err)
 	}
 	defer rows.Close()
 
 	if rows.Err() != nil {
-		return 0, aoserrors.Wrap(rows.Err())
+		return "", aoserrors.Wrap(rows.Err())
 	}
 
 	if !rows.Next() {
-		return 0, aoserrors.New(ErrNotExistStr)
+		return "", aoserrors.New(ErrNotExistStr)
 	}
 
 	if err = rows.Scan(&version); err != nil {
-		return 0, aoserrors.Wrap(err)
+		return "", aoserrors.Wrap(err)
 	}
 
 	return version, nil
 }
 
-// SetAosVersion sets module Aos version.
-func (db *Database) SetAosVersion(id string, version uint64) (err error) {
-	result, err := db.sql.Exec("UPDATE modules SET aosVersion = ? WHERE id= ?", version, id)
+// SetVersion sets module version.
+func (db *Database) SetVersion(id string, version string) (err error) {
+	result, err := db.sql.Exec("UPDATE modules SET version = ? WHERE id= ?", version, id)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -193,7 +193,7 @@ func (db *Database) SetAosVersion(id string, version uint64) (err error) {
 	}
 
 	if count == 0 {
-		if _, err = db.sql.Exec("INSERT INTO modules (id, aosVersion) values(?, ?)", id, version); err != nil {
+		if _, err = db.sql.Exec("INSERT INTO modules (id, version) values(?, ?)", id, version); err != nil {
 			return aoserrors.Wrap(err)
 		}
 	}
@@ -316,7 +316,7 @@ func (db *Database) createModuleTable() (err error) {
 	if _, err = db.sql.Exec(
 		`CREATE TABLE IF NOT EXISTS modules (
 			id TEXT NOT NULL PRIMARY KEY,
-			aosVersion INTEGER,
+			version TEXT,
 			state TEXT)`); err != nil {
 		return aoserrors.Wrap(err)
 	}
