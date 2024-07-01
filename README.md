@@ -1,8 +1,8 @@
 # AOS Update Manager
 
-[![CI](https://github.com/aoscloud/aos_updatemanager/workflows/CI/badge.svg)](https://github.com/aoscloud/aos_updatemanager/ctions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/aoscloud/aos_updatemanager/branch/main/graph/badge.svg?token=fvKMRCJlZv)](https://codecov.io/gh/aoscloud/aos_updatemanager)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=aoscloud_aos_updatemanager&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=aoscloud_aos_updatemanager)
+[![CI](https://github.com/aosedge/aos_updatemanager/workflows/CI/badge.svg)](https://github.com/aosedge/aos_updatemanager/ctions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/aosedge/aos_updatemanager/branch/main/graph/badge.svg?token=fvKMRCJlZv)](https://codecov.io/gh/aosedge/aos_updatemanager)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=aosedge_aos_updatemanager&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=aosedge_aos_updatemanager)
 
 Aos Update Manager (UM) is responsible for update of different system part. The main functions of UM:
 
@@ -10,7 +10,7 @@ Aos Update Manager (UM) is responsible for update of different system part. The 
 * perform update of different system part
 * notify AOS Service Manager about update status
 
-For more details see the [architecure document](https://docs.aoscloud.io/bin/view/Home/Architecture/Aos%20Core/Update%20Manager%20%28UM%29/)
+For more details see the [architecure document](https://docs.aosedge.io/bin/view/Home/Architecture/Aos%20Core/Update%20Manager%20%28UM%29/)
 
 ## Build
 
@@ -55,7 +55,7 @@ UM is configured through a configuration file. The file `aos_updatemanager.cfg` 
 ./aos_updatemanager -c aos_updatemanager.cfg
 ```
 
-The configuration file has JSON format described [here](https://docs.aoscloud.io/bin/view/Home/Architecture/General/Data%20formats/Core%20component%20configurations/Update%20Manager%20configuration/). Example configuration file could be found in [`aos_updatemanager.cfg`](aos_updatemanager.cfg)
+The configuration file has JSON format described [here](https://docs.aosedge.io/bin/view/Home/Architecture/General/Data%20formats/Core%20component%20configurations/Update%20Manager%20configuration/). Example configuration file could be found in [`aos_updatemanager.cfg`](aos_updatemanager.cfg)
 
 To increase log level use option -v:
 

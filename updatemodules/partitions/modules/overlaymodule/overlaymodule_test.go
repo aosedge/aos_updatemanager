@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
 )
 
 /*******************************************************************************

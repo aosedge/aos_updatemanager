@@ -27,8 +27,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/migration"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/migration"
 	log "github.com/sirupsen/logrus"
 )
 

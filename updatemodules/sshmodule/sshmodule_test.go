@@ -24,7 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/updatemodules/sshmodule"
+	"github.com/aosedge/aos_updatemanager/updatemodules/sshmodule"
 )
 
 /*******************************************************************************

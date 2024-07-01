@@ -1,13 +1,13 @@
-module github.com/aoscloud/aos_updatemanager
+module github.com/aosedge/aos_updatemanager
 
 go 1.21
 
-replace github.com/ThalesIgnite/crypto11 => github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
+replace github.com/ThalesIgnite/crypto11 => github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 
-replace github.com/anexia-it/fsquota => github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7
+replace github.com/anexia-it/fsquota => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7
 
 require (
-	github.com/aoscloud/aos_common v0.0.0-20240521092209-a7ee24167d4b
+	github.com/aosedge/aos_common v0.0.0-20240701123742-84e62a5773fc
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/golang/protobuf v1.5.3

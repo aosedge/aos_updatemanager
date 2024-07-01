@@ -1,9 +1,9 @@
-github.com/aoscloud/aos_common v0.0.0-20240521092209-a7ee24167d4b h1:Hmoav/+PqbUKydLeYHrM3zWjjBRfxqUq8AS+CvJWzHY=
-github.com/aoscloud/aos_common v0.0.0-20240521092209-a7ee24167d4b/go.mod h1:yhyw6Pt99GowDShfWnM+UMWR0+Z6rNApwJB39LL7f5E=
-github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:1CPr+UrVduUABuDLGzsKaz7Dp8Nu6zSfp8WqR5TiH0I=
-github.com/aoscloud/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
-github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7 h1:IZrcOMTQKPENNXu3JIKu72Mr8KsRiiZaKN1nJqI2PgU=
-github.com/aoscloud/fsquota v0.0.0-20231127111317-842d831105a7/go.mod h1:sqXhKgR89hKgqFrhR2nYyAz9lKahhLdTz4I+9GLTi6g=
+github.com/aosedge/aos_common v0.0.0-20240701123742-84e62a5773fc h1:+g8nW2vQMq4iS307OKzLtd8u5ZQ9WcvpJNmpfZhtxG4=
+github.com/aosedge/aos_common v0.0.0-20240701123742-84e62a5773fc/go.mod h1:fVk+1Za6Vaef1ysZvjJeFaA8NUS/8U4tJuCqLd5fky0=
+github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:xL5hA9axQFHnoVVF/Q8CkKl9JiTvA7U72jRDltMBB9M=
+github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
+github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7 h1:KR+SuYXJ9HigUaJdUwRlkDOOpkCrliFF3liBVKu2GKY=
+github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7/go.mod h1:sqXhKgR89hKgqFrhR2nYyAz9lKahhLdTz4I+9GLTi6g=
 github.com/cavaliergopher/grab/v3 v3.0.1 h1:4z7TkBfmPjmLAAmkkAZNX/6QJ1nNFdv3SdIHXju0Fr4=
 github.com/cavaliergopher/grab/v3 v3.0.1/go.mod h1:1U/KNnD+Ft6JJiYoYBAimKH2XrYptb8Kl3DFGmsjpq4=
 github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf h1:iW4rZ826su+pqaw19uhpSCzhj44qo35pNgKFGqzDKkU=

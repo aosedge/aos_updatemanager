@@ -23,12 +23,12 @@ import (
 	"os"
 	"sync"
 
-	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aoserrors"
 	log "github.com/sirupsen/logrus"
 	"github.com/tmc/scp"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/aoscloud/aos_updatemanager/updatehandler"
+	"github.com/aosedge/aos_updatemanager/updatehandler"
 )
 
 /*******************************************************************************

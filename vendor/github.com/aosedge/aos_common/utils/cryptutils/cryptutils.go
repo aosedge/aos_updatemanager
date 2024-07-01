@@ -36,8 +36,8 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 	pkcs11uri "github.com/stefanberger/go-pkcs11uri"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/tpmkey"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/tpmkey"
 )
 
 /***********************************************************************************************************************

@@ -22,13 +22,13 @@ import (
 	"path"
 	"testing"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/utils/fs"
-	"github.com/aoscloud/aos_common/utils/testtools"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/utils/fs"
+	"github.com/aosedge/aos_common/utils/testtools"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/controllers/ubootcontroller"
 )
 
 /*******************************************************************************

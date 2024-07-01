@@ -27,7 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/aoscloud/aos_updatemanager/updatemodules/partitions/utils/bootparams"
+	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/utils/bootparams"
 )
 
 /***********************************************************************************************************************

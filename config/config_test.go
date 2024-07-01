@@ -23,9 +23,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/aoscloud/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/aoserrors"
 
-	"github.com/aoscloud/aos_updatemanager/config"
+	"github.com/aosedge/aos_updatemanager/config"
 )
 
 /*******************************************************************************

@@ -52,8 +52,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/aoscloud/aos_common/aoserrors"
-	"github.com/aoscloud/aos_common/partition"
+	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/partition"
 	log "github.com/sirupsen/logrus"
 )
 
