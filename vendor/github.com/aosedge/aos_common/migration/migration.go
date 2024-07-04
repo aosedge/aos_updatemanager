@@ -181,6 +181,7 @@ func copyFile(src string, dst string) (err error) {
 		return aoserrors.Wrap(err)
 	}
 	defer destination.Close()
+
 	_, err = io.Copy(destination, source)
 
 	return aoserrors.Wrap(err)
