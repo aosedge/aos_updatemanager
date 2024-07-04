@@ -76,7 +76,6 @@ const (
 // FileInfo file info.
 type FileInfo struct {
 	Sha256 []byte
-	Sha512 []byte
 	Size   uint64
 }
 
@@ -152,20 +151,6 @@ func CheckFileInfo(ctx context.Context, fileName string, fileInfo FileInfo) (err
 		return aoserrors.New("checksum sha256 mismatch")
 	}
 
-	hash512 := sha3.New512()
-
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	if _, err := io.Copy(hash512, contextRead); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	if !reflect.DeepEqual(hash512.Sum(nil), fileInfo.Sha512) {
-		return aoserrors.New("checksum sha512 mismatch")
-	}
-
 	return nil
 }
 
@@ -193,18 +178,6 @@ func CreateFileInfo(ctx context.Context, fileName string) (fileInfo FileInfo, er
 	}
 
 	fileInfo.Sha256 = hash256.Sum(nil)
-
-	hash512 := sha3.New512()
-
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return fileInfo, aoserrors.Wrap(err)
-	}
-
-	if _, err := io.Copy(hash512, contextRead); err != nil {
-		return fileInfo, aoserrors.Wrap(err)
-	}
-
-	fileInfo.Sha512 = hash512.Sum(nil)
 
 	return fileInfo, nil
 }

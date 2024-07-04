@@ -1,5 +1,7 @@
-github.com/aosedge/aos_common v0.0.0-20240701123742-84e62a5773fc h1:+g8nW2vQMq4iS307OKzLtd8u5ZQ9WcvpJNmpfZhtxG4=
-github.com/aosedge/aos_common v0.0.0-20240701123742-84e62a5773fc/go.mod h1:fVk+1Za6Vaef1ysZvjJeFaA8NUS/8U4tJuCqLd5fky0=
+github.com/aosedge/aos_common v0.0.0-20240704123642-334eadb537ab h1:vON8DvOduWA6mOm5xKibVp6MhPrLjHVvU6oqew2GUco=
+github.com/aosedge/aos_common v0.0.0-20240704123642-334eadb537ab/go.mod h1:6piX5uuY/5CjMZwYB5nTc+dR+/rcZe40FSYRZ5mguJU=
+github.com/aosedge/aos_common v0.0.0-20240709152137-c94ad578854a h1:oajCSEcVxxUWfDA2ugheAUpJXPIhqhP6QdtfjZQvq9U=
+github.com/aosedge/aos_common v0.0.0-20240709152137-c94ad578854a/go.mod h1:6piX5uuY/5CjMZwYB5nTc+dR+/rcZe40FSYRZ5mguJU=
 github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:xL5hA9axQFHnoVVF/Q8CkKl9JiTvA7U72jRDltMBB9M=
 github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
 github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7 h1:KR+SuYXJ9HigUaJdUwRlkDOOpkCrliFF3liBVKu2GKY=
