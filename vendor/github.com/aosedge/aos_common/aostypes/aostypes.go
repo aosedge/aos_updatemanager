@@ -46,6 +46,21 @@ const (
 	monthDuration = yearDuration / 12
 )
 
+// Partition types.
+const (
+	GenericPartition  = "generic"
+	StoragesPartition = "storages"
+	StatesPartition   = "states"
+	ServicesPartition = "services"
+	LayersPartition   = "layers"
+)
+
+// BalancingPolicy types.
+const (
+	BalancingEnabled  = "enabled"
+	BalancingDisabled = "disabled"
+)
+
 /***********************************************************************************************************************
  * Types
  **********************************************************************************************************************/
@@ -60,103 +75,25 @@ type Time struct {
 	time.Time
 }
 
-// AlertRuleParam describes alert rule.
-type AlertRuleParam struct {
-	MinTimeout   Duration `json:"minTimeout"`
-	MinThreshold uint64   `json:"minThreshold"`
-	MaxThreshold uint64   `json:"maxThreshold"`
-}
-
-// PartitionAlertRuleParam describes alert rule.
-type PartitionAlertRuleParam struct {
-	AlertRuleParam
-	Name string `json:"name"`
-}
-
-// AlertRules define service monitoring alerts rules.
-type AlertRules struct {
-	RAM        *AlertRuleParam           `json:"ram,omitempty"`
-	CPU        *AlertRuleParam           `json:"cpu,omitempty"`
-	UsedDisks  []PartitionAlertRuleParam `json:"usedDisks,omitempty"`
-	InTraffic  *AlertRuleParam           `json:"inTraffic,omitempty"`
-	OutTraffic *AlertRuleParam           `json:"outTraffic,omitempty"`
-}
-
-// FileSystemMount specifies a mount instructions.
-type FileSystemMount struct {
-	Destination string   `json:"destination"`
-	Type        string   `json:"type,omitempty"`
-	Source      string   `json:"source,omitempty"`
-	Options     []string `json:"options,omitempty"`
-}
-
-// Host struct represents entry in /etc/hosts.
-type Host struct {
-	IP       string `json:"ip"`
-	Hostname string `json:"hostname"`
-}
-
-// DeviceInfo device information.
-type DeviceInfo struct {
-	Name        string   `json:"name"`
-	SharedCount int      `json:"sharedCount,omitempty"`
-	Groups      []string `json:"groups,omitempty"`
-	HostDevices []string `json:"hostDevices"`
-}
-
-// ResourceInfo resource information.
-type ResourceInfo struct {
-	Name   string            `json:"name"`
-	Groups []string          `json:"groups,omitempty"`
-	Mounts []FileSystemMount `json:"mounts,omitempty"`
-	Env    []string          `json:"env,omitempty"`
-	Hosts  []Host            `json:"hosts,omitempty"`
-}
-
-// NodeConfig node configuration.
-type NodeUnitConfig struct {
-	NodeType  string         `json:"nodeType"`
-	Devices   []DeviceInfo   `json:"devices,omitempty"`
-	Resources []ResourceInfo `json:"resources,omitempty"`
-	Labels    []string       `json:"labels,omitempty"`
-	Priority  uint32         `json:"priority,omitempty"`
-}
-
-// UnitConfig board configuration.
-type UnitConfig struct {
-	FormatVersion uint64           `json:"formatVersion"`
-	VendorVersion string           `json:"vendorVersion"`
-	Nodes         []NodeUnitConfig `json:"nodes"`
-}
-
 // ServiceInfo service info.
 type ServiceInfo struct {
-	VersionInfo
-	ID         string `json:"id"`
+	ServiceID  string `json:"serviceId"`
 	ProviderID string `json:"providerId"`
+	Version    string `json:"version"`
 	GID        uint32 `json:"gid"`
 	URL        string `json:"url"`
 	Sha256     []byte `json:"sha256"`
-	Sha512     []byte `json:"sha512"`
 	Size       uint64 `json:"size"`
 }
 
 // LayerInfo layer info.
 type LayerInfo struct {
-	VersionInfo
-	ID     string `json:"id"`
-	Digest string `json:"digest"`
-	URL    string `json:"url"`
-	Sha256 []byte `json:"sha256"`
-	Sha512 []byte `json:"sha512"`
-	Size   uint64 `json:"size"`
-}
-
-// VersionInfo common version structure.
-type VersionInfo struct {
-	AosVersion    uint64 `json:"aosVersion"`
-	VendorVersion string `json:"vendorVersion"`
-	Description   string `json:"description"`
+	LayerID string `json:"layerId"`
+	Digest  string `json:"digest"`
+	Version string `json:"version"`
+	URL     string `json:"url"`
+	Sha256  []byte `json:"sha256"`
+	Size    uint64 `json:"size"`
 }
 
 // InstanceIdent instance identification information.
@@ -176,12 +113,12 @@ type FirewallRule struct {
 
 // NetworkParameters networks parameters.
 type NetworkParameters struct {
-	NetworkID     string
-	Subnet        string
-	IP            string
-	VlanID        uint64
-	DNSServers    []string
-	FirewallRules []FirewallRule
+	NetworkID     string         `json:"networkId"`
+	Subnet        string         `json:"subnet"`
+	IP            string         `json:"ip"`
+	VlanID        uint64         `json:"vlanId"`
+	DNSServers    []string       `json:"dnsServers"`
+	FirewallRules []FirewallRule `json:"firewallRules"`
 }
 
 // InstanceInfo instance information to start it.
@@ -228,21 +165,79 @@ type RunParameters struct {
 	RestartInterval Duration `json:"restartInterval,omitempty"`
 }
 
+// AlertRuleParam describes alert rule.
+type AlertRuleParam struct {
+	Timeout Duration `json:"timeout"`
+	Low     uint64   `json:"low"`
+	High    uint64   `json:"high"`
+}
+
+// PartitionAlertRuleParam describes alert rule.
+type PartitionAlertRuleParam struct {
+	AlertRuleParam
+	Name string `json:"name"`
+}
+
+// AlertRules define service monitoring alerts rules.
+type AlertRules struct {
+	RAM        *AlertRuleParam           `json:"ram,omitempty"`
+	CPU        *AlertRuleParam           `json:"cpu,omitempty"`
+	UsedDisks  []PartitionAlertRuleParam `json:"usedDisks,omitempty"`
+	InTraffic  *AlertRuleParam           `json:"inTraffic,omitempty"`
+	OutTraffic *AlertRuleParam           `json:"outTraffic,omitempty"`
+}
+
+// ResourceRatiosInfo resource ratios info.
+type ResourceRatiosInfo struct {
+	CPU     float32 `json:"cpu"`
+	Mem     float32 `json:"mem"`
+	Storage float32 `json:"storage"`
+}
+
 // ServiceConfig Aos service configuration.
 type ServiceConfig struct {
 	Created            time.Time                    `json:"created"`
 	Author             string                       `json:"author"`
 	Hostname           *string                      `json:"hostname,omitempty"`
+	BalancingPolicy    string                       `json:"balancingPolicy"`
 	Runner             string                       `json:"runner"`
+	RunParameters      RunParameters                `json:"runParameters,omitempty"`
 	Sysctl             map[string]string            `json:"sysctl,omitempty"`
 	OfflineTTL         Duration                     `json:"offlineTtl,omitempty"`
 	Quotas             ServiceQuotas                `json:"quotas"`
+	ResourceRatios     *ResourceRatiosInfo          `json:"resourceRatios"`
 	AllowedConnections map[string]struct{}          `json:"allowedConnections,omitempty"`
 	Devices            []ServiceDevice              `json:"devices,omitempty"`
 	Resources          []string                     `json:"resources,omitempty"`
 	Permissions        map[string]map[string]string `json:"permissions,omitempty"`
 	AlertRules         *AlertRules                  `json:"alertRules,omitempty"`
-	RunParameters      RunParameters                `json:"runParameters,omitempty"`
+}
+
+// PartitionUsage partition usage information.
+type PartitionUsage struct {
+	Name     string `json:"name"`
+	UsedSize uint64 `json:"usedSize"`
+}
+
+// MonitoringData monitoring data.
+type MonitoringData struct {
+	Timestamp  time.Time        `json:"timestamp"`
+	RAM        uint64           `json:"ram"`
+	CPU        uint64           `json:"cpu"`
+	InTraffic  uint64           `json:"inTraffic"`
+	OutTraffic uint64           `json:"outTraffic"`
+	Disk       []PartitionUsage `json:"disk"`
+}
+
+type InstanceMonitoring struct {
+	InstanceIdent
+	MonitoringData
+}
+
+type NodeMonitoring struct {
+	NodeID        string               `json:"nodeId"`
+	NodeData      MonitoringData       `json:"nodeData"`
+	InstancesData []InstanceMonitoring `json:"instancesData"`
 }
 
 /***********************************************************************************************************************
@@ -289,7 +284,7 @@ func (t *Time) UnmarshalJSON(b []byte) (err error) {
 			return aoserrors.Errorf(errFormat, value)
 		}
 
-		intFields := make([]int, 3) //nolint:gomnd //time format has 3 fields HH:MM:SS
+		intFields := make([]int, 3) //nolint:mnd //time format has 3 fields HH:MM:SS
 
 		for i, field := range strFields {
 			if intFields[i], err = strconv.Atoi(field); err != nil {

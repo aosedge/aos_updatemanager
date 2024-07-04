@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/aosedge/aos_common/aoserrors"
-	pb "github.com/aosedge/aos_common/api/iamanager/v4"
+	pb "github.com/aosedge/aos_common/api/iamanager"
 	"github.com/aosedge/aos_common/utils/cryptutils"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
