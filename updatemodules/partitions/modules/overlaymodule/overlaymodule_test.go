@@ -261,13 +261,13 @@ func TestUpdate(t *testing.T) {
 
 	// Check
 
-	vendorVersion, err := module.GetVendorVersion()
+	version, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
-	if vendorVersion != "v2.0" {
-		t.Errorf("Wrong vendor version: %s", err)
+	if version != "v2.0" {
+		t.Errorf("Wrong version: %s", err)
 	}
 
 	if _, err = os.Stat(path.Join(updateDir, "do_update")); err == nil {

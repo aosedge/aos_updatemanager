@@ -207,13 +207,13 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("Error init module: %s", err)
 	}
 
-	version, err := module.GetVendorVersion()
+	version, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
 	if version != updateVersion {
-		t.Errorf("Wrong vendor version: %s", version)
+		t.Errorf("Wrong version: %s", version)
 	}
 
 	// Update
@@ -238,12 +238,12 @@ func TestUpdate(t *testing.T) {
 
 	// Check
 
-	if version, err = module.GetVendorVersion(); err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+	if version, err = module.GetVersion(); err != nil {
+		t.Errorf("Can't get version: %s", err)
 	}
 
 	if version != updateVersion {
-		t.Errorf("Wrong vendor version: %s", version)
+		t.Errorf("Wrong version: %s", version)
 	}
 
 	if err = testtools.CompareFiles(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
@@ -293,9 +293,9 @@ func TestRevert(t *testing.T) {
 		t.Fatalf("Error init module: %s", err)
 	}
 
-	initialVersion, err := module.GetVendorVersion()
+	initialVersion, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
 	// Prepare
@@ -371,13 +371,13 @@ func TestRevert(t *testing.T) {
 
 	// Check
 
-	version, err := module.GetVendorVersion()
+	version, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
 	if version != initialVersion {
-		t.Errorf("Wrong vendor version: %s", version)
+		t.Errorf("Wrong version: %s", version)
 	}
 
 	if err = testtools.CompareFiles(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
@@ -426,9 +426,9 @@ func TestRevertOnFail(t *testing.T) {
 		t.Fatalf("Error init module: %s", err)
 	}
 
-	initialVersion, err := module.GetVendorVersion()
+	initialVersion, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
 	// Prepare
@@ -482,13 +482,13 @@ func TestRevertOnFail(t *testing.T) {
 
 	// Check
 
-	version, err := module.GetVendorVersion()
+	version, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
 	if version != initialVersion {
-		t.Errorf("Wrong vendor version: %s", version)
+		t.Errorf("Wrong version: %s", version)
 	}
 
 	if err = testtools.CompareFiles(disk.Partitions[part0].Device, disk.Partitions[part1].Device); err != nil {
@@ -621,7 +621,7 @@ func (checker *testChecker) Check() (err error) {
 	return checker.err
 }
 
-func generateImage(imagePath string, vendorVersion string) (content []fsContent, err error) {
+func generateImage(imagePath string, version string) (content []fsContent, err error) {
 	if err = os.MkdirAll(filepath.Dir(imagePath), 0o755); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
@@ -633,7 +633,7 @@ func generateImage(imagePath string, vendorVersion string) (content []fsContent,
 		{"/dir1/file2.txt", []byte("This is test file 1/2")},
 		{"/dir2/file1.txt", []byte("This is test file 2/1")},
 		{"/dir2/file2.txt", []byte("This is test file 2/2")},
-		{versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, vendorVersion))},
+		{versionFile, []byte(fmt.Sprintf(`VERSION="%s"`, version))},
 	}
 
 	if err = testtools.CreateFilePartition(imagePath, "ext4", disk.Partitions[part0].Size,
