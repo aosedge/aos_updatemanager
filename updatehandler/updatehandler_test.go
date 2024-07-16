@@ -71,7 +71,7 @@ type testStorage struct {
 
 type testModule struct {
 	id              string
-	vendorVersion   string
+	version         string
 	preparedVersion string
 	previousVersion string
 	rebootRequired  bool
@@ -134,7 +134,7 @@ func TestMain(m *testing.M) {
 			storage updatehandler.ModuleStorage,
 		) (module updatehandler.UpdateModule, err error) {
 			if _, ok := components[id]; !ok {
-				components[id] = &testModule{id: id, vendorVersion: defaultVersion}
+				components[id] = &testModule{id: id, version: defaultVersion}
 			}
 
 			return components[id], nil
@@ -227,7 +227,7 @@ func TestUpdate(t *testing.T) {
 
 	newStatus.State = umclient.StateUpdated
 	components["id2"].rebootRequired = true
-	components["id2"].vendorVersion = newVersion
+	components["id2"].version = newVersion
 	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus,
@@ -448,7 +448,7 @@ func TestUpdateFailed(t *testing.T) {
 		map[string][]string{"id1": {opRevert}, "id2": {opRevert, opReboot, opRevert}, "id3": {opRevert}}, nil)
 }
 
-func TestUpdateSameVendorVersion(t *testing.T) {
+func TestUpdateSameVersion(t *testing.T) {
 	components = make(map[string]*testModule)
 	storage := newTestStorage()
 	order = nil
@@ -684,16 +684,16 @@ func TestUpdatePriority(t *testing.T) {
 		})
 }
 
-func TestVendorVersionInUpdate(t *testing.T) {
+func TestVersionInUpdate(t *testing.T) {
 	components = map[string]*testModule{
-		"id1": {id: "id1", vendorVersion: defaultVersion},
-		"id2": {id: "id2", vendorVersion: defaultVersion},
-		"id3": {id: "id3", vendorVersion: defaultVersion},
+		"id1": {id: "id1", version: defaultVersion},
+		"id2": {id: "id2", version: defaultVersion},
+		"id3": {id: "id3", version: defaultVersion},
 	}
 	storage := newTestStorage()
 
 	for _, component := range components {
-		_ = storage.SetVersion(component.id, component.vendorVersion)
+		_ = storage.SetVersion(component.id, component.version)
 	}
 
 	order = nil
@@ -741,7 +741,7 @@ func TestVendorVersionInUpdate(t *testing.T) {
 	// Update
 
 	newStatus.State = umclient.StateUpdated
-	components["id2"].vendorVersion = "2.0"
+	components["id2"].version = "2.0"
 	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus,
@@ -823,7 +823,7 @@ func (module *testModule) GetID() (id string) {
 func (module *testModule) Init() (err error) {
 	err = module.status
 	module.status = nil
-	module.previousVersion = module.vendorVersion
+	module.previousVersion = module.version
 
 	mutex.Lock()
 	order = append(order, orderInfo{id: module.id, op: opInit})
@@ -832,14 +832,14 @@ func (module *testModule) Init() (err error) {
 	return aoserrors.Wrap(err)
 }
 
-func (module *testModule) GetVendorVersion() (version string, err error) {
-	return module.vendorVersion, nil
+func (module *testModule) GetVersion() (version string, err error) {
+	return module.version, nil
 }
 
-func (module *testModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+func (module *testModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	err = module.status
 	module.status = nil
-	module.preparedVersion = vendorVersion
+	module.preparedVersion = version
 
 	mutex.Lock()
 	order = append(order, orderInfo{id: module.id, op: opPrepare})
@@ -853,8 +853,8 @@ func (module *testModule) Update() (rebootRequired bool, err error) {
 	module.rebootRequired = false
 
 	if module.preparedVersion != "" {
-		module.previousVersion = module.vendorVersion
-		module.vendorVersion = module.preparedVersion
+		module.previousVersion = module.version
+		module.version = module.preparedVersion
 		module.preparedVersion = ""
 	}
 
@@ -885,7 +885,7 @@ func (module *testModule) Apply() (rebootRequired bool, err error) {
 func (module *testModule) Revert() (rebootRequired bool, err error) {
 	rebootRequired = module.rebootRequired
 	module.rebootRequired = false
-	module.vendorVersion = module.previousVersion
+	module.version = module.previousVersion
 
 	err = module.status
 	module.status = nil
@@ -999,7 +999,7 @@ func createImage(imagePath string) (fileInfo image.FileInfo, err error) {
 }
 
 func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo,
-	vendorVersion *string,
+	version *string,
 ) (infos []umclient.ComponentUpdateInfo, err error) {
 	for _, status := range currentStatus {
 		imagePath := path.Join(tmpDir, fmt.Sprintf("testimage_%s_%s.bin", status.ID, status.Version))
@@ -1017,8 +1017,8 @@ func createUpdateInfos(currentStatus []umclient.ComponentStatusInfo,
 			Size:    imageInfo.Size,
 		}
 
-		if vendorVersion != nil {
-			info.Version = *vendorVersion
+		if version != nil {
+			info.Version = *version
 		}
 
 		infos = append(infos, info)

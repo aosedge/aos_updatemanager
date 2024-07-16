@@ -49,7 +49,7 @@ type SSHModule struct {
 	config         moduleConfig
 	storage        updatehandler.ModuleStorage
 	filePath       string
-	vendorVersion  string
+	version        string
 	pendingVersion string
 }
 
@@ -96,7 +96,7 @@ func New(id string, configJSON json.RawMessage,
 		}
 	}
 
-	sshModule.vendorVersion = state.Version
+	sshModule.version = state.Version
 
 	return sshModule, nil
 }
@@ -115,15 +115,16 @@ func (module *SSHModule) Init() (err error) {
 }
 
 // Prepare prepares module update.
-func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+func (module *SSHModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
+		"version":   version,
 		"imagePath": imagePath,
 	}).Debug("Prepare SSH module")
 
 	module.filePath = imagePath
 
-	module.pendingVersion = vendorVersion
+	module.pendingVersion = version
 
 	return nil
 }
@@ -136,12 +137,12 @@ func (module *SSHModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version.
-func (module *SSHModule) GetVendorVersion() (version string, err error) {
+// GetVersion returns version.
+func (module *SSHModule) GetVersion() (version string, err error) {
 	module.Lock()
 	defer module.Unlock()
 
-	return module.vendorVersion, nil
+	return module.version, nil
 }
 
 // Update performs module update.
@@ -181,7 +182,7 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 		return false, aoserrors.Wrap(err)
 	}
 
-	module.vendorVersion = module.pendingVersion
+	module.version = module.pendingVersion
 
 	return false, nil
 }

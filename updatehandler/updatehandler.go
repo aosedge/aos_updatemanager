@@ -89,12 +89,12 @@ type Handler struct {
 type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
-	// GetVendorVersion returns vendor version
-	GetVendorVersion() (version string, err error)
+	// GetVersion returns version
+	GetVersion() (version string, err error)
 	// Init initializes module
 	Init() (err error)
 	// Prepare prepares module
-	Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error)
+	Prepare(imagePath string, version string, annotations json.RawMessage) (err error)
 	// Update updates module
 	Update() (rebootRequired bool, err error)
 	// Apply applies update
@@ -125,10 +125,10 @@ type ModuleStorage interface {
 type NewPlugin func(id string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
 
 type handlerState struct {
-	UpdateState           string                                   `json:"updateState"`
-	Error                 string                                   `json:"error"`
-	ComponentStatuses     map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
-	CurrentVendorVersions map[string]string                        `json:"currentVendorVersions"`
+	UpdateState       string                                   `json:"updateState"`
+	Error             string                                   `json:"error"`
+	ComponentStatuses map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
+	CurrentVersions   map[string]string                        `json:"currentVersions"`
 }
 
 type componentData struct {
@@ -358,17 +358,17 @@ func (handler *Handler) getVersions() {
 	for id, component := range handler.components {
 		var err error
 
-		vendorVersion, ok := handler.state.CurrentVendorVersions[id]
+		version, ok := handler.state.CurrentVersions[id]
 
 		if handler.state.UpdateState == stateIdle || !ok {
-			if vendorVersion, err = component.module.GetVendorVersion(); err != nil {
-				log.Errorf("Can't get vendor version: %s", aoserrors.Wrap(err))
+			if version, err = component.module.GetVersion(); err != nil {
+				log.Errorf("Can't get version: %s", aoserrors.Wrap(err))
 			}
 		}
 
-		handler.componentStatuses[id].Version = vendorVersion
+		handler.componentStatuses[id].Version = version
 
-		log.WithFields(log.Fields{"id": id, "version": vendorVersion}).Debug("Component version has been updated")
+		log.WithFields(log.Fields{"id": id, "version": version}).Debug("Component version has been updated")
 	}
 }
 
@@ -661,7 +661,7 @@ func (handler *Handler) verifySemver(current, update string) error {
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
-	currentVersion, err := module.GetVendorVersion()
+	currentVersion, err := module.GetVersion()
 	if err != nil {
 		return aoserrors.New("current version is not set for module")
 	}
@@ -731,7 +731,7 @@ func (handler *Handler) onPrepareState(ctx context.Context, event *fsm.Event) {
 
 	handler.state.Error = ""
 	handler.state.ComponentStatuses = make(map[string]*umclient.ComponentStatusInfo)
-	handler.state.CurrentVendorVersions = make(map[string]string)
+	handler.state.CurrentVersions = make(map[string]string)
 
 	infos, ok := event.Args[0].([]umclient.ComponentUpdateInfo)
 	if !ok {
@@ -755,7 +755,7 @@ func (handler *Handler) onPrepareState(ctx context.Context, event *fsm.Event) {
 			return
 		}
 
-		handler.state.CurrentVendorVersions[info.ID] = handler.componentStatuses[info.ID].Version
+		handler.state.CurrentVersions[info.ID] = handler.componentStatuses[info.ID].Version
 		componentsInfo[info.ID] = &infos[i]
 		handler.state.ComponentStatuses[info.ID] = &umclient.ComponentStatusInfo{
 			ID:      info.ID,
@@ -797,14 +797,14 @@ func (handler *Handler) onUpdateState(ctx context.Context, event *fsm.Event) {
 		}
 
 		if !rebootRequired {
-			vendorVersion, err := module.GetVendorVersion()
+			version, err := module.GetVersion()
 			if err != nil {
 				return false, aoserrors.Wrap(err)
 			}
 
-			if vendorVersion != handler.state.ComponentStatuses[module.GetID()].Version {
+			if version != handler.state.ComponentStatuses[module.GetID()].Version {
 				return false, aoserrors.Errorf("versions mismatch in request %s and updated module %s",
-					handler.state.ComponentStatuses[module.GetID()].Version, vendorVersion)
+					handler.state.ComponentStatuses[module.GetID()].Version, version)
 			}
 		}
 
