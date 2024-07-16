@@ -131,13 +131,13 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Apply failed: %s", err)
 	}
 
-	updatedVersion, err := module.GetVendorVersion()
+	updatedVersion, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Get vendor version failed: %s", err)
+		t.Errorf("Get version failed: %s", err)
 	}
 
 	if updatedVersion != newVersion {
-		t.Errorf("Update version missmatch  %s != %s", updatedVersion, newVersion)
+		t.Errorf("Update version mismatch  %s != %s", updatedVersion, newVersion)
 	}
 }
 
