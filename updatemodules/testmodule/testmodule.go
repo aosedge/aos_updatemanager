@@ -75,15 +75,16 @@ func (module *TestModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version.
-func (module *TestModule) GetVendorVersion() (version string, err error) {
+// GetVersion returns version.
+func (module *TestModule) GetVersion() (version string, err error) {
 	return "", aoserrors.New("not supported")
 }
 
 // Prepare prepares module update.
-func (module *TestModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+func (module *TestModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
+		"version":   version,
 		"imagePath": imagePath,
 	}).Debug("Prepare test module")
 

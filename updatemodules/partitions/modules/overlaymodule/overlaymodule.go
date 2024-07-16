@@ -91,7 +91,7 @@ type OverlayModule struct {
 	bootErr        error
 	rebooter       Rebooter
 	checker        UpdateChecker
-	vendorVersion  string
+	version        string
 }
 
 // Rebooter performs module reboot.
@@ -171,7 +171,7 @@ func (module *OverlayModule) Init() (err error) {
 
 	log.WithFields(log.Fields{"id": module.id}).Debug("Init overlay module")
 
-	if module.vendorVersion, err = module.getModuleVersion(); err != nil {
+	if module.version, err = module.getModuleVersion(); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -209,17 +209,17 @@ func (module *OverlayModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version.
-func (module *OverlayModule) GetVendorVersion() (version string, err error) {
-	return module.vendorVersion, nil
+// GetVersion returns version.
+func (module *OverlayModule) GetVersion() (version string, err error) {
+	return module.version, nil
 }
 
 // Prepare prepares module update.
-func (module *OverlayModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+func (module *OverlayModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
-		"id":            module.id,
-		"imagePath":     imagePath,
-		"vendorVersion": vendorVersion,
+		"id":        module.id,
+		"imagePath": imagePath,
+		"version":   version,
 	}).Debug("Prepare overlay module")
 
 	if module.state.UpdateState != idleState && module.state.UpdateState != preparedState {
@@ -411,14 +411,14 @@ func (module *OverlayModule) getState() (err error) {
 func (module *OverlayModule) getModuleVersion() (version string, err error) {
 	data, err := os.ReadFile(module.versionFile)
 	if err != nil {
-		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", module.versionFile, err)
+		return "", aoserrors.Errorf("nonexistent or empty version file %s, err: %s", module.versionFile, err)
 	}
 
 	pattern := regexp.MustCompile(`VERSION\s*=\s*\"(.+)\"`)
 
 	loc := pattern.FindSubmatchIndex(data)
 	if loc == nil {
-		return "", aoserrors.Errorf("vendor version file has wrong format")
+		return "", aoserrors.Errorf("version file has wrong format")
 	}
 
 	return string(data[loc[2]:loc[3]]), nil
