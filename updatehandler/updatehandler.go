@@ -89,6 +89,8 @@ type Handler struct {
 type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
+	// GetType returns component type
+	GetType() (componentType string)
 	// GetVersion returns version
 	GetVersion() (version string, err error)
 	// Init initializes module
@@ -122,7 +124,8 @@ type ModuleStorage interface {
 }
 
 // NewPlugin update module new function.
-type NewPlugin func(id string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
+type NewPlugin func(
+	componentType string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
 
 type handlerState struct {
 	UpdateState       string                                   `json:"updateState"`
@@ -194,18 +197,18 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 
 	for _, moduleCfg := range cfg.UpdateModules {
 		if moduleCfg.Disabled {
-			log.WithField("id", moduleCfg.ID).Debug("Skip disabled module")
+			log.WithFields(log.Fields{"type": moduleCfg.Type}).Debug("Skip disabled module")
 			continue
 		}
 
 		component := componentData{updatePriority: moduleCfg.UpdatePriority, rebootPriority: moduleCfg.RebootPriority}
 
-		if component.module, err = handler.createComponent(moduleCfg.Plugin, moduleCfg.ID,
+		if component.module, err = handler.createComponent(moduleCfg.Plugin, moduleCfg.Type,
 			moduleCfg.Params, moduleStorage); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 
-		handler.components[moduleCfg.ID] = component
+		handler.components[component.module.GetID()] = component
 	}
 
 	handler.init()
@@ -276,14 +279,14 @@ func (handler *Handler) Close() {
  ******************************************************************************/
 
 func (handler *Handler) createComponent(
-	plugin, id string, params json.RawMessage, storage ModuleStorage,
+	plugin, componentType string, params json.RawMessage, storage ModuleStorage,
 ) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, aoserrors.Errorf("plugin %s not found", plugin)
 	}
 
-	if module, err = newFunc(id, params, storage); err != nil {
+	if module, err = newFunc(componentType, params, storage); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 

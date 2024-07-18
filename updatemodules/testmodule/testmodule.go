@@ -39,7 +39,8 @@ const Name = "test"
 
 // TestModule test module.
 type TestModule struct {
-	id string
+	id            string
+	componentType string
 }
 
 /*******************************************************************************
@@ -47,12 +48,14 @@ type TestModule struct {
  ******************************************************************************/
 
 // New creates test module instance.
-func New(id string, configJSON json.RawMessage,
+func New(componentType string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage,
 ) (module updatehandler.UpdateModule, err error) {
-	log.WithField("id", id).Debug("Create test module")
+	id := componentType + "_testID"
 
-	testModule := &TestModule{id: id}
+	log.WithFields(log.Fields{"id": id, "type": componentType}).Debug("Create test module")
+
+	testModule := &TestModule{id: id, componentType: componentType}
 
 	return testModule, nil
 }
@@ -75,6 +78,11 @@ func (module *TestModule) GetID() (id string) {
 	return module.id
 }
 
+// GetType returns component type.
+func (module *TestModule) GetType() string {
+	return module.componentType
+}
+
 // GetVersion returns version.
 func (module *TestModule) GetVersion() (version string, err error) {
 	return "", aoserrors.New("not supported")
@@ -84,6 +92,7 @@ func (module *TestModule) GetVersion() (version string, err error) {
 func (module *TestModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
+		"type":      module.componentType,
 		"version":   version,
 		"imagePath": imagePath,
 	}).Debug("Prepare test module")

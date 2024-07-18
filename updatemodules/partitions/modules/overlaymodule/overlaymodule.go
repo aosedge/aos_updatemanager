@@ -83,6 +83,7 @@ const (
 // OverlayModule overlay module.
 type OverlayModule struct {
 	id             string
+	componentType  string
 	versionFile    string
 	updateDir      string
 	storage        updatehandler.ModuleStorage
@@ -120,19 +121,19 @@ type moduleMetadata struct {
  ******************************************************************************/
 
 // New creates module instance.
-func New(id string, versionFile, updateDir string,
+func New(componentType string, versionFile, updateDir string,
 	storage updatehandler.ModuleStorage, rebooter Rebooter,
 	checker UpdateChecker,
 ) (module updatehandler.UpdateModule, err error) {
-	log.WithFields(log.Fields{"id": id}).Debug("Create overlay module")
+	log.WithFields(log.Fields{"type": componentType}).Debug("Create overlay module")
 
 	if storage == nil {
 		return nil, aoserrors.New("no storage provided")
 	}
 
 	overlayModule := &OverlayModule{
-		id: id, versionFile: versionFile, updateDir: updateDir, storage: storage,
-		rebooter: rebooter, checker: checker,
+		componentType: componentType, versionFile: versionFile,
+		updateDir: updateDir, storage: storage, rebooter: rebooter, checker: checker,
 	}
 
 	if overlayModule.versionFile == "" {
@@ -207,6 +208,11 @@ func (module *OverlayModule) Init() (err error) {
 // GetID returns module ID.
 func (module *OverlayModule) GetID() (id string) {
 	return module.id
+}
+
+// GetType returns component type.
+func (module *OverlayModule) GetType() string {
+	return module.componentType
 }
 
 // GetVersion returns version.
