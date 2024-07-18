@@ -97,7 +97,8 @@ type UpdateChecker interface {
 
 // DualPartModule update dual partition module.
 type DualPartModule struct {
-	id string
+	id            string
+	componentType string
 
 	storage          Storage
 	controller       StateController
@@ -139,14 +140,16 @@ type updateState int
  **********************************************************************************************************************/
 
 // New creates fs update module instance.
-func New(id string, partitions []string, versionFile string, controller StateController,
+func New(componentType string, partitions []string, versionFile string, controller StateController,
 	storage updatehandler.ModuleStorage, rebootHandler RebootHandler,
 	checker UpdateChecker,
 ) (updateModule updatehandler.UpdateModule, err error) {
-	log.WithField("module", id).Debug("Create dualpart module")
+	log.WithFields(log.Fields{
+		"type": componentType,
+	}).Debug("Create dualpart module")
 
 	module := &DualPartModule{
-		id:            id,
+		componentType: componentType,
 		partitions:    partitions,
 		controller:    controller,
 		storage:       storage,
@@ -174,6 +177,11 @@ func (module *DualPartModule) Close() (err error) {
 // GetID returns module ID.
 func (module *DualPartModule) GetID() (id string) {
 	return module.id
+}
+
+// GetType returns component type.
+func (module *DualPartModule) GetType() string {
+	return module.componentType
 }
 
 // Init initializes module.

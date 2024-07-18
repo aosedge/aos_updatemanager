@@ -55,8 +55,9 @@ const (
 )
 
 const (
-	versionExistMsg = "component already has required version: "
-	defaultVersion  = "1.0.0"
+	versionExistMsg   = "component already has required version: "
+	defaultVersion    = "1.0.0"
+	componentIDSuffix = "testID"
 )
 
 /*******************************************************************************
@@ -71,6 +72,7 @@ type testStorage struct {
 
 type testModule struct {
 	id              string
+	componentType   string
 	version         string
 	preparedVersion string
 	previousVersion string
@@ -130,22 +132,26 @@ func TestMain(m *testing.M) {
 	}
 
 	updatehandler.RegisterPlugin("testmodule",
-		func(id string, configJSON json.RawMessage,
+		func(componentType string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage,
 		) (module updatehandler.UpdateModule, err error) {
-			if _, ok := components[id]; !ok {
-				components[id] = &testModule{id: id, version: defaultVersion}
+			if _, ok := components[createComponentID(componentType)]; !ok {
+				components[createComponentID(componentType)] = &testModule{
+					id:            createComponentID(componentType),
+					componentType: componentType,
+					version:       defaultVersion,
+				}
 			}
 
-			return components[id], nil
+			return components[createComponentID(componentType)], nil
 		})
 
 	cfg = &config.Config{
 		DownloadDir: path.Join(tmpDir, "downloadDir"),
 		UpdateModules: []config.ModuleConfig{
-			{ID: "id1", Plugin: "testmodule"},
-			{ID: "id2", Plugin: "testmodule"},
-			{ID: "id3", Plugin: "testmodule"},
+			{Type: "type1", Plugin: "testmodule"},
+			{Type: "type2", Plugin: "testmodule"},
+			{Type: "type3", Plugin: "testmodule"},
 		},
 	}
 
@@ -187,14 +193,18 @@ func TestUpdate(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	// Prepare
 
@@ -221,17 +231,25 @@ func TestUpdate(t *testing.T) {
 	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus,
-		map[string][]string{"id1": {opPrepare}, "id2": {opPrepare}, "id3": {opPrepare}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opPrepare},
+			createComponentID("type2"): {opPrepare},
+			createComponentID("type3"): {opPrepare},
+		}, nil)
 
 	// Update
 
 	newStatus.State = umclient.StateUpdated
-	components["id2"].rebootRequired = true
-	components["id2"].version = newVersion
+	components[createComponentID("type2")].rebootRequired = true
+	components[createComponentID("type2")].version = newVersion
 	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus,
-		map[string][]string{"id1": {opUpdate}, "id2": {opUpdate, opReboot, opUpdate}, "id3": {opUpdate}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opUpdate},
+			createComponentID("type2"): {opUpdate, opReboot, opUpdate},
+			createComponentID("type3"): {opUpdate},
+		}, nil)
 
 	// Reboot
 
@@ -245,7 +263,11 @@ func TestUpdate(t *testing.T) {
 	defer handler.Close()
 
 	testOperation(t, handler, handler.Registered, &newStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	// Apply
 
@@ -259,11 +281,15 @@ func TestUpdate(t *testing.T) {
 		})
 	}
 
-	components["id3"].rebootRequired = true
+	components[createComponentID("type3")].rebootRequired = true
 	order = nil
 
 	testOperation(t, handler, handler.ApplyUpdate, &finalStatus,
-		map[string][]string{"id1": {opApply}, "id2": {opApply}, "id3": {opApply, opReboot, opApply}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opApply},
+			createComponentID("type2"): {opApply},
+			createComponentID("type3"): {opApply, opReboot, opApply},
+		}, nil)
 }
 
 func TestPrepareFail(t *testing.T) {
@@ -280,14 +306,18 @@ func TestPrepareFail(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	// Prepare
 
@@ -297,12 +327,12 @@ func TestPrepareFail(t *testing.T) {
 	}
 
 	for i := range infos {
-		if infos[i].ID == "id2" {
+		if infos[i].ID == createComponentID("type2") {
 			infos[i].Version = defaultVersion
 		}
 	}
 
-	failedComponent := components["id2"]
+	failedComponent := components[createComponentID("type2")]
 	failedComponent.status = errComponentAlreadyHasDefaultVersion
 
 	newStatus := currentStatus
@@ -348,7 +378,11 @@ func TestPrepareFail(t *testing.T) {
 	}
 
 	testOperation(t, handler, handler.RevertUpdate, &finalStatus,
-		map[string][]string{"id1": {opRevert}, "id2": {opRevert}, "id3": {opRevert}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opRevert},
+			createComponentID("type2"): {opRevert},
+			createComponentID("type3"): {opRevert},
+		}, nil)
 }
 
 func TestUpdateFailed(t *testing.T) {
@@ -365,14 +399,18 @@ func TestUpdateFailed(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	// Prepare
 
@@ -395,11 +433,15 @@ func TestUpdateFailed(t *testing.T) {
 	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus,
-		map[string][]string{"id1": {opPrepare}, "id2": {opPrepare}, "id3": {opPrepare}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opPrepare},
+			createComponentID("type2"): {opPrepare},
+			createComponentID("type3"): {opPrepare},
+		}, nil)
 
 	// Update
 
-	failedComponent := components["id2"]
+	failedComponent := components[createComponentID("type2")]
 	failedComponent.status = errComponentAlreadyHasNewVersion
 
 	newStatus = currentStatus
@@ -445,7 +487,11 @@ func TestUpdateFailed(t *testing.T) {
 	}
 
 	testOperation(t, handler, handler.RevertUpdate, &finalStatus,
-		map[string][]string{"id1": {opRevert}, "id2": {opRevert, opReboot, opRevert}, "id3": {opRevert}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opRevert},
+			createComponentID("type2"): {opRevert, opReboot, opRevert},
+			createComponentID("type3"): {opRevert},
+		}, nil)
 }
 
 func TestUpdateSameVersion(t *testing.T) {
@@ -462,14 +508,18 @@ func TestUpdateSameVersion(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	newVersion := defaultVersion
 
@@ -511,14 +561,18 @@ func TestUpdateBadImage(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	// Prepare
 
@@ -528,7 +582,7 @@ func TestUpdateBadImage(t *testing.T) {
 	}
 
 	failedErrStr := "checksum sha256 mismatch"
-	failedComponent := components["id2"]
+	failedComponent := components[createComponentID("type2")]
 
 	newStatus := currentStatus
 
@@ -573,16 +627,20 @@ func TestUpdateBadImage(t *testing.T) {
 	}
 
 	testOperation(t, handler, handler.RevertUpdate, &finalStatus,
-		map[string][]string{"id1": {opRevert}, "id2": {opRevert}, "id3": {opRevert}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opRevert},
+			createComponentID("type2"): {opRevert},
+			createComponentID("type3"): {opRevert},
+		}, nil)
 }
 
 func TestUpdatePriority(t *testing.T) {
 	cfg := &config.Config{
 		DownloadDir: path.Join(tmpDir, "downloadDir"),
 		UpdateModules: []config.ModuleConfig{
-			{ID: "id1", Plugin: "testmodule", UpdatePriority: 3, RebootPriority: 1},
-			{ID: "id2", Plugin: "testmodule", UpdatePriority: 2, RebootPriority: 2},
-			{ID: "id3", Plugin: "testmodule", UpdatePriority: 1, RebootPriority: 3},
+			{Type: "type1", Plugin: "testmodule", UpdatePriority: 3, RebootPriority: 1},
+			{Type: "type2", Plugin: "testmodule", UpdatePriority: 2, RebootPriority: 2},
+			{Type: "type3", Plugin: "testmodule", UpdatePriority: 1, RebootPriority: 3},
 		},
 	}
 
@@ -599,14 +657,18 @@ func TestUpdatePriority(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus, nil,
-		[]orderInfo{{"id1", opInit}, {"id2", opInit}, {"id3", opInit}})
+		[]orderInfo{
+			{createComponentID("type1"), opInit},
+			{createComponentID("type2"), opInit},
+			{createComponentID("type3"), opInit},
+		})
 
 	// Prepare
 
@@ -629,7 +691,11 @@ func TestUpdatePriority(t *testing.T) {
 	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus, nil,
-		[]orderInfo{{"id1", opPrepare}, {"id2", opPrepare}, {"id3", opPrepare}})
+		[]orderInfo{
+			{createComponentID("type1"), opPrepare},
+			{createComponentID("type2"), opPrepare},
+			{createComponentID("type3"), opPrepare},
+		})
 
 	// Update
 
@@ -642,15 +708,15 @@ func TestUpdatePriority(t *testing.T) {
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus, nil,
 		[]orderInfo{
-			{"id1", opUpdate},
-			{"id2", opUpdate},
-			{"id3", opUpdate},
-			{"id3", opReboot},
-			{"id2", opReboot},
-			{"id1", opReboot},
-			{"id1", opUpdate},
-			{"id2", opUpdate},
-			{"id3", opUpdate},
+			{createComponentID("type1"), opUpdate},
+			{createComponentID("type2"), opUpdate},
+			{createComponentID("type3"), opUpdate},
+			{createComponentID("type3"), opReboot},
+			{createComponentID("type2"), opReboot},
+			{createComponentID("type1"), opReboot},
+			{createComponentID("type1"), opUpdate},
+			{createComponentID("type2"), opUpdate},
+			{createComponentID("type3"), opUpdate},
 		})
 
 	// Apply
@@ -672,23 +738,23 @@ func TestUpdatePriority(t *testing.T) {
 
 	testOperation(t, handler, handler.ApplyUpdate, &finalStatus, nil,
 		[]orderInfo{
-			{"id1", opApply},
-			{"id2", opApply},
-			{"id3", opApply},
-			{"id3", opReboot},
-			{"id2", opReboot},
-			{"id1", opReboot},
-			{"id1", opApply},
-			{"id2", opApply},
-			{"id3", opApply},
+			{createComponentID("type1"), opApply},
+			{createComponentID("type2"), opApply},
+			{createComponentID("type3"), opApply},
+			{createComponentID("type3"), opReboot},
+			{createComponentID("type2"), opReboot},
+			{createComponentID("type1"), opReboot},
+			{createComponentID("type1"), opApply},
+			{createComponentID("type2"), opApply},
+			{createComponentID("type3"), opApply},
 		})
 }
 
 func TestVersionInUpdate(t *testing.T) {
 	components = map[string]*testModule{
-		"id1": {id: "id1", version: defaultVersion},
-		"id2": {id: "id2", version: defaultVersion},
-		"id3": {id: "id3", version: defaultVersion},
+		createComponentID("type1"): {id: createComponentID("type1"), componentType: "type1", version: defaultVersion},
+		createComponentID("type2"): {id: createComponentID("type2"), componentType: "type2", version: defaultVersion},
+		createComponentID("type3"): {id: createComponentID("type3"), componentType: "type3", version: defaultVersion},
 	}
 	storage := newTestStorage()
 
@@ -706,14 +772,18 @@ func TestVersionInUpdate(t *testing.T) {
 	currentStatus := umclient.Status{
 		State: umclient.StateIdle,
 		Components: []umclient.ComponentStatusInfo{
-			{ID: "id1", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id2", Status: umclient.StatusInstalled, Version: defaultVersion},
-			{ID: "id3", Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type1"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type2"), Status: umclient.StatusInstalled, Version: defaultVersion},
+			{ID: createComponentID("type3"), Status: umclient.StatusInstalled, Version: defaultVersion},
 		},
 	}
 
 	testOperation(t, handler, handler.Registered, &currentStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 
 	// Prepare
 
@@ -736,16 +806,16 @@ func TestVersionInUpdate(t *testing.T) {
 	order = nil
 
 	testOperation(t, handler, func() { handler.PrepareUpdate(infos) }, &newStatus,
-		map[string][]string{"id2": {opPrepare}}, nil)
+		map[string][]string{createComponentID("type2"): {opPrepare}}, nil)
 
 	// Update
 
 	newStatus.State = umclient.StateUpdated
-	components["id2"].version = "2.0"
+	components[createComponentID("type2")].version = "2.0"
 	order = nil
 
 	testOperation(t, handler, handler.StartUpdate, &newStatus,
-		map[string][]string{"id2": {opUpdate}}, nil)
+		map[string][]string{createComponentID("type2"): {opUpdate}}, nil)
 
 	// Reboot
 
@@ -759,7 +829,11 @@ func TestVersionInUpdate(t *testing.T) {
 	defer handler.Close()
 
 	testOperation(t, handler, handler.Registered, &newStatus,
-		map[string][]string{"id1": {opInit}, "id2": {opInit}, "id3": {opInit}}, nil)
+		map[string][]string{
+			createComponentID("type1"): {opInit},
+			createComponentID("type2"): {opInit},
+			createComponentID("type3"): {opInit},
+		}, nil)
 }
 
 /*******************************************************************************
@@ -818,6 +892,11 @@ func (storage *testStorage) SetModuleState(id string, state []byte) (err error) 
 
 func (module *testModule) GetID() (id string) {
 	return module.id
+}
+
+// GetType returns component type.
+func (module *testModule) GetType() (componentType string) {
+	return module.componentType
 }
 
 func (module *testModule) Init() (err error) {
@@ -1054,4 +1133,8 @@ func testOperation(
 			t.Errorf("Unexpected component order: %v", order)
 		}
 	}
+}
+
+func createComponentID(componentType string) string {
+	return componentType + "_" + componentIDSuffix
 }

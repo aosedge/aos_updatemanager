@@ -142,7 +142,7 @@ func TestMain(m *testing.M) {
  **********************************************************************************************************************/
 
 func TestUpdate(t *testing.T) {
-	module, err := dualpartmodule.New("test", []string{
+	module, err := dualpartmodule.New("testType", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
 	}, versionFile, &stateController, &stateStorage, nil, nil)
@@ -164,8 +164,12 @@ func TestUpdate(t *testing.T) {
 	stateController.bootCurrent = part0
 	stateController.bootOK = false
 
-	if id := module.GetID(); id != "test" {
+	if id := module.GetID(); id != "testType" {
 		t.Errorf("Wrong module id: %s", id)
+	}
+
+	if componentType := module.GetType(); componentType != "testType" {
+		t.Errorf("Wrong component type: %s", componentType)
 	}
 
 	// Init
@@ -261,7 +265,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestRevert(t *testing.T) {
-	module, err := dualpartmodule.New("test", []string{
+	module, err := dualpartmodule.New("testType", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
 	}, versionFile, &stateController, &stateStorage, nil, nil)
@@ -395,7 +399,7 @@ func TestRevert(t *testing.T) {
 }
 
 func TestRevertOnFail(t *testing.T) {
-	module, err := dualpartmodule.New("test", []string{
+	module, err := dualpartmodule.New("testType", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
 	}, versionFile, &stateController, &stateStorage, nil, nil)
@@ -508,7 +512,7 @@ func TestRevertOnFail(t *testing.T) {
 func TestUpdateChecker(t *testing.T) {
 	updateChecker := newTestChecker(nil)
 
-	module, err := dualpartmodule.New("test", []string{
+	module, err := dualpartmodule.New("testType", []string{
 		disk.Partitions[part0].Device,
 		disk.Partitions[part1].Device,
 	}, versionFile, &stateController, &stateStorage, nil, updateChecker)
