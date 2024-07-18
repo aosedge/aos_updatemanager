@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatemodules/sshmodule"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /*******************************************************************************
@@ -87,8 +88,13 @@ func TestGetID(t *testing.T) {
 	}
 	defer module.Close()
 
-	if module.GetID() != "TestComponent" {
-		t.Errorf("Wrong module ID: %s", module.GetID())
+	expectedID, err := idprovider.CreateID(module.GetType())
+	if err != nil {
+		t.Fatalf("Can't create module ID: %v", err)
+	}
+
+	if id := module.GetID(); id != expectedID {
+		t.Errorf("Wrong module ID: %s", id)
 	}
 }
 
