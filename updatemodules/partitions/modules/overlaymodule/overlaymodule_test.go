@@ -29,6 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /*******************************************************************************
@@ -112,7 +113,12 @@ func TestGetID(t *testing.T) {
 	}
 	defer module.Close()
 
-	if id := module.GetID(); id != "testType" {
+	expectedID, err := idprovider.CreateID(module.GetType())
+	if err != nil {
+		t.Fatalf("Can't create module ID: %v", err)
+	}
+
+	if id := module.GetID(); id != expectedID {
 		t.Errorf("Wrong module ID: %s", id)
 	}
 }

@@ -29,6 +29,7 @@ import (
 
 	"github.com/aosedge/aos_updatemanager/database"
 	"github.com/aosedge/aos_updatemanager/updatehandler"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 // Success update sequence diagram:
@@ -131,8 +132,13 @@ func New(componentType string, versionFile, updateDir string,
 		return nil, aoserrors.New("no storage provided")
 	}
 
+	id, err := idprovider.CreateID(componentType)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
 	overlayModule := &OverlayModule{
-		componentType: componentType, versionFile: versionFile,
+		id: id, componentType: componentType, versionFile: versionFile,
 		updateDir: updateDir, storage: storage, rebooter: rebooter, checker: checker,
 	}
 
