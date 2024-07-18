@@ -32,6 +32,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/modules/dualpartmodule"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /***********************************************************************************************************************
@@ -164,7 +165,12 @@ func TestUpdate(t *testing.T) {
 	stateController.bootCurrent = part0
 	stateController.bootOK = false
 
-	if id := module.GetID(); id != "testType" {
+	expectedID, err := idprovider.CreateID(module.GetType())
+	if err != nil {
+		t.Fatalf("Can't create module ID: %v", err)
+	}
+
+	if id := module.GetID(); id != expectedID {
 		t.Errorf("Wrong module id: %s", id)
 	}
 
