@@ -69,7 +69,7 @@ func createConfigFile() (err error) {
 	"WorkingDir": "/var/aos/updatemanager",
 	"DownloadDir": "/var/aos/updatemanager/download",
 	"UpdateModules":[{
-		"ID": "id1",
+		"Type": "type1",
 		"Plugin": "test1",
 		"UpdatePriority": 1,
 		"RebootPriority": 1,
@@ -78,7 +78,7 @@ func createConfigFile() (err error) {
 			"Param2" : 2
 		}
 	}, {
-		"ID": "id2",
+		"Type": "type2",
 		"Plugin": "test2",
 		"UpdatePriority": 2,
 		"RebootPriority": 2,
@@ -87,7 +87,7 @@ func createConfigFile() (err error) {
 			"Param2" : 2
 		}
 	}, {
-		"ID": "id3",
+		"Type": "type3",
 		"Plugin": "test3",
 		"UpdatePriority": 3,
 		"RebootPriority": 3,
@@ -171,9 +171,9 @@ func TestModules(t *testing.T) {
 		t.Fatalf("Wrong modules len: %d", len(cfg.UpdateModules))
 	}
 
-	if cfg.UpdateModules[0].ID != "id1" || cfg.UpdateModules[1].ID != "id2" ||
-		cfg.UpdateModules[2].ID != "id3" {
-		t.Error("Wrong module id")
+	if cfg.UpdateModules[0].Type != "type1" || cfg.UpdateModules[1].Type != "type2" ||
+		cfg.UpdateModules[2].Type != "type3" {
+		t.Error("Wrong component type")
 	}
 
 	if cfg.UpdateModules[0].Plugin != "test1" || cfg.UpdateModules[1].Plugin != "test2" ||

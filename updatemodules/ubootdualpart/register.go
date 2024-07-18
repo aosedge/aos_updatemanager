@@ -53,7 +53,7 @@ type moduleConfig struct {
 
 func init() {
 	updatehandler.RegisterPlugin("ubootdualpart",
-		func(id string, configJSON json.RawMessage,
+		func(componentType string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage,
 		) (module updatehandler.UpdateModule, err error) {
 			var config moduleConfig
@@ -85,7 +85,7 @@ func init() {
 				return nil, aoserrors.Wrap(err)
 			}
 
-			if module, err = dualpartmodule.New(id, partitions, config.VersionFile,
+			if module, err = dualpartmodule.New(componentType, partitions, config.VersionFile,
 				controller, storage, &xenstorerebooter.XenstoreRebooter{},
 				systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
