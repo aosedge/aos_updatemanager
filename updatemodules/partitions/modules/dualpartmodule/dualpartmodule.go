@@ -31,6 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatehandler"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 // The sequence diagram of update:
@@ -148,7 +149,13 @@ func New(componentType string, partitions []string, versionFile string, controll
 		"type": componentType,
 	}).Debug("Create dualpart module")
 
+	id, err := idprovider.CreateID(componentType)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
 	module := &DualPartModule{
+		id:            id,
 		componentType: componentType,
 		partitions:    partitions,
 		controller:    controller,

@@ -29,6 +29,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/aosedge/aos_updatemanager/updatehandler"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /*******************************************************************************
@@ -76,7 +77,12 @@ func New(componentType string, configJSON json.RawMessage,
 ) (module updatehandler.UpdateModule, err error) {
 	log.WithField("type", componentType).Debug("Create SSH module")
 
-	sshModule := &SSHModule{componentType: componentType, storage: storage}
+	id, err := idprovider.CreateID(componentType)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	sshModule := &SSHModule{id: id, componentType: componentType, storage: storage}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
