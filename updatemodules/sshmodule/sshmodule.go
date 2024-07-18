@@ -44,7 +44,8 @@ const Name = "ssh"
 
 // SSHModule SSH module.
 type SSHModule struct {
-	id string
+	id            string
+	componentType string
 	sync.Mutex
 	config         moduleConfig
 	storage        updatehandler.ModuleStorage
@@ -70,12 +71,12 @@ type moduleState struct {
  ******************************************************************************/
 
 // New creates ssh module instance.
-func New(id string, configJSON json.RawMessage,
+func New(componentType string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage,
 ) (module updatehandler.UpdateModule, err error) {
-	log.WithField("id", id).Debug("Create SSH module")
+	log.WithField("type", componentType).Debug("Create SSH module")
 
-	sshModule := &SSHModule{id: id, storage: storage}
+	sshModule := &SSHModule{componentType: componentType, storage: storage}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
@@ -83,7 +84,7 @@ func New(id string, configJSON json.RawMessage,
 		}
 	}
 
-	stateJSON, err := storage.GetModuleState(id)
+	stateJSON, err := storage.GetModuleState(sshModule.id)
 	if err != nil {
 		stateJSON = []byte{}
 	}
@@ -118,6 +119,7 @@ func (module *SSHModule) Init() (err error) {
 func (module *SSHModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
+		"type":      module.componentType,
 		"version":   version,
 		"imagePath": imagePath,
 	}).Debug("Prepare SSH module")
@@ -135,6 +137,14 @@ func (module *SSHModule) GetID() (id string) {
 	defer module.Unlock()
 
 	return module.id
+}
+
+// GetType returns component type.
+func (module *SSHModule) GetType() (id string) {
+	module.Lock()
+	defer module.Unlock()
+
+	return module.componentType
 }
 
 // GetVersion returns version.

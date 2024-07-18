@@ -44,11 +44,11 @@ type moduleConfig struct {
 
 func init() {
 	updatehandler.RegisterPlugin("overlayxenstore",
-		func(id string, configJSON json.RawMessage,
+		func(componentType string, configJSON json.RawMessage,
 			storage updatehandler.ModuleStorage,
 		) (module updatehandler.UpdateModule, err error) {
 			if len(configJSON) == 0 {
-				return nil, aoserrors.Errorf("config for %s module is required", id)
+				return nil, aoserrors.Errorf("config for %s module is required", componentType)
 			}
 
 			var config moduleConfig
@@ -57,7 +57,7 @@ func init() {
 				return nil, aoserrors.Wrap(err)
 			}
 
-			if module, err = overlaymodule.New(id, config.VersionFile, config.UpdateDir,
+			if module, err = overlaymodule.New(componentType, config.VersionFile, config.UpdateDir,
 				storage, &xenstorerebooter.XenstoreRebooter{}, systemdchecker.New(config.SystemdChecker)); err != nil {
 				return nil, aoserrors.Wrap(err)
 			}

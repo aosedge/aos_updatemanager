@@ -81,7 +81,7 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	module, err := sshmodule.New("TestComponent", nil, &testStorage{})
+	module, err := sshmodule.New("testType", nil, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create ssh module: %s", err)
 	}
@@ -89,6 +89,18 @@ func TestGetID(t *testing.T) {
 
 	if module.GetID() != "TestComponent" {
 		t.Errorf("Wrong module ID: %s", module.GetID())
+	}
+}
+
+func TestGetType(t *testing.T) {
+	module, err := sshmodule.New("testType", nil, &testStorage{})
+	if err != nil {
+		t.Fatalf("Can't create ssh module: %s", err)
+	}
+	defer module.Close()
+
+	if componentType := module.GetType(); componentType != "testType" {
+		t.Errorf("Wrong module ID: %s", componentType)
 	}
 }
 
@@ -105,7 +117,7 @@ func TestUpdate(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create ssh module: %s", err)
 	}
@@ -147,7 +159,7 @@ func TestWrongJson(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err == nil {
 		module.Close()
 		log.Fatalf("Expecting error here")
@@ -168,7 +180,7 @@ func TestUpdateErrors(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}
@@ -207,7 +219,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}
