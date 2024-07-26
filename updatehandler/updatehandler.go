@@ -329,6 +329,7 @@ func (handler *Handler) init() {
 	for id, component := range handler.components {
 		handler.componentStatuses[id] = &umclient.ComponentStatusInfo{
 			ID:     id,
+			Type:   component.module.GetType(),
 			Status: umclient.StatusInstalled,
 		}
 
