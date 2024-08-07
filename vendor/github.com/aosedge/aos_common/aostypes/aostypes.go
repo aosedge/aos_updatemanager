@@ -165,33 +165,40 @@ type RunParameters struct {
 	RestartInterval Duration `json:"restartInterval,omitempty"`
 }
 
-// AlertRuleParam describes alert rule.
-type AlertRuleParam struct {
-	Timeout Duration `json:"timeout"`
-	Low     uint64   `json:"low"`
-	High    uint64   `json:"high"`
+// AlertRulePercents describes alert rule.
+type AlertRulePercents struct {
+	MinTimeout   Duration `json:"minTimeout"`
+	MinThreshold float64  `json:"minThreshold"`
+	MaxThreshold float64  `json:"maxThreshold"`
 }
 
-// PartitionAlertRuleParam describes alert rule.
-type PartitionAlertRuleParam struct {
-	AlertRuleParam
+// AlertRulePoints describes alert rule.
+type AlertRulePoints struct {
+	MinTimeout   Duration `json:"minTimeout"`
+	MinThreshold uint64   `json:"minThreshold"`
+	MaxThreshold uint64   `json:"maxThreshold"`
+}
+
+// PartitionAlertRule describes alert rule.
+type PartitionAlertRule struct {
+	AlertRulePercents
 	Name string `json:"name"`
 }
 
 // AlertRules define service monitoring alerts rules.
 type AlertRules struct {
-	RAM        *AlertRuleParam           `json:"ram,omitempty"`
-	CPU        *AlertRuleParam           `json:"cpu,omitempty"`
-	UsedDisks  []PartitionAlertRuleParam `json:"usedDisks,omitempty"`
-	InTraffic  *AlertRuleParam           `json:"inTraffic,omitempty"`
-	OutTraffic *AlertRuleParam           `json:"outTraffic,omitempty"`
+	RAM       *AlertRulePercents   `json:"ram,omitempty"`
+	CPU       *AlertRulePercents   `json:"cpu,omitempty"`
+	UsedDisks []PartitionAlertRule `json:"usedDisks,omitempty"`
+	Download  *AlertRulePoints     `json:"download,omitempty"`
+	Upload    *AlertRulePoints     `json:"upload,omitempty"`
 }
 
 // ResourceRatiosInfo resource ratios info.
 type ResourceRatiosInfo struct {
-	CPU     float32 `json:"cpu"`
-	Mem     float32 `json:"mem"`
-	Storage float32 `json:"storage"`
+	CPU     *float64 `json:"cpu"`
+	RAM     *float64 `json:"ram"`
+	Storage *float64 `json:"storage"`
 }
 
 // ServiceConfig Aos service configuration.
@@ -200,7 +207,7 @@ type ServiceConfig struct {
 	Author             string                       `json:"author"`
 	Hostname           *string                      `json:"hostname,omitempty"`
 	BalancingPolicy    string                       `json:"balancingPolicy"`
-	Runner             string                       `json:"runner"`
+	Runners            []string                     `json:"runners"`
 	RunParameters      RunParameters                `json:"runParameters,omitempty"`
 	Sysctl             map[string]string            `json:"sysctl,omitempty"`
 	OfflineTTL         Duration                     `json:"offlineTtl,omitempty"`
@@ -221,12 +228,12 @@ type PartitionUsage struct {
 
 // MonitoringData monitoring data.
 type MonitoringData struct {
-	Timestamp  time.Time        `json:"timestamp"`
-	RAM        uint64           `json:"ram"`
-	CPU        uint64           `json:"cpu"`
-	InTraffic  uint64           `json:"inTraffic"`
-	OutTraffic uint64           `json:"outTraffic"`
-	Disk       []PartitionUsage `json:"disk"`
+	Timestamp time.Time        `json:"timestamp"`
+	RAM       uint64           `json:"ram"`
+	CPU       uint64           `json:"cpu"`
+	Download  uint64           `json:"download"`
+	Upload    uint64           `json:"upload"`
+	Disk      []PartitionUsage `json:"disk"`
 }
 
 type InstanceMonitoring struct {

@@ -7,10 +7,11 @@ replace github.com/ThalesIgnite/crypto11 => github.com/aosedge/crypto11 v1.0.3-0
 replace github.com/anexia-it/fsquota => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7
 
 require (
-	github.com/aosedge/aos_common v0.0.0-20240709152137-c94ad578854a
+	github.com/aosedge/aos_common v0.0.0-20240807131318-ec6baf1da16c
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/golang/protobuf v1.5.3
+	github.com/hashicorp/go-version v1.6.0
 	github.com/joelnb/xenstore-go v0.3.0
 	github.com/looplab/fsm v1.0.1
 	github.com/mattn/go-sqlite3 v1.14.18
@@ -31,7 +32,6 @@ require (
 	github.com/google/go-tpm v0.9.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/joelnb/wmi v0.0.0-20220227211458-fee931480b9c // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/lib/pq v1.10.9 // indirect
