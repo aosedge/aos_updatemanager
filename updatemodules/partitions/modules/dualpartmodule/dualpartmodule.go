@@ -31,6 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatehandler"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 // The sequence diagram of update:
@@ -97,7 +98,8 @@ type UpdateChecker interface {
 
 // DualPartModule update dual partition module.
 type DualPartModule struct {
-	id string
+	id            string
+	componentType string
 
 	storage          Storage
 	controller       StateController
@@ -107,7 +109,7 @@ type DualPartModule struct {
 	currentPartition int
 	state            moduleState
 	versionFile      string
-	vendorVersion    string
+	version          string
 	bootErr          error
 }
 
@@ -139,14 +141,22 @@ type updateState int
  **********************************************************************************************************************/
 
 // New creates fs update module instance.
-func New(id string, partitions []string, versionFile string, controller StateController,
+func New(componentType string, partitions []string, versionFile string, controller StateController,
 	storage updatehandler.ModuleStorage, rebootHandler RebootHandler,
 	checker UpdateChecker,
 ) (updateModule updatehandler.UpdateModule, err error) {
-	log.WithField("module", id).Debug("Create dualpart module")
+	log.WithFields(log.Fields{
+		"type": componentType,
+	}).Debug("Create dualpart module")
+
+	id, err := idprovider.CreateID(componentType)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
 
 	module := &DualPartModule{
 		id:            id,
+		componentType: componentType,
 		partitions:    partitions,
 		controller:    controller,
 		storage:       storage,
@@ -174,6 +184,11 @@ func (module *DualPartModule) Close() (err error) {
 // GetID returns module ID.
 func (module *DualPartModule) GetID() (id string) {
 	return module.id
+}
+
+// GetType returns component type.
+func (module *DualPartModule) GetType() string {
+	return module.componentType
 }
 
 // Init initializes module.
@@ -211,7 +226,7 @@ func (module *DualPartModule) Init() (err error) {
 		log.WithFields(log.Fields{"id": module.id}).Warn("Boot from fallback partition")
 	}
 
-	if module.vendorVersion, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
+	if module.version, err = module.getModuleVersion(module.partitions[module.currentPartition]); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -222,17 +237,17 @@ func (module *DualPartModule) Init() (err error) {
 	return nil
 }
 
-// GetVendorVersion returns vendor version.
-func (module *DualPartModule) GetVendorVersion() (version string, err error) {
-	return module.vendorVersion, nil
+// GetVersion returns version.
+func (module *DualPartModule) GetVersion() (version string, err error) {
+	return module.version, nil
 }
 
 // Prepare preparing image.
-func (module *DualPartModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+func (module *DualPartModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
-		"id":            module.id,
-		"imagePath":     imagePath,
-		"vendorVersion": vendorVersion,
+		"id":        module.id,
+		"imagePath": imagePath,
+		"version":   version,
 	}).Debug("Prepare dualpart module")
 
 	if module.state.State != idleState && module.state.State != preparedState {
@@ -439,14 +454,14 @@ func (module *DualPartModule) getModuleVersion(part string) (version string, err
 
 	data, err := os.ReadFile(versionFilePath)
 	if err != nil {
-		return "", aoserrors.Errorf("nonexistent or empty vendor version file %s, err: %s", versionFilePath, err)
+		return "", aoserrors.Errorf("nonexistent or empty version file %s, err: %s", versionFilePath, err)
 	}
 
 	pattern := regexp.MustCompile(`VERSION\s*=\s*\"(.+)\"`)
 
 	loc := pattern.FindSubmatchIndex(data)
 	if loc == nil {
-		return "", aoserrors.Errorf("vendor version file has wrong format")
+		return "", aoserrors.Errorf("version file has wrong format")
 	}
 
 	return string(data[loc[2]:loc[3]]), nil

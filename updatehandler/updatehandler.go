@@ -28,6 +28,7 @@ import (
 
 	"github.com/aosedge/aos_common/aoserrors"
 	"github.com/aosedge/aos_common/image"
+	semver "github.com/hashicorp/go-version"
 	"github.com/looplab/fsm"
 	log "github.com/sirupsen/logrus"
 
@@ -88,12 +89,14 @@ type Handler struct {
 type UpdateModule interface {
 	// GetID returns module ID
 	GetID() (id string)
-	// GetVendorVersion returns vendor version
-	GetVendorVersion() (version string, err error)
+	// GetType returns component type
+	GetType() (componentType string)
+	// GetVersion returns version
+	GetVersion() (version string, err error)
 	// Init initializes module
 	Init() (err error)
 	// Prepare prepares module
-	Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error)
+	Prepare(imagePath string, version string, annotations json.RawMessage) (err error)
 	// Update updates module
 	Update() (rebootRequired bool, err error)
 	// Apply applies update
@@ -110,8 +113,8 @@ type UpdateModule interface {
 type StateStorage interface {
 	SetUpdateState(state []byte) (err error)
 	GetUpdateState() (state []byte, err error)
-	SetAosVersion(id string, version uint64) (err error)
-	GetAosVersion(id string) (version uint64, err error)
+	SetVersion(id string, version string) (err error)
+	GetVersion(id string) (version string, err error)
 }
 
 // ModuleStorage provides API store/retrieve module persistent data.
@@ -121,13 +124,14 @@ type ModuleStorage interface {
 }
 
 // NewPlugin update module new function.
-type NewPlugin func(id string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
+type NewPlugin func(
+	componentType string, configJSON json.RawMessage, storage ModuleStorage) (module UpdateModule, err error)
 
 type handlerState struct {
-	UpdateState           string                                   `json:"updateState"`
-	Error                 string                                   `json:"error"`
-	ComponentStatuses     map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
-	CurrentVendorVersions map[string]string                        `json:"currentVendorVersions"`
+	UpdateState       string                                   `json:"updateState"`
+	Error             string                                   `json:"error"`
+	ComponentStatuses map[string]*umclient.ComponentStatusInfo `json:"componentStatuses"`
+	CurrentVersions   map[string]string                        `json:"currentVersions"`
 }
 
 type componentData struct {
@@ -193,18 +197,18 @@ func New(cfg *config.Config, storage StateStorage, moduleStorage ModuleStorage) 
 
 	for _, moduleCfg := range cfg.UpdateModules {
 		if moduleCfg.Disabled {
-			log.WithField("id", moduleCfg.ID).Debug("Skip disabled module")
+			log.WithFields(log.Fields{"type": moduleCfg.Type}).Debug("Skip disabled module")
 			continue
 		}
 
 		component := componentData{updatePriority: moduleCfg.UpdatePriority, rebootPriority: moduleCfg.RebootPriority}
 
-		if component.module, err = handler.createComponent(moduleCfg.Plugin, moduleCfg.ID,
+		if component.module, err = handler.createComponent(moduleCfg.Plugin, moduleCfg.Type,
 			moduleCfg.Params, moduleStorage); err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
 
-		handler.components[moduleCfg.ID] = component
+		handler.components[component.module.GetID()] = component
 	}
 
 	handler.init()
@@ -275,14 +279,14 @@ func (handler *Handler) Close() {
  ******************************************************************************/
 
 func (handler *Handler) createComponent(
-	plugin, id string, params json.RawMessage, storage ModuleStorage,
+	plugin, componentType string, params json.RawMessage, storage ModuleStorage,
 ) (module UpdateModule, err error) {
 	newFunc, ok := plugins[plugin]
 	if !ok {
 		return nil, aoserrors.Errorf("plugin %s not found", plugin)
 	}
 
-	if module, err = newFunc(id, params, storage); err != nil {
+	if module, err = newFunc(componentType, params, storage); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -325,6 +329,7 @@ func (handler *Handler) init() {
 	for id, component := range handler.components {
 		handler.componentStatuses[id] = &umclient.ComponentStatusInfo{
 			ID:     id,
+			Type:   component.module.GetType(),
 			Status: umclient.StatusInstalled,
 		}
 
@@ -334,8 +339,6 @@ func (handler *Handler) init() {
 		operations = append(operations, priorityOperation{
 			priority: component.updatePriority,
 			operation: func() (err error) {
-				log.WithField("id", id).Debug("Init component")
-
 				if err := module.Init(); err != nil {
 					log.Errorf("Can't initialize module %s: %s", id, aoserrors.Wrap(err))
 
@@ -359,20 +362,17 @@ func (handler *Handler) getVersions() {
 	for id, component := range handler.components {
 		var err error
 
-		vendorVersion, ok := handler.state.CurrentVendorVersions[id]
+		version, ok := handler.state.CurrentVersions[id]
 
 		if handler.state.UpdateState == stateIdle || !ok {
-			if vendorVersion, err = component.module.GetVendorVersion(); err != nil {
-				log.Errorf("Can't get vendor version: %s", aoserrors.Wrap(err))
+			if version, err = component.module.GetVersion(); err != nil {
+				log.Errorf("Can't get version: %s", aoserrors.Wrap(err))
 			}
 		}
 
-		handler.componentStatuses[id].VendorVersion = vendorVersion
+		handler.componentStatuses[id].Version = version
 
-		aosVersion, err := handler.storage.GetAosVersion(id)
-		if err == nil {
-			handler.componentStatuses[id].AosVersion = aosVersion
-		}
+		log.WithFields(log.Fields{"id": id, "version": version}).Debug("Component version has been updated")
 	}
 }
 
@@ -388,11 +388,11 @@ func (handler *Handler) sendStatus() {
 		status.Components = append(status.Components, *componentStatus)
 
 		log.WithFields(log.Fields{
-			"id":            componentStatus.ID,
-			"vendorVersion": componentStatus.VendorVersion,
-			"aosVersion":    componentStatus.AosVersion,
-			"status":        componentStatus.Status,
-			"error":         componentStatus.Error,
+			"id":      componentStatus.ID,
+			"type":    componentStatus.Type,
+			"version": componentStatus.Version,
+			"status":  componentStatus.Status,
+			"error":   componentStatus.Error,
 		}).Debug("Component status")
 
 		updateStatus, ok := handler.state.ComponentStatuses[id]
@@ -400,12 +400,12 @@ func (handler *Handler) sendStatus() {
 			status.Components = append(status.Components, *updateStatus)
 
 			log.WithFields(log.Fields{
-				"id":            updateStatus.ID,
-				"vendorVersion": updateStatus.VendorVersion,
-				"aosVersion":    updateStatus.AosVersion,
-				"status":        updateStatus.Status,
-				"error":         updateStatus.Error,
-			}).Debug("Component status")
+				"id":      updateStatus.ID,
+				"type":    updateStatus.Type,
+				"version": updateStatus.Version,
+				"status":  updateStatus.Status,
+				"error":   updateStatus.Error,
+			}).Debug("Component update status")
 		}
 	}
 
@@ -637,28 +637,46 @@ func (handler *Handler) componentOperation(operation componentOperation, stopOnE
 		operationStatuses = rebootStatuses
 	}
 
-	return aoserrors.Wrap(err)
+	return err
+}
+
+func (handler *Handler) verifySemver(current, update string) error {
+	log.WithFields(log.Fields{"currentVersion": current, "updateVersion": update}).Debug("Verify semver")
+
+	currentSemver, err := semver.NewSemver(current)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	updateSemver, err := semver.NewSemver(update)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	if updateSemver.LessThan(currentSemver) {
+		return aoserrors.New("component version downgrade has been rejected")
+	}
+
+	if updateSemver.Equal(currentSemver) {
+		return aoserrors.Errorf("component already has required version: %s", current)
+	}
+
+	return nil
 }
 
 func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclient.ComponentUpdateInfo) (err error) {
-	vendorVersion, err := module.GetVendorVersion()
-	if err == nil && updateInfo.VendorVersion != "" {
-		if vendorVersion == updateInfo.VendorVersion {
-			return aoserrors.Errorf("component already has required vendor version: %s", vendorVersion)
-		}
+	currentVersion, err := module.GetVersion()
+	if err != nil {
+		return aoserrors.New("current version is not set for module")
 	}
 
-	if updateInfo.AosVersion != 0 {
-		aosVersion, err := handler.storage.GetAosVersion(updateInfo.ID)
-		if err == nil {
-			if aosVersion == updateInfo.AosVersion {
-				return aoserrors.Errorf("component already has required Aos version: %d", updateInfo.AosVersion)
-			}
+	log.WithFields(log.Fields{
+		"currentVersion": currentVersion,
+		"updateVersion":  updateInfo.Version,
+	}).Debug("Prepare component")
 
-			if aosVersion > updateInfo.AosVersion {
-				return aoserrors.New("wrong Aos version")
-			}
-		}
+	if err = handler.verifySemver(currentVersion, updateInfo.Version); err != nil {
+		return aoserrors.Wrap(err)
 	}
 
 	if handler.downloadDir != "" {
@@ -688,13 +706,12 @@ func (handler *Handler) prepareComponent(module UpdateModule, updateInfo *umclie
 
 	if err = image.CheckFileInfo(context.Background(), filePath, image.FileInfo{
 		Sha256: updateInfo.Sha256,
-		Sha512: updateInfo.Sha512,
 		Size:   updateInfo.Size,
 	}); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
-	if err = module.Prepare(filePath, updateInfo.VendorVersion, updateInfo.Annotations); err != nil {
+	if err = module.Prepare(filePath, updateInfo.Version, updateInfo.Annotations); err != nil {
 		return aoserrors.Wrap(err)
 	}
 
@@ -718,7 +735,7 @@ func (handler *Handler) onPrepareState(ctx context.Context, event *fsm.Event) {
 
 	handler.state.Error = ""
 	handler.state.ComponentStatuses = make(map[string]*umclient.ComponentStatusInfo)
-	handler.state.CurrentVendorVersions = make(map[string]string)
+	handler.state.CurrentVersions = make(map[string]string)
 
 	infos, ok := event.Args[0].([]umclient.ComponentUpdateInfo)
 	if !ok {
@@ -742,13 +759,13 @@ func (handler *Handler) onPrepareState(ctx context.Context, event *fsm.Event) {
 			return
 		}
 
-		handler.state.CurrentVendorVersions[info.ID] = handler.componentStatuses[info.ID].VendorVersion
+		handler.state.CurrentVersions[info.ID] = handler.componentStatuses[info.ID].Version
 		componentsInfo[info.ID] = &infos[i]
 		handler.state.ComponentStatuses[info.ID] = &umclient.ComponentStatusInfo{
-			ID:            info.ID,
-			VendorVersion: info.VendorVersion,
-			AosVersion:    info.AosVersion,
-			Status:        umclient.StatusInstalling,
+			ID:      info.ID,
+			Type:    info.Type,
+			Version: info.Version,
+			Status:  umclient.StatusInstalling,
 		}
 	}
 
@@ -759,10 +776,10 @@ func (handler *Handler) onPrepareState(ctx context.Context, event *fsm.Event) {
 		}
 
 		log.WithFields(log.Fields{
-			"id":            updateInfo.ID,
-			"vendorVersion": updateInfo.VendorVersion,
-			"aosVersion":    updateInfo.AosVersion,
-			"url":           updateInfo.URL,
+			"id":      updateInfo.ID,
+			"type":    updateInfo.Type,
+			"version": updateInfo.Version,
+			"url":     updateInfo.URL,
 		}).Debug("Prepare component")
 
 		return false, handler.prepareComponent(module, updateInfo)
@@ -784,14 +801,14 @@ func (handler *Handler) onUpdateState(ctx context.Context, event *fsm.Event) {
 		}
 
 		if !rebootRequired {
-			vendorVersion, err := module.GetVendorVersion()
+			version, err := module.GetVersion()
 			if err != nil {
 				return false, aoserrors.Wrap(err)
 			}
 
-			if vendorVersion != handler.state.ComponentStatuses[module.GetID()].VendorVersion {
+			if version != handler.state.ComponentStatuses[module.GetID()].Version {
 				return false, aoserrors.Errorf("versions mismatch in request %s and updated module %s",
-					handler.state.ComponentStatuses[module.GetID()].VendorVersion, vendorVersion)
+					handler.state.ComponentStatuses[module.GetID()].Version, version)
 			}
 		}
 
@@ -820,7 +837,7 @@ func (handler *Handler) onApplyState(ctx context.Context, event *fsm.Event) {
 			return rebootRequired, aoserrors.Errorf("component %s status not found", module.GetID())
 		}
 
-		if err = handler.storage.SetAosVersion(componentStatus.ID, componentStatus.AosVersion); err != nil {
+		if err = handler.storage.SetVersion(componentStatus.ID, componentStatus.Version); err != nil {
 			return rebootRequired, aoserrors.Wrap(err)
 		}
 

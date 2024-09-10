@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/aosedge/aos_common/aoserrors"
-	pb "github.com/aosedge/aos_common/api/iamanager/v4"
+	pb "github.com/aosedge/aos_common/api/iamanager"
 	"github.com/golang/protobuf/ptypes/empty"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"

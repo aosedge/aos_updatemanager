@@ -26,7 +26,8 @@ import (
 	"time"
 
 	"github.com/aosedge/aos_common/aoserrors"
-	pb "github.com/aosedge/aos_common/api/updatemanager/v1"
+	"github.com/aosedge/aos_common/api/common"
+	pb "github.com/aosedge/aos_common/api/updatemanager"
 	"github.com/aosedge/aos_common/utils/cryptutils"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -84,30 +85,29 @@ type ComponentStatus int32
 
 // ComponentUpdateInfo component update info.
 type ComponentUpdateInfo struct {
-	ID            string
-	VendorVersion string
-	AosVersion    uint64
-	Annotations   json.RawMessage
-	URL           string
-	Sha256        []byte
-	Sha512        []byte
-	Size          uint64
+	ID          string
+	Type        string
+	Version     string
+	Annotations json.RawMessage
+	URL         string
+	Sha256      []byte
+	Size        uint64
 }
 
 // ComponentStatusInfo component status info.
 type ComponentStatusInfo struct {
-	ID            string
-	VendorVersion string
-	AosVersion    uint64
-	Status        ComponentStatus
-	Error         string
+	ID      string
+	Type    string
+	Version string
+	Status  ComponentStatus
+	Error   string
 }
 
 // Status update manager status.
 type Status struct {
 	State      UMState
-	Error      string
 	Components []ComponentStatusInfo
+	Error      string
 }
 
 // MessageHandler incoming messages handler.
@@ -315,14 +315,13 @@ func (client *Client) processMessages() (err error) {
 			for _, component := range data.PrepareUpdate.GetComponents() {
 				components = append(components,
 					ComponentUpdateInfo{
-						ID:            component.GetId(),
-						VendorVersion: component.GetVendorVersion(),
-						AosVersion:    component.GetAosVersion(),
-						Annotations:   json.RawMessage(component.GetAnnotations()),
-						URL:           component.GetUrl(),
-						Sha256:        component.GetSha256(),
-						Sha512:        component.GetSha512(),
-						Size:          component.GetSize(),
+						ID:          component.GetComponentId(),
+						Type:        component.GetComponentType(),
+						Version:     component.GetVersion(),
+						Annotations: json.RawMessage(component.GetAnnotations()),
+						URL:         component.GetUrl(),
+						Sha256:      component.GetSha256(),
+						Size:        component.GetSize(),
 					})
 			}
 
@@ -356,24 +355,34 @@ func (client *Client) sendStatus(status Status) (err error) {
 
 	log.WithFields(log.Fields{"umID": client, "state": status.State, "error": status.Error}).Debug("Send status")
 
-	pbComponents := make([]*pb.SystemComponent, 0, len(status.Components))
+	pbComponents := make([]*pb.ComponentStatus, 0, len(status.Components))
 
 	for _, component := range status.Components {
-		pbComponents = append(pbComponents, &pb.SystemComponent{
-			Id:            component.ID,
-			VendorVersion: component.VendorVersion,
-			AosVersion:    component.AosVersion,
-			Status:        pb.ComponentStatus(component.Status),
-			Error:         component.Error,
-		})
+		pbComponent := pb.ComponentStatus{
+			ComponentId:   component.ID,
+			ComponentType: component.Type,
+			Version:       component.Version,
+			State:         pb.ComponentState(component.Status),
+		}
+
+		if component.Error != "" {
+			pbComponent.Error = &common.ErrorInfo{Message: component.Error}
+		}
+
+		pbComponents = append(pbComponents, &pbComponent)
 	}
 
-	if err = client.stream.Send(&pb.UpdateStatus{
-		UmId:       client.umID,
-		UmState:    pb.UmState(status.State),
-		Error:      status.Error,
-		Components: pbComponents,
-	}); err != nil {
+	message := pb.UpdateStatus{
+		NodeId:      client.umID,
+		UpdateState: pb.UpdateState(status.State),
+		Components:  pbComponents,
+	}
+
+	if status.Error != "" {
+		message.Error = &common.ErrorInfo{Message: status.Error}
+	}
+
+	if err = client.stream.Send(&message); err != nil {
 		return aoserrors.Wrap(err)
 	}
 

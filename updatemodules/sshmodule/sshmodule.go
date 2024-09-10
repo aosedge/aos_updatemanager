@@ -29,6 +29,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/aosedge/aos_updatemanager/updatehandler"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /*******************************************************************************
@@ -44,12 +45,13 @@ const Name = "ssh"
 
 // SSHModule SSH module.
 type SSHModule struct {
-	id string
+	id            string
+	componentType string
 	sync.Mutex
 	config         moduleConfig
 	storage        updatehandler.ModuleStorage
 	filePath       string
-	vendorVersion  string
+	version        string
 	pendingVersion string
 }
 
@@ -70,12 +72,17 @@ type moduleState struct {
  ******************************************************************************/
 
 // New creates ssh module instance.
-func New(id string, configJSON json.RawMessage,
+func New(componentType string, configJSON json.RawMessage,
 	storage updatehandler.ModuleStorage,
 ) (module updatehandler.UpdateModule, err error) {
-	log.WithField("id", id).Debug("Create SSH module")
+	log.WithField("type", componentType).Debug("Create SSH module")
 
-	sshModule := &SSHModule{id: id, storage: storage}
+	id, err := idprovider.CreateID(componentType)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
+	}
+
+	sshModule := &SSHModule{id: id, componentType: componentType, storage: storage}
 
 	if configJSON != nil {
 		if err = json.Unmarshal(configJSON, &sshModule.config); err != nil {
@@ -83,7 +90,7 @@ func New(id string, configJSON json.RawMessage,
 		}
 	}
 
-	stateJSON, err := storage.GetModuleState(id)
+	stateJSON, err := storage.GetModuleState(sshModule.id)
 	if err != nil {
 		stateJSON = []byte{}
 	}
@@ -96,7 +103,7 @@ func New(id string, configJSON json.RawMessage,
 		}
 	}
 
-	sshModule.vendorVersion = state.Version
+	sshModule.version = state.Version
 
 	return sshModule, nil
 }
@@ -115,15 +122,17 @@ func (module *SSHModule) Init() (err error) {
 }
 
 // Prepare prepares module update.
-func (module *SSHModule) Prepare(imagePath string, vendorVersion string, annotations json.RawMessage) (err error) {
+func (module *SSHModule) Prepare(imagePath string, version string, annotations json.RawMessage) (err error) {
 	log.WithFields(log.Fields{
 		"id":        module.id,
+		"type":      module.componentType,
+		"version":   version,
 		"imagePath": imagePath,
 	}).Debug("Prepare SSH module")
 
 	module.filePath = imagePath
 
-	module.pendingVersion = vendorVersion
+	module.pendingVersion = version
 
 	return nil
 }
@@ -136,12 +145,20 @@ func (module *SSHModule) GetID() (id string) {
 	return module.id
 }
 
-// GetVendorVersion returns vendor version.
-func (module *SSHModule) GetVendorVersion() (version string, err error) {
+// GetType returns component type.
+func (module *SSHModule) GetType() (id string) {
 	module.Lock()
 	defer module.Unlock()
 
-	return module.vendorVersion, nil
+	return module.componentType
+}
+
+// GetVersion returns version.
+func (module *SSHModule) GetVersion() (version string, err error) {
+	module.Lock()
+	defer module.Unlock()
+
+	return module.version, nil
 }
 
 // Update performs module update.
@@ -181,7 +198,7 @@ func (module *SSHModule) Update() (rebootRequired bool, err error) {
 		return false, aoserrors.Wrap(err)
 	}
 
-	module.vendorVersion = module.pendingVersion
+	module.version = module.pendingVersion
 
 	return false, nil
 }

@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatemodules/sshmodule"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /*******************************************************************************
@@ -81,14 +82,31 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	module, err := sshmodule.New("TestComponent", nil, &testStorage{})
+	module, err := sshmodule.New("testType", nil, &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create ssh module: %s", err)
 	}
 	defer module.Close()
 
-	if module.GetID() != "TestComponent" {
-		t.Errorf("Wrong module ID: %s", module.GetID())
+	expectedID, err := idprovider.CreateID(module.GetType())
+	if err != nil {
+		t.Fatalf("Can't create module ID: %v", err)
+	}
+
+	if id := module.GetID(); id != expectedID {
+		t.Errorf("Wrong module ID: %s", id)
+	}
+}
+
+func TestGetType(t *testing.T) {
+	module, err := sshmodule.New("testType", nil, &testStorage{})
+	if err != nil {
+		t.Fatalf("Can't create ssh module: %s", err)
+	}
+	defer module.Close()
+
+	if componentType := module.GetType(); componentType != "testType" {
+		t.Errorf("Wrong module ID: %s", componentType)
 	}
 }
 
@@ -105,7 +123,7 @@ func TestUpdate(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err != nil {
 		t.Fatalf("Can't create ssh module: %s", err)
 	}
@@ -131,13 +149,13 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Apply failed: %s", err)
 	}
 
-	updatedVersion, err := module.GetVendorVersion()
+	updatedVersion, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Get vendor version failed: %s", err)
+		t.Errorf("Get version failed: %s", err)
 	}
 
 	if updatedVersion != newVersion {
-		t.Errorf("Update version missmatch  %s != %s", updatedVersion, newVersion)
+		t.Errorf("Update version mismatch  %s != %s", updatedVersion, newVersion)
 	}
 }
 
@@ -147,7 +165,7 @@ func TestWrongJson(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err == nil {
 		module.Close()
 		log.Fatalf("Expecting error here")
@@ -168,7 +186,7 @@ func TestUpdateErrors(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}
@@ -207,7 +225,7 @@ func TestUpdateWrongCommands(t *testing.T) {
 		]
 	}`
 
-	module, err := sshmodule.New("TestComponent", []byte(configJSON), &testStorage{})
+	module, err := sshmodule.New("testType", []byte(configJSON), &testStorage{})
 	if err != nil {
 		log.Fatalf("Error creating module %s", err)
 	}

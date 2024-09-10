@@ -50,7 +50,7 @@ type Config struct {
 
 // ModuleConfig module configuration.
 type ModuleConfig struct {
-	ID             string `json:"id"`
+	Type           string `json:"type"`
 	Plugin         string `json:"plugin"`
 	Disabled       bool   `json:"disabled"`
 	UpdatePriority uint32 `json:"updatePriority"`

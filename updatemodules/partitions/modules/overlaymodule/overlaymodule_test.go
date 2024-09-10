@@ -29,6 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/aosedge/aos_updatemanager/updatemodules/partitions/modules/overlaymodule"
+	idprovider "github.com/aosedge/aos_updatemanager/utils"
 )
 
 /*******************************************************************************
@@ -106,14 +107,31 @@ func TestMain(m *testing.M) {
  ******************************************************************************/
 
 func TestGetID(t *testing.T) {
-	module, err := overlaymodule.New("test", versionFile, updateDir, &testStorage{}, nil, nil)
+	module, err := overlaymodule.New("testType", versionFile, updateDir, &testStorage{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 	defer module.Close()
 
-	if module.GetID() != "test" {
-		t.Errorf("Wrong module ID: %s", module.GetID())
+	expectedID, err := idprovider.CreateID(module.GetType())
+	if err != nil {
+		t.Fatalf("Can't create module ID: %v", err)
+	}
+
+	if id := module.GetID(); id != expectedID {
+		t.Errorf("Wrong module ID: %s", id)
+	}
+}
+
+func TestGetType(t *testing.T) {
+	module, err := overlaymodule.New("testType", versionFile, updateDir, &testStorage{}, nil, nil)
+	if err != nil {
+		t.Fatalf("Can't create overlay module: %s", err)
+	}
+	defer module.Close()
+
+	if componentType := module.GetType(); componentType != "testType" {
+		t.Errorf("Wrong module ID: %s", componentType)
 	}
 }
 
@@ -127,7 +145,7 @@ func TestUpdate(t *testing.T) {
 
 	// Create and init module
 
-	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil)
+	module, err := overlaymodule.New("testType", versionFile, updateDir, storage, rebooter, nil)
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -190,7 +208,7 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("Can't create version file: %s", err)
 	}
 
-	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil); err != nil {
+	if module, err = overlaymodule.New("testType", versionFile, updateDir, storage, rebooter, nil); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 
@@ -241,7 +259,7 @@ func TestUpdate(t *testing.T) {
 
 	module.Close()
 
-	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil); err != nil {
+	if module, err = overlaymodule.New("testType", versionFile, updateDir, storage, rebooter, nil); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 
@@ -261,13 +279,13 @@ func TestUpdate(t *testing.T) {
 
 	// Check
 
-	vendorVersion, err := module.GetVendorVersion()
+	version, err := module.GetVersion()
 	if err != nil {
-		t.Errorf("Can't get vendor version: %s", err)
+		t.Errorf("Can't get version: %s", err)
 	}
 
-	if vendorVersion != "v2.0" {
-		t.Errorf("Wrong vendor version: %s", err)
+	if version != "v2.0" {
+		t.Errorf("Wrong version: %s", err)
 	}
 
 	if _, err = os.Stat(path.Join(updateDir, "do_update")); err == nil {
@@ -295,7 +313,7 @@ func TestUpdateFail(t *testing.T) {
 
 	// Create and init module
 
-	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil)
+	module, err := overlaymodule.New("testType", versionFile, updateDir, storage, rebooter, nil)
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -350,7 +368,7 @@ func TestUpdateFail(t *testing.T) {
 
 	module.Close()
 
-	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter, nil); err != nil {
+	if module, err = overlaymodule.New("testType", versionFile, updateDir, storage, rebooter, nil); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
 
@@ -403,7 +421,7 @@ func TestUpdateChecker(t *testing.T) {
 
 	// Create and init module
 
-	module, err := overlaymodule.New("test", versionFile, updateDir, storage, rebooter, newTestChecker(nil))
+	module, err := overlaymodule.New("testType", versionFile, updateDir, storage, rebooter, newTestChecker(nil))
 	if err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
@@ -466,7 +484,7 @@ func TestUpdateChecker(t *testing.T) {
 		t.Fatalf("Can't create updated file: %s", err)
 	}
 
-	if module, err = overlaymodule.New("test", versionFile, updateDir, storage, rebooter,
+	if module, err = overlaymodule.New("testType", versionFile, updateDir, storage, rebooter,
 		newTestChecker(aoserrors.New("update failed"))); err != nil {
 		t.Fatalf("Can't create overlay module: %s", err)
 	}
