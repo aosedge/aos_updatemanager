@@ -24,7 +24,8 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IAMPublicServiceClient interface {
 	GetNodeInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NodeInfo, error)
-	GetCert(ctx context.Context, in *GetCertRequest, opts ...grpc.CallOption) (*GetCertResponse, error)
+	GetCert(ctx context.Context, in *GetCertRequest, opts ...grpc.CallOption) (*CertInfo, error)
+	SubscribeCertChanged(ctx context.Context, in *SubscribeCertChangedRequest, opts ...grpc.CallOption) (IAMPublicService_SubscribeCertChangedClient, error)
 }
 
 type iAMPublicServiceClient struct {
@@ -44,8 +45,8 @@ func (c *iAMPublicServiceClient) GetNodeInfo(ctx context.Context, in *emptypb.Em
 	return out, nil
 }
 
-func (c *iAMPublicServiceClient) GetCert(ctx context.Context, in *GetCertRequest, opts ...grpc.CallOption) (*GetCertResponse, error) {
-	out := new(GetCertResponse)
+func (c *iAMPublicServiceClient) GetCert(ctx context.Context, in *GetCertRequest, opts ...grpc.CallOption) (*CertInfo, error) {
+	out := new(CertInfo)
 	err := c.cc.Invoke(ctx, "/iamanager.v5.IAMPublicService/GetCert", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -53,12 +54,45 @@ func (c *iAMPublicServiceClient) GetCert(ctx context.Context, in *GetCertRequest
 	return out, nil
 }
 
+func (c *iAMPublicServiceClient) SubscribeCertChanged(ctx context.Context, in *SubscribeCertChangedRequest, opts ...grpc.CallOption) (IAMPublicService_SubscribeCertChangedClient, error) {
+	stream, err := c.cc.NewStream(ctx, &IAMPublicService_ServiceDesc.Streams[0], "/iamanager.v5.IAMPublicService/SubscribeCertChanged", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &iAMPublicServiceSubscribeCertChangedClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type IAMPublicService_SubscribeCertChangedClient interface {
+	Recv() (*CertInfo, error)
+	grpc.ClientStream
+}
+
+type iAMPublicServiceSubscribeCertChangedClient struct {
+	grpc.ClientStream
+}
+
+func (x *iAMPublicServiceSubscribeCertChangedClient) Recv() (*CertInfo, error) {
+	m := new(CertInfo)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // IAMPublicServiceServer is the server API for IAMPublicService service.
 // All implementations must embed UnimplementedIAMPublicServiceServer
 // for forward compatibility
 type IAMPublicServiceServer interface {
 	GetNodeInfo(context.Context, *emptypb.Empty) (*NodeInfo, error)
-	GetCert(context.Context, *GetCertRequest) (*GetCertResponse, error)
+	GetCert(context.Context, *GetCertRequest) (*CertInfo, error)
+	SubscribeCertChanged(*SubscribeCertChangedRequest, IAMPublicService_SubscribeCertChangedServer) error
 	mustEmbedUnimplementedIAMPublicServiceServer()
 }
 
@@ -69,8 +103,11 @@ type UnimplementedIAMPublicServiceServer struct {
 func (UnimplementedIAMPublicServiceServer) GetNodeInfo(context.Context, *emptypb.Empty) (*NodeInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNodeInfo not implemented")
 }
-func (UnimplementedIAMPublicServiceServer) GetCert(context.Context, *GetCertRequest) (*GetCertResponse, error) {
+func (UnimplementedIAMPublicServiceServer) GetCert(context.Context, *GetCertRequest) (*CertInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCert not implemented")
+}
+func (UnimplementedIAMPublicServiceServer) SubscribeCertChanged(*SubscribeCertChangedRequest, IAMPublicService_SubscribeCertChangedServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeCertChanged not implemented")
 }
 func (UnimplementedIAMPublicServiceServer) mustEmbedUnimplementedIAMPublicServiceServer() {}
 
@@ -121,6 +158,27 @@ func _IAMPublicService_GetCert_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IAMPublicService_SubscribeCertChanged_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeCertChangedRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(IAMPublicServiceServer).SubscribeCertChanged(m, &iAMPublicServiceSubscribeCertChangedServer{stream})
+}
+
+type IAMPublicService_SubscribeCertChangedServer interface {
+	Send(*CertInfo) error
+	grpc.ServerStream
+}
+
+type iAMPublicServiceSubscribeCertChangedServer struct {
+	grpc.ServerStream
+}
+
+func (x *iAMPublicServiceSubscribeCertChangedServer) Send(m *CertInfo) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // IAMPublicService_ServiceDesc is the grpc.ServiceDesc for IAMPublicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -137,7 +195,13 @@ var IAMPublicService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IAMPublicService_GetCert_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeCertChanged",
+			Handler:       _IAMPublicService_SubscribeCertChanged_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "iamanager/v5/iamanager.proto",
 }
 

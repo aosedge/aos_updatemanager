@@ -1,5 +1,5 @@
-github.com/aosedge/aos_common v0.0.0-20240807131318-ec6baf1da16c h1:+syptKk0KtaFuttYpoUW4VF4eUciUxP5VFeFDDcDNkA=
-github.com/aosedge/aos_common v0.0.0-20240807131318-ec6baf1da16c/go.mod h1:CG/e1tQPMo2fvdwRHi+Cx5StpNURu7InTZSgyfmBVYM=
+github.com/aosedge/aos_common v0.0.0-20241025075156-14720a7d701f h1:bQErAqQmCpJLZvvwnwtnIDXLafWc2CDXl74rc8HkwKM=
+github.com/aosedge/aos_common v0.0.0-20241025075156-14720a7d701f/go.mod h1:8KL7yztgvArj3vpII9hnaAbebP4dP/7pox/vCLXW/cw=
 github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:xL5hA9axQFHnoVVF/Q8CkKl9JiTvA7U72jRDltMBB9M=
 github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
 github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7 h1:KR+SuYXJ9HigUaJdUwRlkDOOpkCrliFF3liBVKu2GKY=
@@ -80,6 +80,8 @@ go.uber.org/atomic v1.7.0 h1:ADUqmZGgLDDfbSL9ZmPxKTybcoEYHgpYfELNoN+7hsw=
 go.uber.org/atomic v1.7.0/go.mod h1:fEN4uk6kAWBTFdckzkM89CLk9XfWZrxpCo0nPH17wJc=
 golang.org/x/crypto v0.21.0 h1:X31++rzVUdKhX5sWmSOFZxx8UW/ldWx55cbf08iNAMA=
 golang.org/x/crypto v0.21.0/go.mod h1:0BP7YvVV9gBbVKyeTG0Gyn+gZm94bibOW5BjDEYAOMs=
+golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 h1:pVgRXcIictcr+lBQIFeiwuwtDIs4eL21OuM9nyAADmo=
+golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0/go.mod h1:CxIveKay+FTh1D0yPZemJVgC/95VzuuOLq5Qi4xnoYc=
 golang.org/x/net v0.23.0 h1:7EYJ93RZ9vYSZAIb2x3lnuvqO5zneoD6IvWjuhfxjTs=
 golang.org/x/net v0.23.0/go.mod h1:JKghWKKOSdJwpW2GEx0Ja7fmaKnMsbu+MWVZTokSYmg=
 golang.org/x/sys v0.0.0-20190916202348-b4ddaad3f8a3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
