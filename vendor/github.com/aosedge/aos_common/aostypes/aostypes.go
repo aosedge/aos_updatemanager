@@ -145,7 +145,7 @@ type ServiceDevice struct {
 
 // ServiceQuotas service quotas representation.
 type ServiceQuotas struct {
-	CPULimit      *uint64 `json:"cpuLimit,omitempty"`
+	CPUDMIPSLimit *uint64 `json:"cpuDmipsLimit,omitempty"`
 	RAMLimit      *uint64 `json:"ramLimit,omitempty"`
 	PIDsLimit     *uint64 `json:"pidsLimit,omitempty"`
 	NoFileLimit   *uint64 `json:"noFileLimit,omitempty"`
@@ -187,11 +187,11 @@ type PartitionAlertRule struct {
 
 // AlertRules define service monitoring alerts rules.
 type AlertRules struct {
-	RAM       *AlertRulePercents   `json:"ram,omitempty"`
-	CPU       *AlertRulePercents   `json:"cpu,omitempty"`
-	UsedDisks []PartitionAlertRule `json:"usedDisks,omitempty"`
-	Download  *AlertRulePoints     `json:"download,omitempty"`
-	Upload    *AlertRulePoints     `json:"upload,omitempty"`
+	RAM        *AlertRulePercents   `json:"ram,omitempty"`
+	CPU        *AlertRulePercents   `json:"cpu,omitempty"`
+	Partitions []PartitionAlertRule `json:"partitions,omitempty"`
+	Download   *AlertRulePoints     `json:"download,omitempty"`
+	Upload     *AlertRulePoints     `json:"upload,omitempty"`
 }
 
 // ResourceRatiosInfo resource ratios info.
@@ -199,6 +199,15 @@ type ResourceRatiosInfo struct {
 	CPU     *float64 `json:"cpu"`
 	RAM     *float64 `json:"ram"`
 	Storage *float64 `json:"storage"`
+	State   *float64 `json:"state"`
+}
+
+// RequestedResources requested service resources (in absolute values: dmips, bytes).
+type RequestedResources struct {
+	CPU     *uint64 `json:"cpu"`
+	RAM     *uint64 `json:"ram"`
+	Storage *uint64 `json:"storage"`
+	State   *uint64 `json:"state"`
 }
 
 // ServiceConfig Aos service configuration.
@@ -212,7 +221,7 @@ type ServiceConfig struct {
 	Sysctl             map[string]string            `json:"sysctl,omitempty"`
 	OfflineTTL         Duration                     `json:"offlineTtl,omitempty"`
 	Quotas             ServiceQuotas                `json:"quotas"`
-	ResourceRatios     *ResourceRatiosInfo          `json:"resourceRatios"`
+	RequestedResources *RequestedResources          `json:"requestedResources"`
 	AllowedConnections map[string]struct{}          `json:"allowedConnections,omitempty"`
 	Devices            []ServiceDevice              `json:"devices,omitempty"`
 	Resources          []string                     `json:"resources,omitempty"`
@@ -228,12 +237,12 @@ type PartitionUsage struct {
 
 // MonitoringData monitoring data.
 type MonitoringData struct {
-	Timestamp time.Time        `json:"timestamp"`
-	RAM       uint64           `json:"ram"`
-	CPU       uint64           `json:"cpu"`
-	Download  uint64           `json:"download"`
-	Upload    uint64           `json:"upload"`
-	Disk      []PartitionUsage `json:"disk"`
+	Timestamp  time.Time        `json:"timestamp"`
+	RAM        uint64           `json:"ram"`
+	CPU        uint64           `json:"cpu"`
+	Download   uint64           `json:"download"`
+	Upload     uint64           `json:"upload"`
+	Partitions []PartitionUsage `json:"partitions"`
 }
 
 type InstanceMonitoring struct {
@@ -327,7 +336,7 @@ func (d *Duration) UnmarshalJSON(b []byte) (err error) {
 
 	switch value := v.(type) {
 	case float64:
-		d.Duration = time.Duration(value)
+		d.Duration = time.Duration(int64(value*float64(time.Second) + 0.5))
 
 		return nil
 
