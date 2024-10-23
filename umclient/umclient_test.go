@@ -292,7 +292,6 @@ func newTestServer(url string) (server *testServer, err error) {
 		server.stopWG.Done()
 	}()
 
-
 	return server, nil
 }
 
@@ -460,8 +459,8 @@ func newCertProvider(nodeID string) *testCertProvider {
 	return &testCertProvider{nodeID: nodeID}
 }
 
-func (provider *testCertProvider) GetNodeID() (string, error) {
-	return provider.nodeID, nil
+func (provider *testCertProvider) GetNodeID() string {
+	return provider.nodeID
 }
 
 func (provider *testCertProvider) GetCertificate(certType string, issuer []byte, serial string) (
