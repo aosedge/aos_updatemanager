@@ -129,7 +129,7 @@ type MessageHandler interface {
 
 // CertificateProvider interface to get certificate.
 type CertificateProvider interface {
-	GetNodeID() (string, error)
+	GetNodeID() string
 	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
 	SubscribeCertChanged(certType string) (<-chan *iamanager.CertInfo, error)
 }
@@ -153,9 +153,7 @@ func New(cfg *config.Config, messageHandler MessageHandler, certProvider Certifi
 		closeChannel:   make(chan struct{}),
 	}
 
-	if client.umID, err = certProvider.GetNodeID(); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
+	client.umID = certProvider.GetNodeID()
 
 	if err = client.createConnection(cfg, certProvider, cryptocontext, insecure); err != nil {
 		return nil, aoserrors.Wrap(err)
