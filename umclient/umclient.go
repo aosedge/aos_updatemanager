@@ -211,7 +211,7 @@ func (client *Client) createConnection(
 				if errors.Is(err, io.EOF) {
 					log.Debug("Connection is closed")
 				} else {
-					log.Errorf("Connection error: %v", aoserrors.Wrap(err))
+					log.Warningf("Connection error: %v", aoserrors.Wrap(err))
 				}
 			}
 
