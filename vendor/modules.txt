@@ -4,7 +4,7 @@ github.com/ThalesIgnite/crypto11
 # github.com/anexia-it/fsquota v0.0.0-00010101000000-000000000000 => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7
 ## explicit; go 1.21
 github.com/anexia-it/fsquota
-# github.com/aosedge/aos_common v0.0.0-20241025075156-14720a7d701f
+# github.com/aosedge/aos_common v0.0.0-20241028191531-828ef3ba589e
 ## explicit; go 1.21
 github.com/aosedge/aos_common/aoserrors
 github.com/aosedge/aos_common/aostypes

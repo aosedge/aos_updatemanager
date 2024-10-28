@@ -260,7 +260,6 @@ func TestUpdate(t *testing.T) {
 	if handler, err = updatehandler.New(cfg, storage, storage); err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
-
 	defer handler.Close()
 
 	testOperation(t, handler, handler.Registered, &newStatus,
@@ -827,7 +826,6 @@ func TestVersionInUpdate(t *testing.T) {
 	if handler, err = updatehandler.New(cfg, storage, storage); err != nil {
 		t.Fatalf("Can't create update handler: %s", err)
 	}
-
 	defer handler.Close()
 
 	testOperation(t, handler, handler.Registered, &newStatus,
