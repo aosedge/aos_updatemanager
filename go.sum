@@ -1,5 +1,5 @@
-github.com/aosedge/aos_common v0.0.0-20241025075156-14720a7d701f h1:bQErAqQmCpJLZvvwnwtnIDXLafWc2CDXl74rc8HkwKM=
-github.com/aosedge/aos_common v0.0.0-20241025075156-14720a7d701f/go.mod h1:8KL7yztgvArj3vpII9hnaAbebP4dP/7pox/vCLXW/cw=
+github.com/aosedge/aos_common v0.0.0-20241028191531-828ef3ba589e h1:uoqg7RNc7+eNbDPeWungkQ1/bekBj0YXdB9rqMbmXm8=
+github.com/aosedge/aos_common v0.0.0-20241028191531-828ef3ba589e/go.mod h1:8KL7yztgvArj3vpII9hnaAbebP4dP/7pox/vCLXW/cw=
 github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f h1:xL5hA9axQFHnoVVF/Q8CkKl9JiTvA7U72jRDltMBB9M=
 github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f/go.mod h1:ILDKtnCKiQ7zRoNxcp36Y1ZR8LBPmR2E23+wTQe/MlE=
 github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7 h1:KR+SuYXJ9HigUaJdUwRlkDOOpkCrliFF3liBVKu2GKY=

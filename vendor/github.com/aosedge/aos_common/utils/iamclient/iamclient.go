@@ -958,7 +958,7 @@ func (client *Client) processNodeInfoChange(sub *nodeInfoChangeSub) {
 	for {
 		nodeInfo, err := (*sub.grpcStream).Recv()
 		if err != nil {
-			log.WithField("err", err).Error("Process NodeInfo change failed")
+			log.WithField("err", err).Warning("Process NodeInfo change failed")
 
 			client.onConnectionLost()
 
@@ -979,7 +979,7 @@ func (client *Client) processUnitSubjectsChange(sub *subjectsChangeSub) {
 	for {
 		subjects, err := (*sub.grpcStream).Recv()
 		if err != nil {
-			log.WithField("err", err).Error("Process UnitSubjects change failed")
+			log.WithField("err", err).Warning("Process UnitSubjects change failed")
 
 			client.onConnectionLost()
 
@@ -1002,7 +1002,7 @@ func (client *Client) processCertInfoChange(sub *certChangeSub) {
 	for {
 		cert, err := (*sub.grpcStream).Recv()
 		if err != nil {
-			log.WithField("err", err).Error("Process CertInfo change failed")
+			log.WithField("err", err).Warning("Process CertInfo change failed")
 
 			client.onConnectionLost()
 
