@@ -1,4 +1,4 @@
-image: golang:1.14
+image: golang:1.22
 
 stages:
   - build
@@ -31,8 +31,8 @@ test:
 whitesource:
   only:
     refs:
-     - master
-     - develop
+      - master
+      - develop
   tags:
     - whitesource_ci
   stage: dependency

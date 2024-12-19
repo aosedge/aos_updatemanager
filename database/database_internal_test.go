@@ -200,7 +200,7 @@ func TestMultiThread(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		for i := 0; i < numIterations; i++ {
+		for i := range numIterations {
 			if err := db.SetUpdateState([]byte(strconv.Itoa(i))); err != nil {
 				if testErr == nil {
 					testErr = err
@@ -214,7 +214,7 @@ func TestMultiThread(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		for i := 0; i < numIterations; i++ {
+		for range numIterations {
 			if _, err := db.GetUpdateState(); err != nil {
 				if testErr == nil {
 					testErr = err

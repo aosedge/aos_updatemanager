@@ -4,7 +4,6 @@ linters:
     - cyclop
     - depguard
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
     - gci
     - gochecknoinits
@@ -13,25 +12,16 @@ linters:
     - nestif
     - nlreturn
     - nonamedreturns
-    - nosnakecase
     - varnamelen
     # deprecated
     - bodyclose
     - contextcheck
-    - deadcode
-    - golint
-    - ifshort
-    - interfacer
-    - maligned
     - nilerr
     - noctx
     - rowserrcheck
-    - scopelint
     - sqlclosecheck
-    - structcheck
     - tparallel
     - unparam
-    - varcheck
     - wastedassign
 
 linters-settings:
@@ -48,13 +38,8 @@ linters-settings:
     excludes:
       - G204
 
-  gomnd:
-    settings:
-      mnd:
-        ignored-numbers: 0o600,0o755,2,10,16,32,64
-
-  gofumpt:
-    lang-version: "1.21"
+  mnd:
+    ignored-numbers: ["2", "10", "0o600", "0o755"]
 
 issues:
   include:

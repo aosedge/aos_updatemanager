@@ -303,7 +303,7 @@ func (handler *Handler) getState() (err error) {
 		return nil
 	}
 
-	if err = json.Unmarshal(jsonState, &handler.state); err != nil {
+	if err = json.Unmarshal(jsonState, &handler.state); err != nil { //nolint:musttag
 		return aoserrors.Wrap(err)
 	}
 
@@ -311,7 +311,7 @@ func (handler *Handler) getState() (err error) {
 }
 
 func (handler *Handler) saveState() (err error) {
-	jsonState, err := json.Marshal(handler.state)
+	jsonState, err := json.Marshal(handler.state) //nolint:musttag
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
@@ -334,7 +334,6 @@ func (handler *Handler) init() {
 		}
 
 		module := component.module
-		id := id
 
 		operations = append(operations, priorityOperation{
 			priority: component.updatePriority,

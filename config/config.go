@@ -72,7 +72,7 @@ func New(fileName string) (config *Config, err error) {
 	config = &Config{}
 
 	decoder := json.NewDecoder(file)
-	if err = decoder.Decode(config); err != nil {
+	if err = decoder.Decode(config); err != nil { //nolint:musttag
 		return config, aoserrors.Wrap(err)
 	}
 

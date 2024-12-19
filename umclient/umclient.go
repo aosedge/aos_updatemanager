@@ -44,7 +44,6 @@ import (
  **********************************************************************************************************************/
 
 const (
-	connectTimeout   = 30 * time.Second
 	reconnectTimeout = 10 * time.Second
 )
 
@@ -268,7 +267,7 @@ func (client *Client) register(config *config.Config, provider CertificateProvid
 	log.Debug("Connecting to CM...")
 
 	client.connection, err = grpchelpers.CreateProtectedConnection(config.CertStorage, config.CMServerURL,
-		connectTimeout, cryptocontext, provider, insecureConn)
+		cryptocontext, provider, insecureConn)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
