@@ -194,7 +194,7 @@ func (hook *journalHook) Fire(entry *log.Entry) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	err = journal.Print(hook.severityMap[entry.Level], logMessage)
+	err = journal.Print(hook.severityMap[entry.Level], logMessage) //nolint:govet
 
 	return aoserrors.Wrap(err)
 }
