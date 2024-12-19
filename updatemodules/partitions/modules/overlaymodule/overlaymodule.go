@@ -57,7 +57,7 @@ import (
 // Init()         -> boot not OK, set update error, clear requestReboot
 // Update()       -> return update error
 // Revert()       -> set state idle
-// Reboot()       -> retrun OK, requestReboot is not set
+// Reboot()       -> return OK, requestReboot is not set
 
 /*******************************************************************************
  * Consts
