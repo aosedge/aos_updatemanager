@@ -18,9 +18,6 @@
 package grpchelpers
 
 import (
-	"context"
-	"time"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,13 +42,9 @@ type CertProvider interface {
  **********************************************************************************************************************/
 
 // CreatePublicConnection creates public GRPC connection.
-func CreatePublicConnection(serverURL string, connectTime time.Duration,
-	cryptocontext *cryptutils.CryptoContext, insecureConn bool) (
+func CreatePublicConnection(serverURL string, cryptocontext *cryptutils.CryptoContext, insecureConn bool) (
 	connection *grpc.ClientConn, err error,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), connectTime)
-	defer cancel()
-
 	var secureOpt grpc.DialOption
 
 	if insecureConn {
@@ -65,7 +58,7 @@ func CreatePublicConnection(serverURL string, connectTime time.Duration,
 		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 	}
 
-	if connection, err = grpc.DialContext(ctx, serverURL, secureOpt, grpc.WithBlock()); err != nil {
+	if connection, err = grpc.NewClient(serverURL, secureOpt); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
@@ -74,12 +67,9 @@ func CreatePublicConnection(serverURL string, connectTime time.Duration,
 
 // CreateProtectedConnection creates protected GRPC connection.
 func CreateProtectedConnection(
-	certType string, protectedURL string, connectTime time.Duration, cryptocontext *cryptutils.CryptoContext,
+	certType string, protectedURL string, cryptocontext *cryptutils.CryptoContext,
 	certProvider CertProvider, insecureConn bool,
 ) (connection *grpc.ClientConn, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), connectTime)
-	defer cancel()
-
 	var secureOpt grpc.DialOption
 
 	if insecureConn {
@@ -98,7 +88,7 @@ func CreateProtectedConnection(
 		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 	}
 
-	if connection, err = grpc.DialContext(ctx, protectedURL, secureOpt, grpc.WithBlock()); err != nil {
+	if connection, err = grpc.NewClient(protectedURL, secureOpt); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
