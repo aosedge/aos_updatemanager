@@ -41,7 +41,7 @@ func CreateID(prefix string) (string, error) {
 		return "", aoserrors.Wrap(err)
 	}
 
-	return prefix + "_" + id, nil
+	return prefix + "-" + id, nil
 }
 
 /***********************************************************************************************************************
