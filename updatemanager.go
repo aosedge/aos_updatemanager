@@ -28,8 +28,8 @@ import (
 	"syscall"
 
 	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/iamclient"
 	"github.com/aosedge/aos_common/utils/cryptutils"
-	"github.com/aosedge/aos_common/utils/iamclient"
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/coreos/go-systemd/journal"
 	log "github.com/sirupsen/logrus"

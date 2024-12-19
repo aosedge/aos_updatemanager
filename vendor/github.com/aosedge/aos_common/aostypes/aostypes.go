@@ -66,12 +66,12 @@ const (
  **********************************************************************************************************************/
 
 // Duration represents duration in format "00:00:00".
-type Duration struct {
+type Duration struct { //nolint:recvcheck
 	time.Duration
 }
 
 // Time represents time in format "00:00:00".
-type Time struct {
+type Time struct { //nolint:recvcheck
 	time.Time
 }
 
@@ -214,6 +214,7 @@ type RequestedResources struct {
 type ServiceConfig struct {
 	Created            time.Time                    `json:"created"`
 	Author             string                       `json:"author"`
+	SkipResourceLimits bool                         `json:"skipResourceLimits"`
 	Hostname           *string                      `json:"hostname,omitempty"`
 	BalancingPolicy    string                       `json:"balancingPolicy"`
 	Runners            []string                     `json:"runners"`
