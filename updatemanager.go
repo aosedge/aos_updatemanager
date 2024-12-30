@@ -28,6 +28,7 @@ import (
 	"syscall"
 
 	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/iamclient"
 	"github.com/aosedge/aos_common/utils/cryptutils"
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/coreos/go-systemd/journal"
@@ -35,7 +36,6 @@ import (
 
 	"github.com/aosedge/aos_updatemanager/config"
 	"github.com/aosedge/aos_updatemanager/database"
-	"github.com/aosedge/aos_updatemanager/iamclient"
 	"github.com/aosedge/aos_updatemanager/umclient"
 	"github.com/aosedge/aos_updatemanager/updatehandler"
 	_ "github.com/aosedge/aos_updatemanager/updatemodules"
@@ -124,7 +124,7 @@ func newUpdateManager(cfg *config.Config) (um *updateManager, err error) {
 		return um, aoserrors.Wrap(err)
 	}
 
-	um.iam, err = iamclient.New(cfg, um.cryptoContext, false)
+	um.iam, err = iamclient.New(cfg.IAMPublicServerURL, "", "", nil, um.cryptoContext, false)
 	if err != nil {
 		return um, aoserrors.Wrap(err)
 	}
@@ -194,7 +194,7 @@ func (hook *journalHook) Fire(entry *log.Entry) (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	err = journal.Print(hook.severityMap[entry.Level], logMessage)
+	err = journal.Print(hook.severityMap[entry.Level], logMessage) //nolint:govet
 
 	return aoserrors.Wrap(err)
 }

@@ -24,10 +24,12 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/aosedge/aos_common/aoserrors"
+	"github.com/aosedge/aos_common/api/iamanager"
 	pb "github.com/aosedge/aos_common/api/updatemanager"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -63,6 +65,7 @@ type testServer struct {
 	stream          pb.UMService_RegisterUMServer
 	registerChannel chan bool
 	statusChannel   chan umclient.Status
+	stopWG          sync.WaitGroup
 	pb.UnimplementedUMServiceServer
 }
 
@@ -279,10 +282,14 @@ func newTestServer(url string) (server *testServer, err error) {
 
 	pb.RegisterUMServiceServer(server.grpcServer, server)
 
+	server.stopWG.Add(1)
+
 	go func() {
 		if err := server.grpcServer.Serve(listener); err != nil {
 			log.Errorf("Can't serve grpc server: %s", err)
 		}
+
+		server.stopWG.Done()
 	}()
 
 	return server, nil
@@ -291,7 +298,10 @@ func newTestServer(url string) (server *testServer, err error) {
 func (server *testServer) close() {
 	if server.grpcServer != nil {
 		server.grpcServer.Stop()
+		server.grpcServer.GracefulStop()
 	}
+
+	server.stopWG.Wait()
 }
 
 func (server *testServer) RegisterUM(stream pb.UMService_RegisterUMServer) (err error) {
@@ -449,10 +459,16 @@ func newCertProvider(nodeID string) *testCertProvider {
 	return &testCertProvider{nodeID: nodeID}
 }
 
-func (provider *testCertProvider) GetNodeID() (string, error) {
-	return provider.nodeID, nil
+func (provider *testCertProvider) GetNodeID() string {
+	return provider.nodeID
 }
 
-func (provider *testCertProvider) GetCertificate(certType string) (certURL, ketURL string, err error) {
+func (provider *testCertProvider) GetCertificate(certType string, issuer []byte, serial string) (
+	certURL, ketURL string, err error,
+) {
 	return "", "", nil
+}
+
+func (provider *testCertProvider) SubscribeCertChanged(certType string) (<-chan *iamanager.CertInfo, error) {
+	return make(<-chan *iamanager.CertInfo), nil
 }

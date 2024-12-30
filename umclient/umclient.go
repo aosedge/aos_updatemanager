@@ -27,13 +27,13 @@ import (
 
 	"github.com/aosedge/aos_common/aoserrors"
 	"github.com/aosedge/aos_common/api/common"
+	"github.com/aosedge/aos_common/api/iamanager"
 	pb "github.com/aosedge/aos_common/api/updatemanager"
 	"github.com/aosedge/aos_common/utils/cryptutils"
+	"github.com/aosedge/aos_common/utils/grpchelpers"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"github.com/aosedge/aos_updatemanager/config"
@@ -44,7 +44,6 @@ import (
  **********************************************************************************************************************/
 
 const (
-	connectTimeout   = 30 * time.Second
 	reconnectTimeout = 10 * time.Second
 )
 
@@ -75,6 +74,7 @@ type Client struct {
 	messageHandler MessageHandler
 	umID           string
 	closeChannel   chan struct{}
+	certChannel    <-chan *iamanager.CertInfo
 }
 
 // UMState UM state.
@@ -128,8 +128,9 @@ type MessageHandler interface {
 
 // CertificateProvider interface to get certificate.
 type CertificateProvider interface {
-	GetNodeID() (string, error)
-	GetCertificate(certType string) (certURL, ketURL string, err error)
+	GetNodeID() string
+	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
+	SubscribeCertChanged(certType string) (<-chan *iamanager.CertInfo, error)
 }
 
 /***********************************************************************************************************************
@@ -151,46 +152,30 @@ func New(cfg *config.Config, messageHandler MessageHandler, certProvider Certifi
 		closeChannel:   make(chan struct{}),
 	}
 
-	if client.umID, err = certProvider.GetNodeID(); err != nil {
-		return nil, aoserrors.Wrap(err)
-	}
+	client.umID = certProvider.GetNodeID()
 
 	if err = client.createConnection(cfg, certProvider, cryptocontext, insecure); err != nil {
 		return nil, aoserrors.Wrap(err)
 	}
 
-	go func() {
-		for {
-			select {
-			case <-client.closeChannel:
-				return
-
-			case status := <-client.messageHandler.StatusChannel():
-				if err := client.sendStatus(status); err != nil {
-					log.Errorf("Can't send status: %s", aoserrors.Wrap(err))
-				}
-			}
+	if !insecure {
+		if client.certChannel, err = certProvider.SubscribeCertChanged(cfg.CertStorage); err != nil {
+			return nil, aoserrors.Wrap(err)
 		}
-	}()
+	}
+
+	go client.processMessages()
 
 	return client, nil
 }
 
 // Close closes UM client.
 func (client *Client) Close() (err error) {
-	log.Debug("Close UM client")
-
-	if client.stream != nil {
-		err = aoserrors.Wrap(client.stream.CloseSend())
-	}
-
-	if client.connection != nil {
-		client.connection.Close()
-	}
-
 	close(client.closeChannel)
 
-	return aoserrors.Wrap(err)
+	client.closeGRPCConnection()
+
+	return nil
 }
 
 func (state UMState) String() string {
@@ -213,63 +198,41 @@ func (client *Client) createConnection(
 	config *config.Config, provider CertificateProvider,
 	cryptocontext *cryptutils.CryptoContext, insecureConn bool,
 ) (err error) {
-	log.Debug("Connecting to CM...")
-
-	var secureOpt grpc.DialOption
-
-	if insecureConn {
-		secureOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
-	} else {
-		certURL, keyURL, err := provider.GetCertificate(config.CertStorage)
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
-
-		tlsConfig, err := cryptocontext.GetClientMutualTLSConfig(certURL, keyURL)
-		if err != nil {
-			return aoserrors.Wrap(err)
-		}
-
-		secureOpt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
+	if err := client.register(config, provider, cryptocontext, insecureConn); err != nil {
+		return err
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-
-	if client.connection, err = grpc.DialContext(ctx, config.CMServerURL, secureOpt, grpc.WithBlock()); err != nil {
-		return aoserrors.Wrap(err)
-	}
-
-	log.Debug("Connected to CM")
 
 	go func() {
-		err := client.register()
-
 		for {
-			if err != nil && len(client.closeChannel) == 0 {
-				log.Errorf("Error register to CM: %s", aoserrors.Wrap(err))
-			} else {
-				client.messageHandler.Registered()
+			client.messageHandler.Registered()
 
-				if err = client.processMessages(); err != nil {
-					if errors.Is(err, io.EOF) {
-						log.Debug("Connection is closed")
-					} else {
-						log.Errorf("Connection error: %s", aoserrors.Wrap(err))
-					}
+			if err = client.processGRPCMessages(); err != nil {
+				if errors.Is(err, io.EOF) {
+					log.Debug("Connection is closed")
+				} else {
+					log.Warningf("Connection error: %v", aoserrors.Wrap(err))
 				}
 			}
 
 			log.Debugf("Reconnect to CM in %v...", reconnectTimeout)
 
-			select {
-			case <-client.closeChannel:
-				log.Debugf("Disconnected from CM")
+			client.closeGRPCConnection()
 
-				return
+		reconnectionLoop:
+			for {
+				select {
+				case <-client.closeChannel:
+					log.Debug("Disconnected from CM")
 
-			case <-time.After(reconnectTimeout):
-				err = client.register()
+					return
+
+				case <-time.After(reconnectTimeout):
+					if err := client.register(config, provider, cryptocontext, insecureConn); err != nil {
+						log.WithField("err", err).Debug("Reconnection failed")
+					} else {
+						break reconnectionLoop
+					}
+				}
 			}
 		}
 	}()
@@ -277,9 +240,39 @@ func (client *Client) createConnection(
 	return nil
 }
 
-func (client *Client) register() (err error) {
+func (client *Client) closeGRPCConnection() {
 	client.Lock()
 	defer client.Unlock()
+
+	log.Debug("Closing CM connection...")
+
+	if client.stream != nil {
+		if err := client.stream.CloseSend(); err != nil {
+			log.WithField("err", err).Error("UM client failed send close")
+		}
+	}
+
+	if client.connection != nil {
+		client.connection.Close()
+		client.connection = nil
+	}
+}
+
+func (client *Client) register(config *config.Config, provider CertificateProvider,
+	cryptocontext *cryptutils.CryptoContext, insecureConn bool,
+) (err error) {
+	client.Lock()
+	defer client.Unlock()
+
+	log.Debug("Connecting to CM...")
+
+	client.connection, err = grpchelpers.CreateProtectedConnection(config.CertStorage, config.CMServerURL,
+		cryptocontext, provider, insecureConn)
+	if err != nil {
+		return aoserrors.Wrap(err)
+	}
+
+	log.Debug("Connected to CM")
 
 	log.Debug("Registering to CM...")
 
@@ -292,7 +285,7 @@ func (client *Client) register() (err error) {
 	return nil
 }
 
-func (client *Client) processMessages() (err error) {
+func (client *Client) processGRPCMessages() (err error) {
 	for {
 		message, err := client.stream.Recv()
 		if err != nil {
@@ -341,6 +334,25 @@ func (client *Client) processMessages() (err error) {
 			log.Debug("Revert update received")
 
 			client.messageHandler.RevertUpdate()
+		}
+	}
+}
+
+func (client *Client) processMessages() {
+	for {
+		select {
+		case <-client.closeChannel:
+			return
+
+		case <-client.certChannel:
+			log.Debug("TLS certificate changed")
+
+			client.closeGRPCConnection()
+
+		case status := <-client.messageHandler.StatusChannel():
+			if err := client.sendStatus(status); err != nil {
+				log.Errorf("Can't send status: %v", aoserrors.Wrap(err))
+			}
 		}
 	}
 }
