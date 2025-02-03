@@ -74,7 +74,7 @@ type Client struct {
 	isMainNode bool
 
 	publicConnection    *grpchelpers.GRPCConn
-	protectedConnection *grpc.ClientConn
+	protectedConnection *grpchelpers.GRPCConn
 
 	publicService            pb.IAMPublicServiceClient
 	identService             pb.IAMPublicIdentityServiceClient
@@ -133,13 +133,14 @@ func New(
 	cryptocontext *cryptutils.CryptoContext, insecure bool,
 ) (client *Client, err error) {
 	localClient := &Client{
-		publicURL:        publicURL,
-		protectedURL:     protectedURL,
-		certStorage:      certStorage,
-		sender:           sender,
-		cryptocontext:    cryptocontext,
-		insecure:         insecure,
-		publicConnection: grpchelpers.NewGRPCConn(),
+		publicURL:           publicURL,
+		protectedURL:        protectedURL,
+		certStorage:         certStorage,
+		sender:              sender,
+		cryptocontext:       cryptocontext,
+		insecure:            insecure,
+		publicConnection:    grpchelpers.NewGRPCConn(),
+		protectedConnection: grpchelpers.NewGRPCConn(),
 		nodeInfoSubs: &nodeInfoChangeSub{
 			listeners: make([]chan cloudprotocol.NodeInfo, 0),
 		},
@@ -613,7 +614,6 @@ func (client *Client) Close() error {
 	client.isReconnecting.Store(true)
 
 	client.closeGRPCConnection()
-	client.publicConnection.Close()
 
 	log.Debug("Disconnected from IAM")
 
@@ -657,7 +657,8 @@ func (client *Client) SubscribeCertChanged(certType string) (<-chan *pb.CertInfo
 	ch := make(chan *pb.CertInfo, 1)
 
 	if _, ok := client.certChangeSub[certType]; !ok {
-		grpcStream, err := client.subscribeCertChange(certType)
+		grpcStream, err := client.publicService.SubscribeCertChanged(
+			context.Background(), &pb.SubscribeCertChangedRequest{Type: certType})
 		if err != nil {
 			return nil, aoserrors.Wrap(err)
 		}
@@ -838,7 +839,7 @@ func (client *Client) GetPermissions(
 func (client *Client) openGRPCConnection() (err error) {
 	log.Debug("Connecting to IAM...")
 
-	var publicConn *grpc.ClientConn
+	var publicConn, protectedConn *grpc.ClientConn
 
 	publicConn, err = grpchelpers.CreatePublicConnection(
 		client.publicURL, client.cryptocontext, client.insecure)
@@ -846,30 +847,46 @@ func (client *Client) openGRPCConnection() (err error) {
 		return aoserrors.Wrap(err)
 	}
 
-	if err := client.publicConnection.Start(publicConn); err != nil {
-		return aoserrors.Wrap(err)
-	}
+	client.publicConnection.Set(publicConn)
+
+	defer func() {
+		if err == nil {
+			client.publicConnection.Start()
+		} else {
+			publicConn.Close()
+		}
+	}()
 
 	client.publicService = pb.NewIAMPublicServiceClient(client.publicConnection)
 	client.identService = pb.NewIAMPublicIdentityServiceClient(client.publicConnection)
 	client.publicNodesService = pb.NewIAMPublicNodesServiceClient(client.publicConnection)
 	client.publicPermissionsService = pb.NewIAMPublicPermissionsServiceClient(client.publicConnection)
 
-	if err = client.restoreCertInfoSubs(); err != nil {
-		log.Error("Failed subscribe on CertInfo change")
-
-		return aoserrors.Wrap(err)
+	if err = client.restorePublicSubs(); err != nil {
+		return err
 	}
 
 	if !client.isProtectedConnEnabled() {
 		return nil
 	}
 
-	client.protectedConnection, err = grpchelpers.CreateProtectedConnection(client.certStorage,
-		client.protectedURL, client.cryptocontext, client, client.insecure)
+	certProvider := NewCertProvider(publicConn)
+
+	protectedConn, err = grpchelpers.CreateProtectedConnection(client.certStorage,
+		client.protectedURL, client.cryptocontext, certProvider, client.insecure)
 	if err != nil {
 		return aoserrors.Wrap(err)
 	}
+
+	client.protectedConnection.Set(protectedConn)
+
+	defer func() {
+		if err == nil {
+			client.protectedConnection.Start()
+		} else {
+			protectedConn.Close()
+		}
+	}()
 
 	client.certificateService = pb.NewIAMCertificateServiceClient(client.protectedConnection)
 	client.provisioningService = pb.NewIAMProvisioningServiceClient(client.protectedConnection)
@@ -889,7 +906,7 @@ func (client *Client) closeGRPCConnection() {
 	}
 
 	if client.protectedConnection != nil {
-		client.protectedConnection.Close()
+		client.protectedConnection.Stop()
 	}
 
 	for _, sub := range client.certChangeSub {
@@ -942,20 +959,6 @@ func (client *Client) subscribeUnitSubjectsChange() error {
 	go client.processUnitSubjectsChange(client.subjectsSubs)
 
 	return nil
-}
-
-func (client *Client) subscribeCertChange(certType string) (
-	listener pb.IAMPublicService_SubscribeCertChangedClient, err error,
-) {
-	listener, err = client.publicService.SubscribeCertChanged(context.Background(),
-		&pb.SubscribeCertChangedRequest{Type: certType})
-	if err != nil {
-		log.WithField("error", err).Error("Can't subscribe on CertChange event")
-
-		return nil, aoserrors.Wrap(err)
-	}
-
-	return listener, aoserrors.Wrap(err)
 }
 
 func (client *Client) processNodeInfoChange(sub *nodeInfoChangeSub) {
@@ -1182,9 +1185,10 @@ func (client *Client) finishProvisioning(nodeID, password string) (errorInfo *cl
 
 func (client *Client) restoreCertInfoSubs() error {
 	for certType, sub := range client.certChangeSub {
-		grpcStream, err := client.subscribeCertChange(certType)
+		grpcStream, err := client.publicService.SubscribeCertChanged(
+			context.Background(), &pb.SubscribeCertChangedRequest{Type: certType})
 		if err != nil {
-			return err
+			return aoserrors.Wrap(err)
 		}
 
 		sub.grpcStream = &grpcStream
@@ -1192,6 +1196,32 @@ func (client *Client) restoreCertInfoSubs() error {
 		sub.stopWG.Add(1)
 
 		go client.processCertInfoChange(sub)
+	}
+
+	return nil
+}
+
+func (client *Client) restorePublicSubs() error {
+	var err error
+
+	if err = client.restoreCertInfoSubs(); err != nil {
+		log.Error("Failed subscribe on CertInfo change")
+
+		return aoserrors.Wrap(err)
+	}
+
+	if client.isMainNode {
+		if err = client.subscribeNodeInfoChange(); err != nil {
+			log.Error("Failed subscribe on NodeInfo change")
+
+			return aoserrors.Wrap(err)
+		}
+
+		if err = client.subscribeUnitSubjectsChange(); err != nil {
+			log.Error("Failed subscribe on UnitSubject change")
+
+			return aoserrors.Wrap(err)
+		}
 	}
 
 	return nil

@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/aosedge/aos_common/aoserrors"
-	"github.com/aosedge/aos_common/api/iamanager"
 	"github.com/aosedge/aos_common/utils/cryptutils"
 )
 
@@ -34,7 +33,6 @@ import (
 // CertProvider certificate provider interface.
 type CertProvider interface {
 	GetCertificate(certType string, issuer []byte, serial string) (certURL, keyURL string, err error)
-	SubscribeCertChanged(certType string) (<-chan *iamanager.CertInfo, error)
 }
 
 /***********************************************************************************************************************

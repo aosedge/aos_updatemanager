@@ -35,6 +35,7 @@ type GRPCConn struct {
 	sync.Mutex
 
 	grpcConn    *grpc.ClientConn
+	started     bool
 	connStarted sync.WaitGroup
 }
 
@@ -44,26 +45,30 @@ type GRPCConn struct {
 
 // NewGRPCConn creates new GRPCConn object.
 func NewGRPCConn() *GRPCConn {
-	conn := GRPCConn{}
+	conn := GRPCConn{started: false}
 
 	conn.connStarted.Add(1)
 
 	return &conn
 }
 
-// Start starts new grpc connection.
-func (conn *GRPCConn) Start(connection *grpc.ClientConn) error {
+// Set assigns new grpc connection.
+func (conn *GRPCConn) Set(connection *grpc.ClientConn) {
 	conn.Lock()
 	defer conn.Unlock()
 
-	if conn.grpcConn != nil {
-		return aoserrors.New("Previous connection should be stopped before reset")
-	}
-
 	conn.grpcConn = connection
-	conn.connStarted.Done()
+}
 
-	return nil
+// Start starts processing grpc calls.
+func (conn *GRPCConn) Start() {
+	conn.Lock()
+	defer conn.Unlock()
+
+	if !conn.started {
+		conn.started = true
+		conn.connStarted.Done()
+	}
 }
 
 // Stop stops current grpc connection.
@@ -71,14 +76,15 @@ func (conn *GRPCConn) Stop() {
 	conn.Lock()
 	defer conn.Unlock()
 
-	if conn.grpcConn == nil {
-		return
+	if conn.grpcConn != nil {
+		conn.grpcConn.Close()
+		conn.grpcConn = nil
 	}
 
-	conn.grpcConn.Close()
-	conn.grpcConn = nil
-
-	conn.connStarted.Add(1)
+	if conn.started {
+		conn.started = false
+		conn.connStarted.Add(1)
+	}
 }
 
 // Close closes grpc connection and releases all spawned goroutines.
@@ -86,9 +92,12 @@ func (conn *GRPCConn) Close() {
 	conn.Lock()
 	defer conn.Unlock()
 
-	if conn.grpcConn == nil {
+	if !conn.started {
+		conn.started = true
 		conn.connStarted.Done()
-	} else {
+	}
+
+	if conn.grpcConn == nil {
 		conn.grpcConn.Close()
 		conn.grpcConn = nil
 	}
@@ -102,7 +111,8 @@ func (conn *GRPCConn) Close() {
 func (conn *GRPCConn) Invoke(ctx context.Context, method string, args any, reply any,
 	opts ...grpc.CallOption,
 ) error {
-	lock := make(chan struct{}, 1)
+	lock := make(chan struct{})
+	defer close(lock)
 
 	go func() {
 		conn.connStarted.Wait()
@@ -125,31 +135,13 @@ func (conn *GRPCConn) Invoke(ctx context.Context, method string, args any, reply
 	}
 }
 
-// NewStream begins a streaming RPC.
 func (conn *GRPCConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string,
 	opts ...grpc.CallOption,
 ) (grpc.ClientStream, error) {
-	lock := make(chan struct{}, 1)
-
-	go func() {
-		conn.connStarted.Wait()
-		lock <- struct{}{}
-	}()
-
-	select {
-	case <-lock:
-		conn.Lock()
-		defer conn.Unlock()
-
-		if conn.grpcConn == nil {
-			return nil, aoserrors.New("grpc connection closed")
-		}
-
-		stream, err := conn.grpcConn.NewStream(ctx, desc, method, opts...)
-
-		return stream, aoserrors.Wrap(err)
-
-	case <-ctx.Done():
-		return nil, aoserrors.New("grpc context closed")
+	stream, err := conn.grpcConn.NewStream(ctx, desc, method, opts...)
+	if err != nil {
+		return nil, aoserrors.Wrap(err)
 	}
+
+	return stream, nil
 }
