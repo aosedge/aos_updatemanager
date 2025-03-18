@@ -46,6 +46,7 @@ type Config struct {
 	DownloadDir        string         `json:"downloadDir"`
 	UpdateModules      []ModuleConfig `json:"updateModules"`
 	Migration          Migration      `json:"migration"`
+	NodePriority       uint32         `json:"nodePriority"`
 }
 
 // ModuleConfig module configuration.

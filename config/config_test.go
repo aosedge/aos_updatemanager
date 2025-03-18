@@ -100,7 +100,8 @@ func createConfigFile() (err error) {
 	"migration": {
 		"migrationPath" : "/usr/share/aos_updatemanager/migration",
 		"mergedMigrationPath" : "/var/aos/updatemanager/mergedMigrationPath"
-	}
+	},
+	"nodepriority" : 1
 }`
 
 	return saveConfigFile("aos_updatemanager.cfg", configContent)
@@ -233,5 +234,11 @@ func TestDatabaseMigration(t *testing.T) {
 
 	if cfg.Migration.MergedMigrationPath != "/var/aos/updatemanager/mergedMigrationPath" {
 		t.Errorf("Wrong migrationPath /var/aos/updatemanager/mergedMigrationPath, != %s", cfg.Migration.MergedMigrationPath)
+	}
+}
+
+func TestNodePriority(t *testing.T) {
+	if cfg.NodePriority != 1 {
+		t.Errorf("Wrong nodePriority, != %d", cfg.NodePriority)
 	}
 }

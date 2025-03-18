@@ -73,6 +73,7 @@ type Client struct {
 	stream         pb.UMService_RegisterUMClient
 	messageHandler MessageHandler
 	umID           string
+	nodePriority   uint32
 	closeChannel   chan struct{}
 	certChannel    <-chan *iamanager.CertInfo
 }
@@ -150,9 +151,9 @@ func New(cfg *config.Config, messageHandler MessageHandler, certProvider Certifi
 	client = &Client{
 		messageHandler: messageHandler,
 		closeChannel:   make(chan struct{}),
+		umID:           certProvider.GetNodeID(),
+		nodePriority:   cfg.NodePriority,
 	}
-
-	client.umID = certProvider.GetNodeID()
 
 	if err = client.createConnection(cfg, certProvider, cryptocontext, insecure); err != nil {
 		return nil, aoserrors.Wrap(err)
@@ -386,6 +387,7 @@ func (client *Client) sendStatus(status Status) (err error) {
 
 	message := pb.UpdateStatus{
 		NodeId:      client.umID,
+		Priority:    client.nodePriority,
 		UpdateState: pb.UpdateState(status.State),
 		Components:  pbComponents,
 	}
