@@ -7,7 +7,7 @@ replace github.com/ThalesIgnite/crypto11 => github.com/aosedge/crypto11 v1.0.3-0
 replace github.com/anexia-it/fsquota => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7
 
 require (
-	github.com/aosedge/aos_common v0.0.0-20250203110328-0c0bb9de26a4
+	github.com/aosedge/aos_common v0.0.0-20250326085753-a41423448286
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/hashicorp/go-version v1.7.0
@@ -16,7 +16,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/sirupsen/logrus v1.9.3
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
-	golang.org/x/crypto v0.31.0
+	golang.org/x/crypto v0.33.0
 	google.golang.org/grpc v1.69.0
 	gopkg.in/ini.v1 v1.67.0
 )
@@ -46,8 +46,8 @@ require (
 	github.com/thales-e-security/pool v0.0.2 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/protobuf v1.36.0 // indirect
 )
