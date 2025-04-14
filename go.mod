@@ -1,6 +1,7 @@
 module github.com/aosedge/aos_updatemanager
 
 go 1.22.0
+toolchain go1.24.1
 
 replace github.com/ThalesIgnite/crypto11 => github.com/aosedge/crypto11 v1.0.3-0.20220217163524-ddd0ace39e6f
 
@@ -16,7 +17,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/sirupsen/logrus v1.9.3
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	google.golang.org/grpc v1.69.0
 	gopkg.in/ini.v1 v1.67.0
 )
