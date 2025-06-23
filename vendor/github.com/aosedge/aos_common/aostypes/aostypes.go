@@ -196,10 +196,10 @@ type AlertRules struct {
 
 // ResourceRatiosInfo resource ratios info.
 type ResourceRatiosInfo struct {
-	CPU     *float64 `json:"cpu"`
-	RAM     *float64 `json:"ram"`
-	Storage *float64 `json:"storage"`
-	State   *float64 `json:"state"`
+	CPU     *float64 `json:"cpu,omitempty"`
+	RAM     *float64 `json:"ram,omitempty"`
+	Storage *float64 `json:"storage,omitempty"`
+	State   *float64 `json:"state,omitempty"`
 }
 
 // RequestedResources requested service resources (in absolute values: dmips, bytes).
