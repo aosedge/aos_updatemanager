@@ -7,7 +7,7 @@ replace github.com/ThalesIgnite/crypto11 => github.com/aosedge/crypto11 v1.0.3-0
 replace github.com/anexia-it/fsquota => github.com/aosedge/fsquota v0.0.0-20231127111317-842d831105a7
 
 require (
-	github.com/aosedge/aos_common v0.0.0-20250408145334-d61c386d3584
+	github.com/aosedge/aos_common v0.0.0-20250623084924-f58327ffce8d
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/hashicorp/go-version v1.7.0
